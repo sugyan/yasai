@@ -1,3 +1,11 @@
+mod piece;
+mod position;
+mod square;
+
+pub use piece::Piece;
+pub use position::Position;
+pub use square::Square;
+
 #[cfg(test)]
 mod tests {
     #[test]
