@@ -1,10 +1,36 @@
+use crate::Color;
 use std::fmt;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PieceType(pub u8);
+
+impl PieceType {
+    pub const OCCUPIED: PieceType = PieceType(0);
+    pub const FU: PieceType = PieceType(1);
+    pub const KY: PieceType = PieceType(2);
+    pub const KE: PieceType = PieceType(3);
+    pub const GI: PieceType = PieceType(4);
+    pub const KA: PieceType = PieceType(5);
+    pub const HI: PieceType = PieceType(6);
+    pub const KI: PieceType = PieceType(7);
+    pub const OU: PieceType = PieceType(8);
+    pub const TO: PieceType = PieceType(9);
+    pub const NY: PieceType = PieceType(10);
+    pub const NK: PieceType = PieceType(11);
+    pub const NG: PieceType = PieceType(12);
+    pub const UM: PieceType = PieceType(13);
+    pub const RY: PieceType = PieceType(14);
+
+    pub const NUM: usize = 15;
+}
 
 /// Represents a piece on the game board.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Piece(u8);
 
 impl Piece {
+    pub const WHITE_BIT_SHIFT: u32 = 4;
+    pub const WHITE_BIT: u8 = 1 << Piece::WHITE_BIT_SHIFT;
     // empty piece
     pub const EMP: Piece = Piece(0);
     // black pieces
@@ -12,9 +38,9 @@ impl Piece {
     pub const BKY: Piece = Piece(2);
     pub const BKE: Piece = Piece(3);
     pub const BGI: Piece = Piece(4);
-    pub const BKI: Piece = Piece(5);
-    pub const BKA: Piece = Piece(6);
-    pub const BHI: Piece = Piece(7);
+    pub const BKA: Piece = Piece(5);
+    pub const BHI: Piece = Piece(6);
+    pub const BKI: Piece = Piece(7);
     pub const BOU: Piece = Piece(8);
     pub const BTO: Piece = Piece(9);
     pub const BNY: Piece = Piece(10);
@@ -27,9 +53,9 @@ impl Piece {
     pub const WKY: Piece = Piece(18);
     pub const WKE: Piece = Piece(19);
     pub const WGI: Piece = Piece(20);
-    pub const WKI: Piece = Piece(21);
-    pub const WKA: Piece = Piece(22);
-    pub const WHI: Piece = Piece(23);
+    pub const WKA: Piece = Piece(21);
+    pub const WHI: Piece = Piece(22);
+    pub const WKI: Piece = Piece(23);
     pub const WOU: Piece = Piece(24);
     pub const WTO: Piece = Piece(25);
     pub const WNY: Piece = Piece(26);
@@ -37,6 +63,23 @@ impl Piece {
     pub const WNG: Piece = Piece(28);
     pub const WUM: Piece = Piece(29);
     pub const WRY: Piece = Piece(30);
+
+    pub fn piece_type(&self) -> Option<PieceType> {
+        match *self {
+            Piece::EMP => None,
+            Piece(u) => Some(PieceType(u & 0x0f)),
+        }
+    }
+    pub fn color(&self) -> Option<Color> {
+        match *self {
+            Piece::EMP => None,
+            Piece(u) => Some(if (u & Piece::WHITE_BIT) == 0 {
+                Color::BLACK
+            } else {
+                Color::WHITE
+            }),
+        }
+    }
 }
 
 impl fmt::Display for Piece {

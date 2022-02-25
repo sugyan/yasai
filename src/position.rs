@@ -1,46 +1,69 @@
-use crate::{Piece, Square};
-use std::fmt;
+use crate::bitboard::Bitboard;
+use crate::movegen::MoveList;
+use crate::piece::PieceType;
+use crate::{Color, Piece, Square};
 
 /// Represents a state of the game.
 #[derive(Debug)]
 pub struct Position {
     board: [Piece; Square::NUM],
+    pt_bb: [Bitboard; PieceType::NUM],
+    c_bb: [Bitboard; Color::NUM],
+    side_to_move: Color,
 }
 
 impl Position {
-    pub fn new(board: [Piece; Square::NUM]) -> Position {
-        Position { board }
+    pub fn new(board: [Piece; Square::NUM], side_to_move: Color) -> Position {
+        let mut pt_bb = [Bitboard::ZERO; PieceType::NUM];
+        let mut c_bb = [Bitboard::ZERO; Color::NUM];
+        for sq in Square::ALL {
+            let piece = board[sq.0 as usize];
+            if let Some(pt) = piece.piece_type() {
+                pt_bb[PieceType::OCCUPIED.0 as usize] |= sq;
+                pt_bb[pt.0 as usize] |= sq;
+            }
+            if let Some(c) = piece.color() {
+                c_bb[c.0 as usize] |= sq;
+            }
+        }
+        Position {
+            board,
+            pt_bb,
+            c_bb,
+            side_to_move,
+        }
+    }
+    pub fn side_to_move(&self) -> Color {
+        self.side_to_move
+    }
+    pub fn legal_moves(&self) -> MoveList {
+        let mut ml = MoveList::default();
+        ml.generate_legals(self);
+        ml
     }
 }
 
 impl Default for Position {
     fn default() -> Self {
-        Self {
-            #[rustfmt::skip]
-            board: [
-                Piece::WKY, Piece::WKE, Piece::WGI, Piece::WKI, Piece::WOU, Piece::WKI, Piece::WGI, Piece::WKE, Piece::WKY,
-                Piece::EMP, Piece::WHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::WKA, Piece::EMP,
-                Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU,
-                Piece::EMP, Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BHI, Piece::EMP,
-                Piece::BKY, Piece::BKE, Piece::BGI, Piece::BKI, Piece::BOU, Piece::BKI, Piece::BGI, Piece::BKE, Piece::BKY,
-            ],
-        }
-    }
-}
-
-impl fmt::Display for Position {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for rank in 0..9 {
-            write!(f, "P{}", rank + 1)?;
-            for file in 0..9 {
-                write!(f, "{}", self.board[rank * 9 + file])?;
+        #[rustfmt::skip]
+        let initial_board = [
+            [Piece::WKY, Piece::WKE, Piece::WGI, Piece::WKI, Piece::WOU, Piece::WKI, Piece::WGI, Piece::WKE, Piece::WKY],
+            [Piece::EMP, Piece::WHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::WKA, Piece::EMP],
+            [Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU],
+            [Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP],
+            [Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP],
+            [Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP],
+            [Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU],
+            [Piece::EMP, Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BHI, Piece::EMP],
+            [Piece::BKY, Piece::BKE, Piece::BGI, Piece::BKI, Piece::BOU, Piece::BKI, Piece::BGI, Piece::BKE, Piece::BKY]
+        ];
+        let mut board = [Piece::EMP; Square::NUM];
+        for i in 0..9 {
+            for j in 0..9 {
+                let (file, rank) = (8 - j, i);
+                board[Square::new(file, rank).0 as usize] = initial_board[i as usize][j as usize];
             }
-            writeln!(f)?;
         }
-        Ok(())
+        Self::new(board, Color::BLACK)
     }
 }
