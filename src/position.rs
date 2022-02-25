@@ -2,28 +2,29 @@ use crate::bitboard::Bitboard;
 use crate::movegen::MoveList;
 use crate::piece::PieceType;
 use crate::{Color, Piece, Square};
+use std::fmt;
 
 /// Represents a state of the game.
 #[derive(Debug)]
 pub struct Position {
     board: [Piece; Square::NUM],
-    pt_bb: [Bitboard; PieceType::NUM],
     c_bb: [Bitboard; Color::NUM],
+    pt_bb: [Bitboard; PieceType::NUM],
     side_to_move: Color,
 }
 
 impl Position {
     pub fn new(board: [Piece; Square::NUM], side_to_move: Color) -> Position {
-        let mut pt_bb = [Bitboard::ZERO; PieceType::NUM];
         let mut c_bb = [Bitboard::ZERO; Color::NUM];
+        let mut pt_bb = [Bitboard::ZERO; PieceType::NUM];
         for sq in Square::ALL {
             let piece = board[sq.0 as usize];
+            if let Some(c) = piece.color() {
+                c_bb[c.0 as usize] |= sq;
+            }
             if let Some(pt) = piece.piece_type() {
                 pt_bb[PieceType::OCCUPIED.0 as usize] |= sq;
                 pt_bb[pt.0 as usize] |= sq;
-            }
-            if let Some(c) = piece.color() {
-                c_bb[c.0 as usize] |= sq;
             }
         }
         Position {
@@ -40,6 +41,20 @@ impl Position {
         let mut ml = MoveList::default();
         ml.generate_legals(self);
         ml
+    }
+    pub fn piece_on(&self, sq: Square) -> Piece {
+        self.board[sq.0 as usize]
+    }
+    pub fn pieces_cp(&self, c: Color, pt: PieceType) -> Bitboard {
+        self.pieces_c(c) & self.pieces_p(pt)
+    }
+    pub fn pieces_c(&self, c: Color) -> Bitboard {
+        debug_assert!((c.0 as usize) < Color::NUM);
+        unsafe { *self.c_bb.get_unchecked(c.0 as usize) }
+    }
+    fn pieces_p(&self, pt: PieceType) -> Bitboard {
+        debug_assert!((pt.0 as usize) < PieceType::NUM);
+        unsafe { *self.pt_bb.get_unchecked(pt.0 as usize) }
     }
 }
 
@@ -65,5 +80,18 @@ impl Default for Position {
             }
         }
         Self::new(board, Color::BLACK)
+    }
+}
+
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for rank in 0..9 {
+            write!(f, "P{}", rank + 1)?;
+            for file in (0..9).rev() {
+                write!(f, "{}", self.piece_on(Square::new(file, rank)))?;
+            }
+            writeln!(f)?;
+        }
+        Ok(())
     }
 }

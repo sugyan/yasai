@@ -1,11 +1,38 @@
-use crate::{Move, Position};
+use crate::bitboard::Bitboard;
+use crate::table::ATTACK_TABLE;
+use crate::{Move, PieceType, Position};
 
 #[derive(Default)]
 pub struct MoveList(Vec<Move>);
 
 impl MoveList {
     pub fn generate_legals(&mut self, pos: &Position) {
-        // TODO
+        // TODO: in check
+        let color = pos.side_to_move();
+        let target = !pos.pieces_c(color);
+        self.generate_for_gi(pos, &target);
+        self.generate_for_ki(pos, &target);
+        // TODO...
+    }
+    fn push(&mut self, m: Move) {
+        self.0.push(m);
+    }
+    fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
+        let color = pos.side_to_move();
+        for from in pos.pieces_cp(color, PieceType::GI) {
+            for to in ATTACK_TABLE.gi.attack(from, color) & *target {
+                // TODO: promote?
+                self.push(Move::new(from, to, pos.piece_on(from), false));
+            }
+        }
+    }
+    fn generate_for_ki(&mut self, pos: &Position, target: &Bitboard) {
+        let color = pos.side_to_move();
+        for from in pos.pieces_cp(color, PieceType::KI) {
+            for to in ATTACK_TABLE.ki.attack(from, color) & *target {
+                self.push(Move::new(from, to, pos.piece_on(from), false));
+            }
+        }
     }
 }
 

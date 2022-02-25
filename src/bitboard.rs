@@ -9,12 +9,33 @@ pub union Bitboard {
 impl Bitboard {
     pub const ZERO: Bitboard = Bitboard { u: [0, 0] };
 
+    pub fn is_empty(&self) -> bool {
+        (self.value(0) | self.value(1)) == 0
+    }
+    pub fn pop(&mut self) -> Square {
+        if self.value(0) != 0 {
+            self.pop0()
+        } else {
+            self.pop1()
+        }
+    }
     fn value(&self, i: usize) -> u64 {
         debug_assert!(i < 2);
         unsafe { *self.u.get_unchecked(i) }
     }
-    pub fn is_empty(&self) -> bool {
-        (self.value(0) | self.value(1)) == 0
+    fn pop0(&mut self) -> Square {
+        let sq = Square(self.value(0).trailing_zeros() as i8);
+        unsafe {
+            self.u[0] &= self.u[0] - 1;
+        }
+        sq
+    }
+    fn pop1(&mut self) -> Square {
+        let sq = Square(self.value(1).trailing_zeros() as i8);
+        unsafe {
+            self.u[1] &= self.u[1] - 1;
+        }
+        sq
     }
 
     const SQUARE_MASK: [Bitboard; Square::NUM] = [
@@ -102,10 +123,20 @@ impl Bitboard {
     ];
 }
 
+impl ops::Not for Bitboard {
+    type Output = Bitboard;
+
+    fn not(self) -> Self::Output {
+        Bitboard {
+            u: [!self.value(0), !self.value(1)],
+        }
+    }
+}
+
 impl ops::BitAnd<Bitboard> for Bitboard {
     type Output = Bitboard;
 
-    fn bitand(self, rhs: Bitboard) -> Bitboard {
+    fn bitand(self, rhs: Bitboard) -> Self::Output {
         Bitboard {
             u: [self.value(0) & rhs.value(0), self.value(1) & rhs.value(1)],
         }
@@ -115,7 +146,7 @@ impl ops::BitAnd<Bitboard> for Bitboard {
 impl ops::BitAnd<Square> for Bitboard {
     type Output = Bitboard;
 
-    fn bitand(self, rhs: Square) -> Bitboard {
+    fn bitand(self, rhs: Square) -> Self::Output {
         self & Bitboard::SQUARE_MASK[rhs.0 as usize]
     }
 }
@@ -135,16 +166,28 @@ impl ops::BitOrAssign<Square> for Bitboard {
     }
 }
 
+impl Iterator for Bitboard {
+    type Item = Square;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.pop())
+        }
+    }
+}
+
 impl fmt::Debug for Bitboard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut s = String::new();
         for rank in 0..9 {
             s.push(' ');
-            for file in 0..9 {
+            for file in (0..9).rev() {
                 s.push(if (*self & Square::new(file, rank)).is_empty() {
-                    '0'
+                    '.'
                 } else {
-                    '1'
+                    '#'
                 });
             }
             s += "\n";

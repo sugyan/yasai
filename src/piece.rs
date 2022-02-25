@@ -1,7 +1,7 @@
 use crate::Color;
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PieceType(pub u8);
 
 impl PieceType {
@@ -24,9 +24,34 @@ impl PieceType {
     pub const NUM: usize = 15;
 }
 
+impl fmt::Debug for PieceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("PieceType")
+            .field(&match self.0 {
+                0 => "OCCUPIED",
+                1 => "FU",
+                2 => "KY",
+                3 => "KE",
+                4 => "GI",
+                5 => "KA",
+                6 => "HI",
+                7 => "KI",
+                8 => "OU",
+                9 => "TO",
+                10 => "NY",
+                11 => "NK",
+                12 => "NG",
+                13 => "UM",
+                14 => "RY",
+                _ => unreachable!(),
+            })
+            .finish()
+    }
+}
+
 /// Represents a piece on the game board.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Piece(u8);
+pub struct Piece(pub u8);
 
 impl Piece {
     pub const WHITE_BIT_SHIFT: u32 = 4;

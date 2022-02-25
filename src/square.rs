@@ -1,5 +1,7 @@
-#[derive(Clone, Copy, Debug)]
-pub struct Square(pub u8);
+use std::fmt;
+
+#[derive(Clone, Copy)]
+pub struct Square(pub i8);
 
 impl Square {
     pub const SQ11: Square = Square(0);
@@ -86,8 +88,14 @@ impl Square {
     /// How many squares are there?
     pub const NUM: usize = 81;
 
-    pub fn new(file: u8, rank: u8) -> Self {
+    pub fn new(file: i8, rank: i8) -> Self {
         Square(file * 9 + rank)
+    }
+    pub fn file(&self) -> i8 {
+        self.0 / 9
+    }
+    pub fn rank(&self) -> i8 {
+        self.0 % 9
     }
 
     #[rustfmt::skip]
@@ -102,4 +110,13 @@ impl Square {
         Square::SQ81, Square::SQ82, Square::SQ83, Square::SQ84, Square::SQ85, Square::SQ86, Square::SQ87, Square::SQ88, Square::SQ89,
         Square::SQ91, Square::SQ92, Square::SQ93, Square::SQ94, Square::SQ95, Square::SQ96, Square::SQ97, Square::SQ98, Square::SQ99,
     ];
+}
+
+impl fmt::Debug for Square {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Square")
+            .field("file", &(self.0 / 9 + 1))
+            .field("rank", &(self.0 % 9 + 1))
+            .finish()
+    }
 }
