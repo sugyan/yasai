@@ -50,7 +50,7 @@ impl fmt::Debug for PieceType {
 }
 
 /// Represents a piece on the game board.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Piece(pub u8);
 
 impl Piece {
@@ -145,5 +145,14 @@ impl fmt::Display for Piece {
                 _ => unreachable!(),
             }
         )
+    }
+}
+
+impl fmt::Debug for Piece {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Piece")
+            .field("color", &self.color())
+            .field("piece_type", &self.piece_type())
+            .finish()
     }
 }

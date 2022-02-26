@@ -1,6 +1,7 @@
 use crate::bitboard::Bitboard;
 use crate::movegen::MoveList;
 use crate::piece::PieceType;
+use crate::square::{File, Rank};
 use crate::{Color, Piece, Square};
 use std::fmt;
 
@@ -52,7 +53,7 @@ impl Position {
         debug_assert!((c.0 as usize) < Color::NUM);
         unsafe { *self.c_bb.get_unchecked(c.0 as usize) }
     }
-    fn pieces_p(&self, pt: PieceType) -> Bitboard {
+    pub fn pieces_p(&self, pt: PieceType) -> Bitboard {
         debug_assert!((pt.0 as usize) < PieceType::NUM);
         unsafe { *self.pt_bb.get_unchecked(pt.0 as usize) }
     }
@@ -75,7 +76,7 @@ impl Default for Position {
         let mut board = [Piece::EMP; Square::NUM];
         for i in 0..9 {
             for j in 0..9 {
-                let (file, rank) = (8 - j, i);
+                let (file, rank) = (File(8 - j), Rank(i));
                 board[Square::new(file, rank).0 as usize] = initial_board[i as usize][j as usize];
             }
         }
@@ -85,9 +86,9 @@ impl Default for Position {
 
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for rank in 0..9 {
-            write!(f, "P{}", rank + 1)?;
-            for file in (0..9).rev() {
+        for &rank in Rank::ALL.iter() {
+            write!(f, "P{}", rank.0 + 1)?;
+            for &file in File::ALL.iter().rev() {
                 write!(f, "{}", self.piece_on(Square::new(file, rank)))?;
             }
             writeln!(f)?;

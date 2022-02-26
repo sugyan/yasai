@@ -1,4 +1,88 @@
-use std::fmt;
+use std::{fmt, ops};
+
+#[derive(Clone, Copy)]
+pub struct File(pub i8);
+
+impl File {
+    pub const FILE1: File = File(0);
+    pub const FILE2: File = File(1);
+    pub const FILE3: File = File(2);
+    pub const FILE4: File = File(3);
+    pub const FILE5: File = File(4);
+    pub const FILE6: File = File(5);
+    pub const FILE7: File = File(6);
+    pub const FILE8: File = File(7);
+    pub const FILE9: File = File(8);
+    pub const NUM: usize = 9;
+
+    pub const ALL: [File; File::NUM] = [
+        File::FILE1,
+        File::FILE2,
+        File::FILE3,
+        File::FILE4,
+        File::FILE5,
+        File::FILE6,
+        File::FILE7,
+        File::FILE8,
+        File::FILE9,
+    ];
+}
+
+impl ops::Sub for File {
+    type Output = i8;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.0 - rhs.0
+    }
+}
+
+impl fmt::Debug for File {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("File").field(&(self.0 + 1)).finish()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Rank(pub i8);
+
+impl Rank {
+    pub const RANK1: Rank = Rank(0);
+    pub const RANK2: Rank = Rank(1);
+    pub const RANK3: Rank = Rank(2);
+    pub const RANK4: Rank = Rank(3);
+    pub const RANK5: Rank = Rank(4);
+    pub const RANK6: Rank = Rank(5);
+    pub const RANK7: Rank = Rank(6);
+    pub const RANK8: Rank = Rank(7);
+    pub const RANK9: Rank = Rank(8);
+    pub const NUM: usize = 9;
+
+    pub const ALL: [Rank; Rank::NUM] = [
+        Rank::RANK1,
+        Rank::RANK2,
+        Rank::RANK3,
+        Rank::RANK4,
+        Rank::RANK5,
+        Rank::RANK6,
+        Rank::RANK7,
+        Rank::RANK8,
+        Rank::RANK9,
+    ];
+}
+
+impl ops::Sub for Rank {
+    type Output = i8;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.0 - rhs.0
+    }
+}
+
+impl fmt::Debug for Rank {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Rank").field(&(self.0 + 1)).finish()
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct Square(pub i8);
@@ -88,14 +172,14 @@ impl Square {
     /// How many squares are there?
     pub const NUM: usize = 81;
 
-    pub fn new(file: i8, rank: i8) -> Self {
-        Square(file * 9 + rank)
+    pub fn new(file: File, rank: Rank) -> Self {
+        Square(file.0 * 9 + rank.0)
     }
-    pub fn file(&self) -> i8 {
-        self.0 / 9
+    pub fn file(&self) -> File {
+        File(self.0 / 9)
     }
-    pub fn rank(&self) -> i8 {
-        self.0 % 9
+    pub fn rank(&self) -> Rank {
+        Rank(self.0 % 9)
     }
 
     #[rustfmt::skip]
@@ -115,8 +199,8 @@ impl Square {
 impl fmt::Debug for Square {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Square")
-            .field("file", &(self.0 / 9 + 1))
-            .field("rank", &(self.0 % 9 + 1))
+            .field("file", &self.file())
+            .field("rank", &self.rank())
             .finish()
     }
 }

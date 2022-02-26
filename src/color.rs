@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// Represent a color.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Color(pub u8);
 
 impl Color {
