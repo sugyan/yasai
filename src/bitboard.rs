@@ -28,10 +28,16 @@ impl Bitboard {
         Bitboard::SQUARE[sq.0 as usize]
     }
     pub fn from_file(file: File) -> Bitboard {
-        Bitboard::FILE[file.0 as usize]
+        Bitboard::FILES[file.0 as usize]
     }
     pub fn from_rank(rank: Rank) -> Bitboard {
-        Bitboard::RANK[rank.0 as usize]
+        Bitboard::RANKS[rank.0 as usize]
+    }
+    pub fn merge(&self) -> u64 {
+        self.value(0) | self.value(1)
+    }
+    pub fn count_ones(&self) -> u32 {
+        self.value(0).count_ones() + self.value(1).count_ones()
     }
     fn pop0(&mut self) -> Square {
         let sq = Square(self.value(0).trailing_zeros() as i8);
@@ -49,7 +55,7 @@ impl Bitboard {
     }
 
     #[rustfmt::skip]
-    const FILE: [Bitboard; File::NUM] = [
+    pub const FILES: [Bitboard; File::NUM] = [
         Bitboard { u: [0x01ff      , 0] },
         Bitboard { u: [0x01ff <<  9, 0] },
         Bitboard { u: [0x01ff << 18, 0] },
@@ -57,11 +63,11 @@ impl Bitboard {
         Bitboard { u: [0x01ff << 36, 0] },
         Bitboard { u: [0x01ff << 45, 0] },
         Bitboard { u: [0x01ff << 54, 0] },
-        Bitboard { u: [0, 0x01ff <<  0] },
+        Bitboard { u: [0, 0x01ff      ] },
         Bitboard { u: [0, 0x01ff <<  9] }
     ];
     #[rustfmt::skip]
-    const RANK: [Bitboard; Rank::NUM] = [
+    pub const RANKS: [Bitboard; Rank::NUM] = [
         Bitboard { u: [0x0040_2010_0804_0201     , 0x0201     ] },
         Bitboard { u: [0x0040_2010_0804_0201 << 1, 0x0201 << 1] },
         Bitboard { u: [0x0040_2010_0804_0201 << 2, 0x0201 << 2] },
@@ -201,6 +207,21 @@ impl ops::BitOr<Square> for Bitboard {
 
     fn bitor(self, rhs: Square) -> Self::Output {
         self | Bitboard::from_square(rhs)
+    }
+}
+
+impl ops::BitAndAssign<Bitboard> for Bitboard {
+    fn bitand_assign(&mut self, rhs: Bitboard) {
+        unsafe {
+            self.u[0] &= rhs.u[0];
+            self.u[1] &= rhs.u[1];
+        }
+    }
+}
+
+impl ops::BitAndAssign<Square> for Bitboard {
+    fn bitand_assign(&mut self, rhs: Square) {
+        *self &= Bitboard::from_square(rhs);
     }
 }
 

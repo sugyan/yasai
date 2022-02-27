@@ -1,6 +1,6 @@
 use std::{fmt, ops};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct File(pub i8);
 
 impl File {
@@ -42,7 +42,7 @@ impl fmt::Debug for File {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Rank(pub i8);
 
 impl Rank {

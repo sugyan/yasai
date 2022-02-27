@@ -14,6 +14,8 @@ impl MoveList {
         self.generate_for_ky(pos, &target);
         self.generate_for_ke(pos, &target);
         self.generate_for_gi(pos, &target);
+        self.generate_for_ka(pos, &target);
+        self.generate_for_hi(pos, &target);
         self.generate_for_ki(pos, &target);
     }
     fn push(&mut self, m: Move) {
@@ -51,6 +53,26 @@ impl MoveList {
         let color = pos.side_to_move();
         for from in pos.pieces_cp(color, PieceType::GI) {
             for to in ATTACK_TABLE.gi.attack(from, color) & *target {
+                // TODO: promote?
+                self.push(Move::new(from, to, pos.piece_on(from), false));
+            }
+        }
+    }
+    fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
+        let color = pos.side_to_move();
+        for from in pos.pieces_cp(color, PieceType::KA) {
+            let occupied = pos.pieces_p(PieceType::OCCUPIED);
+            for to in ATTACK_TABLE.ka.attack(from, &occupied) & *target {
+                // TODO: promote?
+                self.push(Move::new(from, to, pos.piece_on(from), false));
+            }
+        }
+    }
+    fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
+        let color = pos.side_to_move();
+        for from in pos.pieces_cp(color, PieceType::HI) {
+            let occupied = pos.pieces_p(PieceType::OCCUPIED);
+            for to in ATTACK_TABLE.hi.attack(from, &occupied) & *target {
                 // TODO: promote?
                 self.push(Move::new(from, to, pos.piece_on(from), false));
             }

@@ -1,6 +1,7 @@
 use crate::bitboard::Bitboard;
-use crate::square::Rank;
+use crate::square::{File, Rank};
 use crate::{Color, Square};
+use bitintr::Pext;
 use once_cell::sync::Lazy;
 
 #[derive(Clone, Copy)]
@@ -108,7 +109,7 @@ impl LanceAttackTable {
         10, 10, 10, 10, 10, 10, 10, 10, 10,
     ];
 
-    fn new() -> LanceAttackTable {
+    fn new() -> Self {
         let mut table = [[[Bitboard::ZERO; LanceAttackTable::MASK_TABLE_NUM as usize]; Color::NUM];
             Square::NUM];
         for &sq in &Square::ALL {
@@ -143,15 +144,76 @@ impl LanceAttackTable {
     }
 }
 
+pub struct SlidingAttackTable {
+    table: Vec<Bitboard>,
+    masks: [Bitboard; Square::NUM],
+    offsets: [usize; Square::NUM],
+}
+
+impl SlidingAttackTable {
+    fn attack_mask(sq: Square, deltas: &[Delta]) -> Bitboard {
+        let mut bb = sliding_attacks(sq, Bitboard::ZERO, deltas);
+        if sq.file() != File::FILE1 {
+            bb &= !Bitboard::FILES[File::FILE1.0 as usize];
+        }
+        if sq.file() != File::FILE9 {
+            bb &= !Bitboard::FILES[File::FILE9.0 as usize];
+        }
+        if sq.rank() != Rank::RANK1 {
+            bb &= !Bitboard::RANKS[Rank::RANK1.0 as usize];
+        }
+        if sq.rank() != Rank::RANK9 {
+            bb &= !Bitboard::RANKS[Rank::RANK9.0 as usize];
+        }
+        bb
+    }
+    fn occupied_to_index(occupied: Bitboard, mask: Bitboard) -> usize {
+        (occupied & mask).merge().pext(mask.merge()) as usize
+    }
+    fn new(table_size: usize, deltas: &[Delta]) -> Self {
+        let mut table = vec![Bitboard::ZERO; table_size];
+        let mut masks = [Bitboard::ZERO; Square::NUM];
+        let mut offsets = [0; Square::NUM];
+        let mut offset = 0;
+        for &sq in &Square::ALL {
+            let mask = SlidingAttackTable::attack_mask(sq, deltas);
+            masks[sq.0 as usize] = mask;
+            offsets[sq.0 as usize] = offset;
+            let ones = mask.count_ones();
+            for index in 0..1 << ones {
+                let occupied = mask.enumerate().fold(Bitboard::ZERO, |acc, (i, sq)| {
+                    if (index & (1 << i)) != 0 {
+                        acc | sq
+                    } else {
+                        acc
+                    }
+                });
+                table[offset + Self::occupied_to_index(occupied, mask)] =
+                    sliding_attacks(sq, occupied, deltas);
+            }
+            offset += 1 << ones;
+        }
+        Self {
+            table,
+            masks,
+            offsets,
+        }
+    }
+    pub fn attack(&self, sq: Square, occupied: &Bitboard) -> Bitboard {
+        self.table[self.offsets[sq.0 as usize]
+            + Self::occupied_to_index(*occupied, self.masks[sq.0 as usize])]
+    }
+}
+
 pub struct AttackTable {
     pub fu: PieceAttackTable,
     pub ky: LanceAttackTable,
     pub ke: PieceAttackTable,
     pub gi: PieceAttackTable,
     pub ki: PieceAttackTable,
+    pub ka: SlidingAttackTable,
+    pub hi: SlidingAttackTable,
 }
-
-impl AttackTable {}
 
 pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| AttackTable {
     fu: PieceAttackTable::new(&[PieceAttackTable::BFU_DELTAS, PieceAttackTable::WFU_DELTAS]),
@@ -159,4 +221,12 @@ pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| AttackTable {
     ke: PieceAttackTable::new(&[PieceAttackTable::BKE_DELTAS, PieceAttackTable::WKE_DELTAS]),
     gi: PieceAttackTable::new(&[PieceAttackTable::BGI_DELTAS, PieceAttackTable::WGI_DELTAS]),
     ki: PieceAttackTable::new(&[PieceAttackTable::BKI_DELTAS, PieceAttackTable::WKI_DELTAS]),
+    ka: SlidingAttackTable::new(
+        20224, // 1 * (1 << 12) + 8 * (1 << 10) + 16 * (1 << 8) + 52 * (1 << 6) + 4 * (1 << 7)
+        &[Delta::NE, Delta::SE, Delta::SW, Delta::NW],
+    ),
+    hi: SlidingAttackTable::new(
+        495616, // 4 * (1 << 14) + 28 * (1 << 13) + 49 * (1 << 12)
+        &[Delta::N, Delta::E, Delta::S, Delta::W],
+    ),
 });
