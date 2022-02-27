@@ -38,16 +38,16 @@ impl std::ops::Add<Delta> for Square {
 pub struct PieceAttackTable([[Bitboard; Color::NUM]; Square::NUM]);
 
 impl PieceAttackTable {
-    const BFU_DELTAS: &'static [Delta] = &[Delta::N];
-    const WFU_DELTAS: &'static [Delta] = &[Delta::S];
-    const BKE_DELTAS: &'static [Delta] = &[Delta::NNE, Delta::NNW];
-    const WKE_DELTAS: &'static [Delta] = &[Delta::SSE, Delta::SSW];
-    const BGI_DELTAS: &'static [Delta] = &[Delta::N, Delta::NE, Delta::SE, Delta::SW, Delta::NW];
-    const WGI_DELTAS: &'static [Delta] = &[Delta::S, Delta::NE, Delta::SE, Delta::SW, Delta::NW];
-    #[rustfmt::skip]
-    const BKI_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::NE, Delta::NW];
-    #[rustfmt::skip]
-    const WKI_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::SE, Delta::SW];
+    #[rustfmt::skip]    const BFU_DELTAS: &'static [Delta] = &[Delta::N];
+    #[rustfmt::skip]    const WFU_DELTAS: &'static [Delta] = &[Delta::S];
+    #[rustfmt::skip]    const BKE_DELTAS: &'static [Delta] = &[Delta::NNE, Delta::NNW];
+    #[rustfmt::skip]    const WKE_DELTAS: &'static [Delta] = &[Delta::SSE, Delta::SSW];
+    #[rustfmt::skip]    const BGI_DELTAS: &'static [Delta] = &[Delta::N, Delta::NE, Delta::SE, Delta::SW, Delta::NW];
+    #[rustfmt::skip]    const WGI_DELTAS: &'static [Delta] = &[Delta::S, Delta::NE, Delta::SE, Delta::SW, Delta::NW];
+    #[rustfmt::skip]    const BKI_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::NE, Delta::NW];
+    #[rustfmt::skip]    const WKI_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::SE, Delta::SW];
+    #[rustfmt::skip]    const BOU_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::NE, Delta::SE, Delta::SW, Delta::NW];
+    #[rustfmt::skip]    const WOU_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::SE, Delta::SE, Delta::SW, Delta::NW];
 
     fn new(deltas: &[&[Delta]; Color::NUM]) -> Self {
         let mut table = [[Bitboard::ZERO; Color::NUM]; Square::NUM];
@@ -213,6 +213,7 @@ pub struct AttackTable {
     pub ki: PieceAttackTable,
     pub ka: SlidingAttackTable,
     pub hi: SlidingAttackTable,
+    pub ou: PieceAttackTable,
 }
 
 pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| AttackTable {
@@ -229,4 +230,5 @@ pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| AttackTable {
         495616, // 4 * (1 << 14) + 28 * (1 << 13) + 49 * (1 << 12)
         &[Delta::N, Delta::E, Delta::S, Delta::W],
     ),
+    ou: PieceAttackTable::new(&[PieceAttackTable::BOU_DELTAS, PieceAttackTable::WOU_DELTAS]),
 });

@@ -17,6 +17,7 @@ impl MoveList {
         self.generate_for_ka(pos, &target);
         self.generate_for_hi(pos, &target);
         self.generate_for_ki(pos, &target);
+        self.generate_for_ou(pos, &target);
     }
     fn push(&mut self, m: Move) {
         self.0.push(m);
@@ -83,6 +84,15 @@ impl MoveList {
         // TODO: promoted pieces
         for from in pos.pieces_cp(color, PieceType::KI) {
             for to in ATTACK_TABLE.ki.attack(from, color) & *target {
+                self.push(Move::new(from, to, pos.piece_on(from), false));
+            }
+        }
+    }
+    fn generate_for_ou(&mut self, pos: &Position, target: &Bitboard) {
+        let color = pos.side_to_move();
+        // TODO: use king_square?
+        if let Some(from) = pos.pieces_cp(color, PieceType::OU).next() {
+            for to in ATTACK_TABLE.ou.attack(from, color) & *target {
                 self.push(Move::new(from, to, pos.piece_on(from), false));
             }
         }
