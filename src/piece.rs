@@ -99,9 +99,9 @@ impl Piece {
         match *self {
             Piece::EMP => None,
             Piece(u) => Some(if (u & Piece::WHITE_BIT) == 0 {
-                Color::BLACK
+                Color::Black
             } else {
-                Color::WHITE
+                Color::White
             }),
         }
     }

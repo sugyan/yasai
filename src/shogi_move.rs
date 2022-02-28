@@ -1,6 +1,10 @@
+use crate::{Piece, Square};
 use std::fmt;
 
-use crate::{Piece, Square};
+pub enum MoveType {
+    Normal,
+    Drop,
+}
 
 // xxxxxxxx xxxxxxxx xxxxxxxx x1111111  to
 // xxxxxxxx xxxxxxxx xxxxxxxx 1xxxxxxx  promote flag
@@ -15,6 +19,8 @@ impl Move {
     const PIECE_MASK: u32 = 0x0000_001f;
     const FROM_SHIFT: u32 = 8;
     const PIECE_SHIFT: u32 = 16;
+    const PROMOTE_FLAG: u32 = 1 << 7;
+    const DROP_FLAG: u32 = 1 << 15;
 
     pub fn new(from: Square, to: Square, piece: Piece, promote: bool) -> Self {
         Move(
@@ -23,16 +29,26 @@ impl Move {
                 | (to.0 as u32),
         )
     }
+    pub fn from(&self) -> Square {
+        Square(((self.0 >> Move::FROM_SHIFT) & Move::SQUARE_MASK) as i8)
+    }
+    pub fn to(&self) -> Square {
+        Square((self.0 & Move::SQUARE_MASK) as i8)
+    }
+    pub fn move_type(&self) -> MoveType {
+        if self.0 & Move::DROP_FLAG == 0 {
+            MoveType::Normal
+        } else {
+            MoveType::Drop
+        }
+    }
 }
 
 impl fmt::Debug for Move {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Move")
-            .field(
-                "from",
-                &Square(((self.0 >> Move::FROM_SHIFT) & Move::SQUARE_MASK) as i8),
-            )
-            .field("to", &Square((self.0 & Move::SQUARE_MASK) as i8))
+            .field("from", &self.from())
+            .field("to", &self.to())
             .field(
                 "piece",
                 &Piece(((self.0 >> Move::PIECE_SHIFT) & Move::PIECE_MASK) as u8),

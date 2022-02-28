@@ -53,11 +53,11 @@ impl PieceAttackTable {
         let mut table = [[Bitboard::ZERO; Color::NUM]; Square::NUM];
         for &sq in &Square::ALL {
             for &color in &Color::ALL {
-                for &delta in deltas[color.0 as usize] {
+                for &delta in deltas[color.index()] {
                     if let Some(to) = sq + delta {
                         if (to.file() - sq.file()).abs() <= 1 && (to.rank() - sq.rank()).abs() <= 2
                         {
-                            table[sq.0 as usize][color.0 as usize] |= to;
+                            table[sq.0 as usize][color.index()] |= to;
                         }
                     }
                 }
@@ -65,8 +65,8 @@ impl PieceAttackTable {
         }
         Self(table)
     }
-    pub fn attack(&self, sq: Square, color: Color) -> Bitboard {
-        self.0[sq.0 as usize][color.0 as usize]
+    pub fn attack(&self, sq: Square, c: Color) -> Bitboard {
+        self.0[sq.0 as usize][c.index()]
     }
 }
 
@@ -110,28 +110,32 @@ impl LanceAttackTable {
         10, 10, 10, 10, 10, 10, 10, 10, 10,
     ];
 
+    fn attack_mask(sq: Square) -> Bitboard {
+        Bitboard::from_file(sq.file())
+            & !(Bitboard::from_rank(Rank::RANK1) | Bitboard::from_rank(Rank::RANK9))
+    }
+    fn index_to_occupied(index: usize, mask: Bitboard) -> Bitboard {
+        let mut bb = Bitboard::ZERO;
+        for (i, sq) in mask.enumerate() {
+            if (index & (1 << i)) != 0 {
+                bb |= sq;
+            }
+        }
+        bb
+    }
     fn new() -> Self {
         let mut table = [[[Bitboard::ZERO; LanceAttackTable::MASK_TABLE_NUM as usize]; Color::NUM];
             Square::NUM];
         for &sq in &Square::ALL {
-            let file_mask = Bitboard::from_file(sq.file())
-                & !(Bitboard::from_rank(Rank::RANK1) | Bitboard::from_rank(Rank::RANK9));
-            for &color in &Color::ALL {
-                let deltas = match color {
-                    Color::BLACK => vec![Delta::N],
-                    Color::WHITE => vec![Delta::S],
-                    _ => unreachable!(),
+            let mask = Self::attack_mask(sq);
+            for &c in &Color::ALL {
+                let deltas = match c {
+                    Color::Black => vec![Delta::N],
+                    Color::White => vec![Delta::S],
                 };
                 for index in 0..LanceAttackTable::MASK_TABLE_NUM {
-                    let occupied = file_mask.enumerate().fold(Bitboard::ZERO, |acc, (i, sq)| {
-                        if (index & (1 << i)) != 0 {
-                            acc | sq
-                        } else {
-                            acc
-                        }
-                    });
-                    table[sq.0 as usize][color.0 as usize][index] =
-                        sliding_attacks(sq, occupied, &deltas);
+                    let occupied = Self::index_to_occupied(index, mask);
+                    table[sq.0 as usize][c.index()][index] = sliding_attacks(sq, occupied, &deltas);
                 }
             }
         }
@@ -141,7 +145,7 @@ impl LanceAttackTable {
         let index = ((occupied.value(if sq.0 > Square::SQ79.0 { 1 } else { 0 })
             >> LanceAttackTable::OFFSETS[sq.0 as usize]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
-        self.0[sq.0 as usize][color.0 as usize][index]
+        self.0[sq.0 as usize][color.index()][index]
     }
 }
 
@@ -168,7 +172,7 @@ impl SlidingAttackTable {
         }
         bb
     }
-    fn index_to_occupied(index: u32, mask: Bitboard) -> Bitboard {
+    fn index_to_occupied(index: usize, mask: Bitboard) -> Bitboard {
         let mut bb = Bitboard::ZERO;
         for (i, sq) in mask.enumerate() {
             if (index & (1 << i)) != 0 {

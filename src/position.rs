@@ -1,8 +1,9 @@
 use crate::bitboard::Bitboard;
 use crate::movegen::MoveList;
 use crate::piece::PieceType;
+use crate::shogi_move::MoveType;
 use crate::square::{File, Rank};
-use crate::{Color, Piece, Square};
+use crate::{Color, Move, Piece, Square};
 use std::fmt;
 
 /// Represents a state of the game.
@@ -21,7 +22,7 @@ impl Position {
         for sq in Square::ALL {
             let piece = board[sq.0 as usize];
             if let Some(c) = piece.color() {
-                c_bb[c.0 as usize] |= sq;
+                c_bb[c.index()] |= sq;
             }
             if let Some(pt) = piece.piece_type() {
                 pt_bb[PieceType::OCCUPIED.0 as usize] |= sq;
@@ -50,10 +51,63 @@ impl Position {
         self.pieces_c(c) & self.pieces_p(pt)
     }
     pub fn pieces_c(&self, c: Color) -> Bitboard {
-        self.c_bb[c.0 as usize]
+        self.c_bb[c.index()]
     }
     pub fn pieces_p(&self, pt: PieceType) -> Bitboard {
         self.pt_bb[pt.0 as usize]
+    }
+    pub fn do_move(&mut self, m: Move) {
+        let to = m.to();
+        match m.move_type() {
+            MoveType::Normal => {
+                let from = m.from();
+                let p_from = self.piece_on(from);
+                self.remove_piece(from, p_from);
+                // TODO: captured?
+                // TODO: promoted?
+                let p_to = p_from;
+                self.put_piece(to, p_to);
+            }
+            MoveType::Drop => {
+                // TODO
+            }
+        }
+        self.side_to_move = !self.side_to_move;
+    }
+    pub fn undo_move(&mut self, m: Move) {
+        let to = m.to();
+        match m.move_type() {
+            MoveType::Normal => {
+                let p_to = self.piece_on(to);
+                // TODO: captured?
+                self.remove_piece(to, p_to);
+                // TODO: promoted?
+                let p_from = p_to;
+                let from = m.from();
+                self.put_piece(from, p_from);
+            }
+            MoveType::Drop => {
+                // TODO
+            }
+        }
+        self.side_to_move = !self.side_to_move;
+    }
+    fn put_piece(&mut self, sq: Square, p: Piece) {
+        if let (Some(c), Some(pt)) = (p.color(), p.piece_type()) {
+            self.xor_bbs(c, pt, sq);
+        }
+        self.board[sq.0 as usize] = p;
+    }
+    fn remove_piece(&mut self, sq: Square, p: Piece) {
+        if let (Some(c), Some(pt)) = (p.color(), p.piece_type()) {
+            self.xor_bbs(c, pt, sq);
+        }
+        self.board[sq.0 as usize] = Piece::EMP;
+    }
+    fn xor_bbs(&mut self, c: Color, pt: PieceType, sq: Square) {
+        self.c_bb[c.index()] ^= sq;
+        self.pt_bb[PieceType::OCCUPIED.0 as usize] ^= sq;
+        self.pt_bb[pt.0 as usize] ^= sq;
     }
 }
 
@@ -78,7 +132,7 @@ impl Default for Position {
                 board[Square::new(file, rank).0 as usize] = initial_board[i as usize][j as usize];
             }
         }
-        Self::new(board, Color::BLACK)
+        Self::new(board, Color::Black)
     }
 }
 

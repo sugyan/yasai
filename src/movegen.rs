@@ -19,6 +19,9 @@ impl MoveList {
         self.generate_for_ki(pos, &target);
         self.generate_for_ou(pos, &target);
     }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
     fn push(&mut self, m: Move) {
         self.0.push(m);
     }

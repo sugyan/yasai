@@ -239,6 +239,21 @@ impl ops::BitOrAssign<Square> for Bitboard {
     }
 }
 
+impl ops::BitXorAssign<Bitboard> for Bitboard {
+    fn bitxor_assign(&mut self, rhs: Bitboard) {
+        unsafe {
+            self.u[0] ^= rhs.u[0];
+            self.u[1] ^= rhs.u[1];
+        }
+    }
+}
+
+impl ops::BitXorAssign<Square> for Bitboard {
+    fn bitxor_assign(&mut self, rhs: Square) {
+        *self ^= Bitboard::from_square(rhs)
+    }
+}
+
 impl Iterator for Bitboard {
     type Item = Square;
 
