@@ -25,6 +25,7 @@ impl Move {
     pub fn new(from: Square, to: Square, piece: Piece, promote: bool) -> Self {
         Move(
             (piece.0 as u32) << Move::PIECE_SHIFT
+                | if promote { Move::PROMOTE_FLAG } else { 0 }
                 | (from.0 as u32) << Move::FROM_SHIFT
                 | (to.0 as u32),
         )
@@ -42,6 +43,9 @@ impl Move {
             MoveType::Drop
         }
     }
+    pub fn is_promotion(&self) -> bool {
+        self.0 & Move::PROMOTE_FLAG != 0
+    }
 }
 
 impl fmt::Debug for Move {
@@ -53,6 +57,7 @@ impl fmt::Debug for Move {
                 "piece",
                 &Piece(((self.0 >> Move::PIECE_SHIFT) & Move::PIECE_MASK) as u8),
             )
+            .field("promotion", &self.is_promotion())
             .finish()
     }
 }

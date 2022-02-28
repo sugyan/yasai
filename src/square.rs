@@ -1,3 +1,4 @@
+use crate::Color;
 use std::{fmt, ops};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -98,6 +99,12 @@ impl Rank {
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
     ];
+    pub fn is_opponent_field(&self, c: Color) -> bool {
+        match c {
+            Color::Black => (1 << self.0) & 0x0007 != 0,
+            Color::White => (1 << self.0) & 0x01c0 != 0,
+        }
+    }
 }
 
 impl From<Square> for Rank {

@@ -26,59 +26,68 @@ impl MoveList {
         self.0.push(m);
     }
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
-        let color = pos.side_to_move();
-        for from in pos.pieces_cp(color, PieceType::FU) {
-            for to in ATTACK_TABLE.fu.attack(from, color) & *target {
-                // TODO: promote?
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::FU) {
+            for to in ATTACK_TABLE.fu.attack(from, c) & *target {
+                // TODO: (force) promote?
                 self.push(Move::new(from, to, pos.piece_on(from), false));
             }
         }
     }
     fn generate_for_ky(&mut self, pos: &Position, target: &Bitboard) {
-        let color = pos.side_to_move();
-        for from in pos.pieces_cp(color, PieceType::KY) {
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::KY) {
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
-            for to in ATTACK_TABLE.ky.attack(from, color, &occupied) & *target {
+            for to in ATTACK_TABLE.ky.attack(from, c, &occupied) & *target {
                 // TODO: (force) promote?
                 self.push(Move::new(from, to, pos.piece_on(from), false));
             }
         }
     }
     fn generate_for_ke(&mut self, pos: &Position, target: &Bitboard) {
-        let color = pos.side_to_move();
-        for from in pos.pieces_cp(color, PieceType::KE) {
-            for to in ATTACK_TABLE.ke.attack(from, color) & *target {
-                // TODO: promote?
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::KE) {
+            for to in ATTACK_TABLE.ke.attack(from, c) & *target {
+                // TODO: (force) promote?
                 self.push(Move::new(from, to, pos.piece_on(from), false));
             }
         }
     }
     fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
-        let color = pos.side_to_move();
-        for from in pos.pieces_cp(color, PieceType::GI) {
-            for to in ATTACK_TABLE.gi.attack(from, color) & *target {
-                // TODO: promote?
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::GI) {
+            let from_is_opponent_field = from.rank().is_opponent_field(c);
+            for to in ATTACK_TABLE.gi.attack(from, c) & *target {
                 self.push(Move::new(from, to, pos.piece_on(from), false));
+                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                    self.push(Move::new(from, to, pos.piece_on(from), true));
+                }
             }
         }
     }
     fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
-        let color = pos.side_to_move();
-        for from in pos.pieces_cp(color, PieceType::KA) {
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::KA) {
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
+            let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.ka.attack(from, &occupied) & *target {
-                // TODO: promote?
                 self.push(Move::new(from, to, pos.piece_on(from), false));
+                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                    self.push(Move::new(from, to, pos.piece_on(from), true));
+                }
             }
         }
     }
     fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
-        let color = pos.side_to_move();
-        for from in pos.pieces_cp(color, PieceType::HI) {
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::HI) {
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
+            let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.hi.attack(from, &occupied) & *target {
-                // TODO: promote?
                 self.push(Move::new(from, to, pos.piece_on(from), false));
+                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                    self.push(Move::new(from, to, pos.piece_on(from), true));
+                }
             }
         }
     }
