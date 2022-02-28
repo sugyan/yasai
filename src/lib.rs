@@ -5,7 +5,7 @@ mod piece;
 mod position;
 mod shogi_move;
 mod square;
-mod table;
+mod attack_table;
 
 pub use color::Color;
 pub use piece::{Piece, PieceType};

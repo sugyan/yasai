@@ -21,8 +21,7 @@ impl Bitboard {
         }
     }
     pub fn value(&self, i: usize) -> u64 {
-        debug_assert!(i < 2);
-        unsafe { *self.u.get_unchecked(i) }
+        unsafe { self.u[i] }
     }
     pub fn from_square(sq: Square) -> Bitboard {
         Bitboard::SQUARE[sq.0 as usize]

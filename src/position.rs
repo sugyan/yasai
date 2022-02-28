@@ -50,12 +50,10 @@ impl Position {
         self.pieces_c(c) & self.pieces_p(pt)
     }
     pub fn pieces_c(&self, c: Color) -> Bitboard {
-        debug_assert!((c.0 as usize) < Color::NUM);
-        unsafe { *self.c_bb.get_unchecked(c.0 as usize) }
+        self.c_bb[c.0 as usize]
     }
     pub fn pieces_p(&self, pt: PieceType) -> Bitboard {
-        debug_assert!((pt.0 as usize) < PieceType::NUM);
-        unsafe { *self.pt_bb.get_unchecked(pt.0 as usize) }
+        self.pt_bb[pt.0 as usize]
     }
 }
 

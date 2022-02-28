@@ -27,7 +27,7 @@ impl std::ops::Add<Delta> for Square {
 
     fn add(self, rhs: Delta) -> Self::Output {
         let i = self.0 + rhs.0;
-        if (0..Square::NUM as i8).contains(&i) {
+        if 0 <= i && i < Square::NUM as i8 {
             Some(Square(i))
         } else {
             None
@@ -75,7 +75,8 @@ fn sliding_attacks(sq: Square, occupied: Bitboard, deltas: &[Delta]) -> Bitboard
     for &delta in deltas {
         let (mut prev, mut curr) = (sq, sq + delta);
         while let Some(to) = curr {
-            if (to.file() - prev.file()).abs() > 1 || (to.rank() - prev.rank()).abs() > 1 {
+            // stop if rank diff is +8 or -8
+            if (to.rank() - prev.rank()) & 0x0f == 0x08 {
                 break;
             }
             bb |= to;
@@ -167,6 +168,15 @@ impl SlidingAttackTable {
         }
         bb
     }
+    fn index_to_occupied(index: u32, mask: Bitboard) -> Bitboard {
+        let mut bb = Bitboard::ZERO;
+        for (i, sq) in mask.enumerate() {
+            if (index & (1 << i)) != 0 {
+                bb |= sq;
+            }
+        }
+        bb
+    }
     fn occupied_to_index(occupied: Bitboard, mask: Bitboard) -> usize {
         (occupied & mask).merge().pext(mask.merge()) as usize
     }
@@ -177,17 +187,11 @@ impl SlidingAttackTable {
         let mut offset = 0;
         for &sq in &Square::ALL {
             let mask = SlidingAttackTable::attack_mask(sq, deltas);
+            let ones = mask.count_ones();
             masks[sq.0 as usize] = mask;
             offsets[sq.0 as usize] = offset;
-            let ones = mask.count_ones();
             for index in 0..1 << ones {
-                let occupied = mask.enumerate().fold(Bitboard::ZERO, |acc, (i, sq)| {
-                    if (index & (1 << i)) != 0 {
-                        acc | sq
-                    } else {
-                        acc
-                    }
-                });
+                let occupied = Self::index_to_occupied(index, mask);
                 table[offset + Self::occupied_to_index(occupied, mask)] =
                     sliding_attacks(sq, occupied, deltas);
             }

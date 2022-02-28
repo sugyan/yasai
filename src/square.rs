@@ -26,6 +26,24 @@ impl File {
         File::FILE8,
         File::FILE9,
     ];
+    #[rustfmt::skip]
+    const SQUARE_TO_FILE: [File; Square::NUM] = [
+        File::FILE1, File::FILE1, File::FILE1, File::FILE1, File::FILE1, File::FILE1, File::FILE1, File::FILE1, File::FILE1,
+        File::FILE2, File::FILE2, File::FILE2, File::FILE2, File::FILE2, File::FILE2, File::FILE2, File::FILE2, File::FILE2,
+        File::FILE3, File::FILE3, File::FILE3, File::FILE3, File::FILE3, File::FILE3, File::FILE3, File::FILE3, File::FILE3,
+        File::FILE4, File::FILE4, File::FILE4, File::FILE4, File::FILE4, File::FILE4, File::FILE4, File::FILE4, File::FILE4,
+        File::FILE5, File::FILE5, File::FILE5, File::FILE5, File::FILE5, File::FILE5, File::FILE5, File::FILE5, File::FILE5,
+        File::FILE6, File::FILE6, File::FILE6, File::FILE6, File::FILE6, File::FILE6, File::FILE6, File::FILE6, File::FILE6,
+        File::FILE7, File::FILE7, File::FILE7, File::FILE7, File::FILE7, File::FILE7, File::FILE7, File::FILE7, File::FILE7,
+        File::FILE8, File::FILE8, File::FILE8, File::FILE8, File::FILE8, File::FILE8, File::FILE8, File::FILE8, File::FILE8,
+        File::FILE9, File::FILE9, File::FILE9, File::FILE9, File::FILE9, File::FILE9, File::FILE9, File::FILE9, File::FILE9,
+    ];
+}
+
+impl From<Square> for File {
+    fn from(sq: Square) -> Self {
+        File::SQUARE_TO_FILE[sq.0 as usize]
+    }
 }
 
 impl ops::Sub for File {
@@ -68,6 +86,24 @@ impl Rank {
         Rank::RANK8,
         Rank::RANK9,
     ];
+    #[rustfmt::skip]
+    const SQUARE_TO_RANK: [Rank; Square::NUM] = [
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+        Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
+    ];
+}
+
+impl From<Square> for Rank {
+    fn from(sq: Square) -> Self {
+        Rank::SQUARE_TO_RANK[sq.0 as usize]
+    }
 }
 
 impl ops::Sub for Rank {
@@ -176,10 +212,10 @@ impl Square {
         Square(file.0 * 9 + rank.0)
     }
     pub fn file(&self) -> File {
-        File(self.0 / 9)
+        File::from(*self)
     }
     pub fn rank(&self) -> Rank {
-        Rank(self.0 % 9)
+        Rank::from(*self)
     }
 
     #[rustfmt::skip]

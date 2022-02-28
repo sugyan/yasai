@@ -1,5 +1,5 @@
+use crate::attack_table::ATTACK_TABLE;
 use crate::bitboard::Bitboard;
-use crate::table::ATTACK_TABLE;
 use crate::{Move, PieceType, Position};
 
 #[derive(Default)]
