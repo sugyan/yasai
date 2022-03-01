@@ -150,9 +150,13 @@ impl fmt::Display for Piece {
 
 impl fmt::Debug for Piece {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Piece")
-            .field("color", &self.color())
-            .field("piece_type", &self.piece_type())
-            .finish()
+        if let (Some(c), Some(pt)) = (self.color(), self.piece_type()) {
+            f.debug_struct("Piece")
+                .field("color", &c)
+                .field("piece_type", &pt)
+                .finish()
+        } else {
+            f.debug_tuple("Piece::EMPTY").finish()
+        }
     }
 }

@@ -28,39 +28,43 @@ impl MoveList {
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, PieceType::FU) {
+            let p_from = pos.piece_on(from);
             for to in ATTACK_TABLE.fu.attack(from, c) & *target {
                 // TODO: (force) promote?
-                self.push(Move::new(from, to, pos.piece_on(from), false));
+                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
             }
         }
     }
     fn generate_for_ky(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, PieceType::KY) {
+            let p_from = pos.piece_on(from);
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
             for to in ATTACK_TABLE.ky.attack(from, c, &occupied) & *target {
                 // TODO: (force) promote?
-                self.push(Move::new(from, to, pos.piece_on(from), false));
+                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
             }
         }
     }
     fn generate_for_ke(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, PieceType::KE) {
+            let p_from = pos.piece_on(from);
             for to in ATTACK_TABLE.ke.attack(from, c) & *target {
                 // TODO: (force) promote?
-                self.push(Move::new(from, to, pos.piece_on(from), false));
+                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
             }
         }
     }
     fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, PieceType::GI) {
+            let p_from = pos.piece_on(from);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.gi.attack(from, c) & *target {
-                self.push(Move::new(from, to, pos.piece_on(from), false));
+                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new(from, to, pos.piece_on(from), true));
+                    self.push(Move::new_normal(from, to, true, p_from, pos.piece_on(to)));
                 }
             }
         }
@@ -68,12 +72,13 @@ impl MoveList {
     fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, PieceType::KA) {
+            let p_from = pos.piece_on(from);
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.ka.attack(from, &occupied) & *target {
-                self.push(Move::new(from, to, pos.piece_on(from), false));
+                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new(from, to, pos.piece_on(from), true));
+                    self.push(Move::new_normal(from, to, true, p_from, pos.piece_on(to)));
                 }
             }
         }
@@ -81,12 +86,13 @@ impl MoveList {
     fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, PieceType::HI) {
+            let p_from = pos.piece_on(from);
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.hi.attack(from, &occupied) & *target {
-                self.push(Move::new(from, to, pos.piece_on(from), false));
+                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new(from, to, pos.piece_on(from), true));
+                    self.push(Move::new_normal(from, to, true, p_from, pos.piece_on(to)));
                 }
             }
         }
@@ -95,8 +101,9 @@ impl MoveList {
         let color = pos.side_to_move();
         // TODO: promoted pieces
         for from in pos.pieces_cp(color, PieceType::KI) {
+            let p_from = pos.piece_on(from);
             for to in ATTACK_TABLE.ki.attack(from, color) & *target {
-                self.push(Move::new(from, to, pos.piece_on(from), false));
+                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
             }
         }
     }
@@ -104,8 +111,9 @@ impl MoveList {
         let color = pos.side_to_move();
         // TODO: use king_square?
         if let Some(from) = pos.pieces_cp(color, PieceType::OU).next() {
+            let p_from = pos.piece_on(from);
             for to in ATTACK_TABLE.ou.attack(from, color) & *target {
-                self.push(Move::new(from, to, pos.piece_on(from), false));
+                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
             }
         }
     }

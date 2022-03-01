@@ -1,63 +1,59 @@
 use crate::{Piece, Square};
-use std::fmt;
 
-pub enum MoveType {
-    Normal,
-    Drop,
+#[derive(Clone, Copy, Debug)]
+pub struct Move {
+    from: Option<Square>,
+    to: Square,
+    promotion: bool,
+    piece: Piece,
+    captured: Piece,
 }
-
-// xxxxxxxx xxxxxxxx xxxxxxxx x1111111  to
-// xxxxxxxx xxxxxxxx xxxxxxxx 1xxxxxxx  promote flag
-// xxxxxxxx xxxxxxxx x1111111 xxxxxxxx  from (or 0 if drop)
-// xxxxxxxx xxxxxxxx 1xxxxxxx xxxxxxxx  drop flag
-// xxxxxxxx xxx11111 xxxxxxxx xxxxxxxx  moved piece (If this move is promotion, moved piece is unpromoted piece)
-#[derive(Clone, Copy)]
-pub struct Move(u32);
 
 impl Move {
-    const SQUARE_MASK: u32 = 0x0000_007f;
-    const PIECE_MASK: u32 = 0x0000_001f;
-    const FROM_SHIFT: u32 = 8;
-    const PIECE_SHIFT: u32 = 16;
-    const PROMOTE_FLAG: u32 = 1 << 7;
-    const DROP_FLAG: u32 = 1 << 15;
-
-    pub fn new(from: Square, to: Square, piece: Piece, promote: bool) -> Self {
-        Move(
-            (piece.0 as u32) << Move::PIECE_SHIFT
-                | if promote { Move::PROMOTE_FLAG } else { 0 }
-                | (from.0 as u32) << Move::FROM_SHIFT
-                | (to.0 as u32),
-        )
-    }
-    pub fn from(&self) -> Square {
-        Square(((self.0 >> Move::FROM_SHIFT) & Move::SQUARE_MASK) as i8)
-    }
-    pub fn to(&self) -> Square {
-        Square((self.0 & Move::SQUARE_MASK) as i8)
-    }
-    pub fn move_type(&self) -> MoveType {
-        if self.0 & Move::DROP_FLAG == 0 {
-            MoveType::Normal
-        } else {
-            MoveType::Drop
+    fn new(
+        from: Option<Square>,
+        to: Square,
+        promotion: bool,
+        piece: Piece,
+        captured: Piece,
+    ) -> Self {
+        Move {
+            from,
+            to,
+            promotion,
+            piece,
+            captured,
         }
     }
-    pub fn is_promotion(&self) -> bool {
-        self.0 & Move::PROMOTE_FLAG != 0
+    pub fn new_normal(
+        from: Square,
+        to: Square,
+        promotion: bool,
+        piece: Piece,
+        captured: Piece,
+    ) -> Self {
+        Move::new(Some(from), to, promotion, piece, captured)
     }
-}
-
-impl fmt::Debug for Move {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Move")
-            .field("from", &self.from())
-            .field("to", &self.to())
-            .field(
-                "piece",
-                &Piece(((self.0 >> Move::PIECE_SHIFT) & Move::PIECE_MASK) as u8),
-            )
-            .field("promotion", &self.is_promotion())
-            .finish()
+    pub fn new_drop(to: Square, piece: Piece) -> Self {
+        Move::new(None, to, false, piece, Piece::EMP)
+    }
+    pub fn from(&self) -> Option<Square> {
+        self.from
+    }
+    pub fn to(&self) -> Square {
+        self.to
+    }
+    pub fn is_promotion(&self) -> bool {
+        self.promotion
+    }
+    pub fn piece(&self) -> Piece {
+        self.piece
+    }
+    pub fn captured(&self) -> Option<Piece> {
+        if self.captured != Piece::EMP {
+            Some(self.captured)
+        } else {
+            None
+        }
     }
 }

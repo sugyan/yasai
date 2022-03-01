@@ -1,7 +1,6 @@
 use crate::bitboard::Bitboard;
 use crate::movegen::MoveList;
 use crate::piece::PieceType;
-use crate::shogi_move::MoveType;
 use crate::square::{File, Rank};
 use crate::{Color, Move, Piece, Square};
 use std::fmt;
@@ -57,50 +56,59 @@ impl Position {
         self.pt_bb[pt.0 as usize]
     }
     pub fn do_move(&mut self, m: Move) {
+        let c = self.side_to_move;
         let to = m.to();
-        match m.move_type() {
-            MoveType::Normal => {
-                let from = m.from();
-                let p_from = self.piece_on(from);
-                self.remove_piece(from, p_from);
-                // TODO: captured?
-                // TODO: promoted?
-                let p_to = p_from;
-                self.put_piece(to, p_to);
+        // Normal move
+        if let Some(from) = m.from() {
+            let p_from = self.piece_on(from);
+            self.remove_piece(from, p_from);
+            if let Some(p_cap) = m.captured() {
+                if let Some(pt) = p_cap.piece_type() {
+                    self.xor_bbs(!c, pt, to);
+                }
             }
-            MoveType::Drop => {
-                // TODO
-            }
+            // TODO: promoted?
+            let p_to = p_from;
+            self.put_piece(to, p_to);
+        }
+        // Drop move
+        else {
+            // TODO
         }
         self.side_to_move = !self.side_to_move;
     }
     pub fn undo_move(&mut self, m: Move) {
         let to = m.to();
-        match m.move_type() {
-            MoveType::Normal => {
-                let p_to = self.piece_on(to);
-                // TODO: captured?
-                self.remove_piece(to, p_to);
-                // TODO: promoted?
-                let p_from = p_to;
-                let from = m.from();
-                self.put_piece(from, p_from);
+        // Normal move
+        if let Some(from) = m.from() {
+            let p_to = self.piece_on(to);
+            self.remove_piece(to, p_to);
+            if let Some(p_cap) = m.captured() {
+                self.put_piece(to, p_cap)
             }
-            MoveType::Drop => {
-                // TODO
-            }
+            // TODO: promoted?
+            let p_from = p_to;
+            self.put_piece(from, p_from);
+        }
+        // Drop move
+        else {
+            // TODO
         }
         self.side_to_move = !self.side_to_move;
     }
     fn put_piece(&mut self, sq: Square, p: Piece) {
         if let (Some(c), Some(pt)) = (p.color(), p.piece_type()) {
             self.xor_bbs(c, pt, sq);
+        } else {
+            panic!("put_piece: invalid piece: {:?}, square: {:?}", p, sq);
         }
         self.board[sq.0 as usize] = p;
     }
     fn remove_piece(&mut self, sq: Square, p: Piece) {
         if let (Some(c), Some(pt)) = (p.color(), p.piece_type()) {
             self.xor_bbs(c, pt, sq);
+        } else {
+            panic!("remove_piece: invalid piece: {:?}, square: {:?}", p, sq);
         }
         self.board[sq.0 as usize] = Piece::EMP;
     }

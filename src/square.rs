@@ -241,9 +241,8 @@ impl Square {
 
 impl fmt::Debug for Square {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Square")
-            .field("file", &self.file())
-            .field("rank", &self.rank())
+        f.debug_tuple("Square")
+            .field(&(self.file(), self.rank()))
             .finish()
     }
 }
