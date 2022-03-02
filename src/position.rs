@@ -107,7 +107,7 @@ impl Position {
         self.c_bb[c.index()]
     }
     pub fn pieces_p(&self, pt: PieceType) -> Bitboard {
-        self.pt_bb[pt.0 as usize]
+        self.pt_bb[pt.index()]
     }
     pub fn pieces_ps(&self, pts: &[PieceType]) -> Bitboard {
         let mut bb = Bitboard::ZERO;
@@ -224,7 +224,7 @@ impl Position {
     fn xor_bbs(&mut self, c: Color, pt: PieceType, sq: Square) {
         self.c_bb[c.index()] ^= sq;
         self.pt_bb[PieceType::OCCUPIED.index()] ^= sq;
-        self.pt_bb[pt.0 as usize] ^= sq;
+        self.pt_bb[pt.index()] ^= sq;
     }
     #[rustfmt::skip]
     pub fn attackers_to(&self, c: Color, to: Square) -> Bitboard {
