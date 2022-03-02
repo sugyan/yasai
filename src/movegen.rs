@@ -1,11 +1,12 @@
 use crate::bitboard::Bitboard;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
-use crate::{Move, PieceType, Position};
+use crate::{Color, Move, PieceType, Position, Square};
 
-#[derive(Default)]
 pub struct MoveList(Vec<Move>);
 
 impl MoveList {
+    const MAX_LEGAL_MOVES: usize = 593;
+
     pub fn generate_legals(&mut self, pos: &Position) {
         if pos.in_check() {
             self.generate_evasions(pos);
@@ -16,10 +17,16 @@ impl MoveList {
         let c = pos.side_to_move();
         self.0.retain(|m| {
             if let Some(from) = m.from() {
+                // 玉が相手の攻撃範囲内に動いてしまう指し手
                 if pos.piece_on(from).piece_type() == Some(PieceType::OU) {
                     return pos.attackers_to(!c, m.to()).is_empty();
                 }
-                // TODO: pinned
+                // 飛び駒から守っている駒が直線上から外れてしまう指し手
+                if !(pos.pinned() & Bitboard::from_square(from)).is_empty() {
+                    let sq = pos.pieces_cp(c, PieceType::OU).pop();
+                    return !((BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
+                        && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty());
+                }
             }
             true
         });
@@ -41,26 +48,32 @@ impl MoveList {
     }
     fn generate_evasions(&mut self, pos: &Position) {
         let c = pos.side_to_move();
+        let mut checkers_attacks = Bitboard::ZERO;
+        let mut checkers_count = 0;
+        for sq in pos.checkers() {
+            if let Some(pt) = pos.piece_on(sq).piece_type() {
+                checkers_attacks |= Self::pseudo_attack(pt, sq);
+            }
+            checkers_count += 1;
+        }
         let sq = pos.pieces_cp(c, PieceType::OU).pop();
-        for to in ATTACK_TABLE.ou.attack(sq, !c) & !pos.pieces_c(c) {
+        for to in ATTACK_TABLE.ou.attack(sq, !c) & !pos.pieces_c(c) & !checkers_attacks {
             self.push(Move::new_normal(sq, to, false, pos.piece_on(sq)));
         }
-        if let Some(checkers) = pos.checkers() {
-            // 両王手の場合は玉が逃げるしかない
-            if checkers.count() > 1 {
-                return;
-            }
-            let checker = checkers.clone().pop();
-            let target = checkers | BETWEEN_TABLE[checker.index()][sq.index()];
-            self.generate_for_fu(pos, &target);
-            self.generate_for_ky(pos, &target);
-            self.generate_for_ke(pos, &target);
-            self.generate_for_gi(pos, &target);
-            self.generate_for_ka(pos, &target);
-            self.generate_for_hi(pos, &target);
-            self.generate_for_ki(pos, &target);
-            // TODO: drop
+        // 両王手の場合は玉が逃げるしかない
+        if checkers_count > 1 {
+            return;
         }
+        let checker = pos.checkers().pop();
+        let target = pos.checkers() | BETWEEN_TABLE[checker.index()][sq.index()];
+        self.generate_for_fu(pos, &target);
+        self.generate_for_ky(pos, &target);
+        self.generate_for_ke(pos, &target);
+        self.generate_for_gi(pos, &target);
+        self.generate_for_ka(pos, &target);
+        self.generate_for_hi(pos, &target);
+        self.generate_for_ki(pos, &target);
+        // TODO: drop
     }
     fn push(&mut self, m: Move) {
         self.0.push(m);
@@ -156,6 +169,23 @@ impl MoveList {
                 self.push(Move::new_normal(from, to, false, p_from));
             }
         }
+    }
+    #[rustfmt::skip]
+    fn pseudo_attack(pt: PieceType, sq: Square) -> Bitboard {
+        match pt {
+            // TODO
+            PieceType::KA => ATTACK_TABLE.ka.pseudo_attack(sq),
+            PieceType::UM => ATTACK_TABLE.ka.pseudo_attack(sq) | ATTACK_TABLE.ou.attack(sq, Color::Black),
+            PieceType::HI => ATTACK_TABLE.hi.pseudo_attack(sq),
+            PieceType::RY => ATTACK_TABLE.hi.pseudo_attack(sq) | ATTACK_TABLE.ou.attack(sq, Color::Black),
+            _ => Bitboard::ZERO,
+        }
+    }
+}
+
+impl Default for MoveList {
+    fn default() -> Self {
+        Self(Vec::with_capacity(MoveList::MAX_LEGAL_MOVES))
     }
 }
 

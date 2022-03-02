@@ -210,8 +210,11 @@ impl SlidingAttackTable {
         }
     }
     pub fn attack(&self, sq: Square, occupied: &Bitboard) -> Bitboard {
-        self.table[self.offsets[sq.0 as usize]
-            + Self::occupied_to_index(*occupied, self.masks[sq.0 as usize])]
+        self.table[self.offsets[sq.index()]
+            + Self::occupied_to_index(*occupied, self.masks[sq.index()])]
+    }
+    pub fn pseudo_attack(&self, sq: Square) -> Bitboard {
+        self.table[self.offsets[sq.index()]]
     }
 }
 
