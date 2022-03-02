@@ -42,7 +42,7 @@ impl File {
 
 impl From<Square> for File {
     fn from(sq: Square) -> Self {
-        File::SQUARE_TO_FILE[sq.0 as usize]
+        File::SQUARE_TO_FILE[sq.index()]
     }
 }
 
@@ -108,7 +108,7 @@ impl Rank {
 
 impl From<Square> for Rank {
     fn from(sq: Square) -> Self {
-        Rank::SQUARE_TO_RANK[sq.0 as usize]
+        Rank::SQUARE_TO_RANK[sq.index()]
     }
 }
 
@@ -234,6 +234,15 @@ impl Square {
     }
     pub fn rank(&self) -> Rank {
         Rank::from(*self)
+    }
+    pub fn checked_shift(self, file_delta: i8, rank_delta: i8) -> Option<Self> {
+        let file = self.file().0 + file_delta;
+        let rank = self.rank().0 + rank_delta;
+        if (0..9).contains(&file) && (0..9).contains(&rank) {
+            Some(Square(file * 9 + rank))
+        } else {
+            None
+        }
     }
     pub fn index(&self) -> usize {
         self.0 as usize

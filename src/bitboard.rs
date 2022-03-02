@@ -24,7 +24,7 @@ impl Bitboard {
         unsafe { self.u[i] }
     }
     pub fn from_square(sq: Square) -> Bitboard {
-        Bitboard::SQUARE[sq.0 as usize]
+        Bitboard::SQUARE[sq.index()]
     }
     pub fn from_file(file: File) -> Bitboard {
         Bitboard::FILES[file.0 as usize]

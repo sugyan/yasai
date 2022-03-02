@@ -7,34 +7,25 @@ use bitintr::Pext;
 use once_cell::sync::Lazy;
 
 #[derive(Clone, Copy)]
-struct Delta(pub i8);
-
-impl Delta {
-    const N: Delta = Delta(-1);
-    const E: Delta = Delta(-9);
-    const S: Delta = Delta(1);
-    const W: Delta = Delta(9);
-    const NE: Delta = Delta(Delta::N.0 + Delta::E.0);
-    const SE: Delta = Delta(Delta::S.0 + Delta::E.0);
-    const SW: Delta = Delta(Delta::S.0 + Delta::W.0);
-    const NW: Delta = Delta(Delta::N.0 + Delta::W.0);
-    const NNE: Delta = Delta(Delta::N.0 + Delta::NE.0);
-    const NNW: Delta = Delta(Delta::N.0 + Delta::NW.0);
-    const SSE: Delta = Delta(Delta::S.0 + Delta::SE.0);
-    const SSW: Delta = Delta(Delta::S.0 + Delta::SW.0);
+struct Delta {
+    file: i8,
+    rank: i8,
 }
 
-impl std::ops::Add<Delta> for Square {
-    type Output = Option<Square>;
-
-    fn add(self, rhs: Delta) -> Self::Output {
-        let i = self.0 + rhs.0;
-        if 0 <= i && i < Square::NUM as i8 {
-            Some(Square(i))
-        } else {
-            None
-        }
-    }
+#[rustfmt::skip]
+impl Delta {
+    const N:   Delta = Delta { file:  0, rank: -1 };
+    const E:   Delta = Delta { file: -1, rank:  0 };
+    const S:   Delta = Delta { file:  0, rank:  1 };
+    const W:   Delta = Delta { file:  1, rank:  0 };
+    const NE:  Delta = Delta { file: -1, rank: -1 };
+    const SE:  Delta = Delta { file: -1, rank:  1 };
+    const SW:  Delta = Delta { file:  1, rank:  1 };
+    const NW:  Delta = Delta { file:  1, rank: -1 };
+    const NNE: Delta = Delta { file: -1, rank: -2 };
+    const NNW: Delta = Delta { file:  1, rank: -2 };
+    const SSE: Delta = Delta { file: -1, rank:  2 };
+    const SSW: Delta = Delta { file:  1, rank:  2 };
 }
 
 pub struct PieceAttackTable([[Bitboard; Color::NUM]; Square::NUM]);
@@ -56,11 +47,8 @@ impl PieceAttackTable {
         for sq in Square::ALL {
             for color in Color::ALL {
                 for &delta in deltas[color.index()] {
-                    if let Some(to) = sq + delta {
-                        if (to.file() - sq.file()).abs() <= 1 && (to.rank() - sq.rank()).abs() <= 2
-                        {
-                            table[sq.0 as usize][color.index()] |= to;
-                        }
+                    if let Some(to) = sq.checked_shift(delta.file, delta.rank) {
+                        table[sq.index()][color.index()] |= to;
                     }
                 }
             }
@@ -68,25 +56,20 @@ impl PieceAttackTable {
         Self(table)
     }
     pub fn attack(&self, sq: Square, c: Color) -> Bitboard {
-        self.0[sq.0 as usize][c.index()]
+        self.0[sq.index()][c.index()]
     }
 }
 
 fn sliding_attacks(sq: Square, occupied: Bitboard, deltas: &[Delta]) -> Bitboard {
     let mut bb = Bitboard::ZERO;
     for &delta in deltas {
-        let (mut prev, mut curr) = (sq, sq + delta);
+        let mut curr = sq.checked_shift(delta.file, delta.rank);
         while let Some(to) = curr {
-            // stop if rank diff is +8 or -8
-            if (to.rank() - prev.rank()) & 0x0f == 0x08 {
-                break;
-            }
             bb |= to;
             if !(occupied & to).is_empty() {
                 break;
             }
-            prev = to;
-            curr = to + delta;
+            curr = to.checked_shift(delta.file, delta.rank);
         }
     }
     bb
@@ -137,17 +120,17 @@ impl LanceAttackTable {
                 };
                 for index in 0..LanceAttackTable::MASK_TABLE_NUM {
                     let occupied = Self::index_to_occupied(index, mask);
-                    table[sq.0 as usize][c.index()][index] = sliding_attacks(sq, occupied, &deltas);
+                    table[sq.index()][c.index()][index] = sliding_attacks(sq, occupied, &deltas);
                 }
             }
         }
         Self(table)
     }
     pub fn attack(&self, sq: Square, c: Color, occupied: &Bitboard) -> Bitboard {
-        let index = ((occupied.value(if sq.0 > Square::SQ79.0 { 1 } else { 0 })
-            >> LanceAttackTable::OFFSETS[sq.0 as usize]) as usize)
+        let index = ((occupied.value(if sq.index() >= 63 { 1 } else { 0 })
+            >> LanceAttackTable::OFFSETS[sq.index()]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
-        self.0[sq.0 as usize][c.index()][index]
+        self.0[sq.index()][c.index()][index]
     }
 }
 
@@ -194,8 +177,8 @@ impl SlidingAttackTable {
         for sq in Square::ALL {
             let mask = SlidingAttackTable::attack_mask(sq, deltas);
             let ones = mask.count_ones();
-            masks[sq.0 as usize] = mask;
-            offsets[sq.0 as usize] = offset;
+            masks[sq.index()] = mask;
+            offsets[sq.index()] = offset;
             for index in 0..1 << ones {
                 let occupied = Self::index_to_occupied(index, mask);
                 table[offset + Self::occupied_to_index(occupied, mask)] =
@@ -210,8 +193,8 @@ impl SlidingAttackTable {
         }
     }
     pub fn attack(&self, sq: Square, occupied: &Bitboard) -> Bitboard {
-        self.table[self.offsets[sq.index()]
-            + Self::occupied_to_index(*occupied, self.masks[sq.index()])]
+        self.table
+            [self.offsets[sq.index()] + Self::occupied_to_index(*occupied, self.masks[sq.index()])]
     }
     pub fn pseudo_attack(&self, sq: Square) -> Bitboard {
         self.table[self.offsets[sq.index()]]

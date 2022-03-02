@@ -59,7 +59,7 @@ impl Position {
         let mut c_bb = [Bitboard::ZERO; Color::NUM];
         let mut pt_bb = [Bitboard::ZERO; PieceType::NUM];
         for sq in Square::ALL {
-            let piece = board[sq.0 as usize];
+            let piece = board[sq.index()];
             if let Some(c) = piece.color() {
                 c_bb[c.index()] |= sq;
             }
@@ -98,7 +98,7 @@ impl Position {
         ml
     }
     pub fn piece_on(&self, sq: Square) -> Piece {
-        self.board[sq.0 as usize]
+        self.board[sq.index()]
     }
     pub fn pieces_cp(&self, c: Color, pt: PieceType) -> Bitboard {
         self.pieces_c(c) & self.pieces_p(pt)
@@ -211,7 +211,7 @@ impl Position {
         } else {
             panic!("failed to put piece: square: {:?}, piece: {:?}", sq, p);
         }
-        self.board[sq.0 as usize] = p;
+        self.board[sq.index()] = p;
     }
     fn remove_piece(&mut self, sq: Square, p: Piece) {
         if let (Some(c), Some(pt)) = (p.color(), p.piece_type()) {
@@ -219,7 +219,7 @@ impl Position {
         } else {
             panic!("failed to remove piece: square: {:?}, piece: {:?}", sq, p);
         }
-        self.board[sq.0 as usize] = Piece::EMP;
+        self.board[sq.index()] = Piece::EMP;
     }
     fn xor_bbs(&mut self, c: Color, pt: PieceType, sq: Square) {
         self.c_bb[c.index()] ^= sq;
@@ -259,7 +259,7 @@ impl Default for Position {
         for i in 0..9 {
             for j in 0..9 {
                 let (file, rank) = (File(8 - j), Rank(i));
-                board[Square::new(file, rank).0 as usize] = initial_board[i as usize][j as usize];
+                board[Square::new(file, rank).index()] = initial_board[i as usize][j as usize];
             }
         }
         Self::new(board, Color::Black)
