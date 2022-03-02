@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::bitboard::Bitboard;
 use crate::square::{File, Rank};
 use crate::{Color, Square};
@@ -51,8 +53,8 @@ impl PieceAttackTable {
 
     fn new(deltas: &[&[Delta]; Color::NUM]) -> Self {
         let mut table = [[Bitboard::ZERO; Color::NUM]; Square::NUM];
-        for &sq in &Square::ALL {
-            for &color in &Color::ALL {
+        for sq in Square::ALL {
+            for color in Color::ALL {
                 for &delta in deltas[color.index()] {
                     if let Some(to) = sq + delta {
                         if (to.file() - sq.file()).abs() <= 1 && (to.rank() - sq.rank()).abs() <= 2
@@ -126,9 +128,9 @@ impl LanceAttackTable {
     fn new() -> Self {
         let mut table = [[[Bitboard::ZERO; LanceAttackTable::MASK_TABLE_NUM as usize]; Color::NUM];
             Square::NUM];
-        for &sq in &Square::ALL {
+        for sq in Square::ALL {
             let mask = Self::attack_mask(sq);
-            for &c in &Color::ALL {
+            for c in Color::ALL {
                 let deltas = match c {
                     Color::Black => vec![Delta::N],
                     Color::White => vec![Delta::S],
@@ -141,11 +143,11 @@ impl LanceAttackTable {
         }
         Self(table)
     }
-    pub fn attack(&self, sq: Square, color: Color, occupied: &Bitboard) -> Bitboard {
+    pub fn attack(&self, sq: Square, c: Color, occupied: &Bitboard) -> Bitboard {
         let index = ((occupied.value(if sq.0 > Square::SQ79.0 { 1 } else { 0 })
             >> LanceAttackTable::OFFSETS[sq.0 as usize]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
-        self.0[sq.0 as usize][color.index()][index]
+        self.0[sq.0 as usize][c.index()][index]
     }
 }
 
@@ -189,7 +191,7 @@ impl SlidingAttackTable {
         let mut masks = [Bitboard::ZERO; Square::NUM];
         let mut offsets = [0; Square::NUM];
         let mut offset = 0;
-        for &sq in &Square::ALL {
+        for sq in Square::ALL {
             let mask = SlidingAttackTable::attack_mask(sq, deltas);
             let ones = mask.count_ones();
             masks[sq.0 as usize] = mask;
@@ -239,4 +241,32 @@ pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| AttackTable {
         &[Delta::N, Delta::E, Delta::S, Delta::W],
     ),
     ou: PieceAttackTable::new(&[PieceAttackTable::BOU_DELTAS, PieceAttackTable::WOU_DELTAS]),
+});
+
+pub static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::new(|| {
+    let mut bbs = [[Bitboard::ZERO; Square::NUM]; Square::NUM];
+    for sq0 in Square::ALL {
+        for sq1 in Square::ALL {
+            let (df, dr) = (sq1.file() - sq0.file(), sq1.rank() - sq0.rank());
+            if (df | dr == 0) || (df != 0 && dr != 0 && df.abs() != dr.abs()) {
+                continue;
+            }
+            #[rustfmt::skip]
+            let delta = match (df.cmp(&0), dr.cmp(&0)) {
+                (Ordering::Equal,   Ordering::Less)    => Delta::N,
+                (Ordering::Less,    Ordering::Equal)   => Delta::E,
+                (Ordering::Equal,   Ordering::Greater) => Delta::S,
+                (Ordering::Greater, Ordering::Equal)   => Delta::W,
+                (Ordering::Less,    Ordering::Less)    => Delta::NE,
+                (Ordering::Less,    Ordering::Greater) => Delta::SE,
+                (Ordering::Greater, Ordering::Greater) => Delta::SW,
+                (Ordering::Greater, Ordering::Less)    => Delta::NW,
+                _ => unreachable!(),
+            };
+            bbs[sq0.index()][sq1.index()] =
+                sliding_attacks(sq0, Bitboard::from_square(sq1), &[delta])
+                    & !Bitboard::from_square(sq1);
+        }
+    }
+    bbs
 });

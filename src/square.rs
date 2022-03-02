@@ -15,7 +15,6 @@ impl File {
     pub const FILE8: File = File(7);
     pub const FILE9: File = File(8);
     pub const NUM: usize = 9;
-
     pub const ALL: [File; File::NUM] = [
         File::FILE1,
         File::FILE2,
@@ -75,7 +74,6 @@ impl Rank {
     pub const RANK8: Rank = Rank(7);
     pub const RANK9: Rank = Rank(8);
     pub const NUM: usize = 9;
-
     pub const ALL: [Rank; Rank::NUM] = [
         Rank::RANK1,
         Rank::RANK2,
@@ -99,6 +97,7 @@ impl Rank {
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
     ];
+
     pub fn is_opponent_field(&self, c: Color) -> bool {
         match c {
             Color::Black => (1 << self.0) & 0x0007 != 0,
@@ -127,7 +126,7 @@ impl fmt::Debug for Rank {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Square(pub i8);
 
 impl Square {
@@ -214,17 +213,6 @@ impl Square {
     pub const SQ99: Square = Square(80);
     /// How many squares are there?
     pub const NUM: usize = 81;
-
-    pub fn new(file: File, rank: Rank) -> Self {
-        Square(file.0 * 9 + rank.0)
-    }
-    pub fn file(&self) -> File {
-        File::from(*self)
-    }
-    pub fn rank(&self) -> Rank {
-        Rank::from(*self)
-    }
-
     #[rustfmt::skip]
     pub const ALL: [Square; Square::NUM] = [
         Square::SQ11, Square::SQ12, Square::SQ13, Square::SQ14, Square::SQ15, Square::SQ16, Square::SQ17, Square::SQ18, Square::SQ19,
@@ -237,6 +225,19 @@ impl Square {
         Square::SQ81, Square::SQ82, Square::SQ83, Square::SQ84, Square::SQ85, Square::SQ86, Square::SQ87, Square::SQ88, Square::SQ89,
         Square::SQ91, Square::SQ92, Square::SQ93, Square::SQ94, Square::SQ95, Square::SQ96, Square::SQ97, Square::SQ98, Square::SQ99,
     ];
+
+    pub fn new(file: File, rank: Rank) -> Self {
+        Square(file.0 * 9 + rank.0)
+    }
+    pub fn file(&self) -> File {
+        File::from(*self)
+    }
+    pub fn rank(&self) -> Rank {
+        Rank::from(*self)
+    }
+    pub fn index(&self) -> usize {
+        self.0 as usize
+    }
 }
 
 impl fmt::Debug for Square {

@@ -272,11 +272,8 @@ impl fmt::Debug for Bitboard {
         for &rank in Rank::ALL.iter() {
             s.push(' ');
             for &file in File::ALL.iter().rev() {
-                s.push(if (*self & Square::new(file, rank)).is_empty() {
-                    '.'
-                } else {
-                    '#'
-                });
+                let b = !(*self & Square::new(file, rank)).is_empty();
+                s.push(if b { '#' } else { '.' });
             }
             s += "\n";
         }

@@ -20,8 +20,28 @@ impl PieceType {
     pub const NG: PieceType = PieceType(12);
     pub const UM: PieceType = PieceType(13);
     pub const RY: PieceType = PieceType(14);
-
     pub const NUM: usize = 15;
+    pub const ALL: [PieceType; PieceType::NUM] = [
+        PieceType::OCCUPIED,
+        PieceType::FU,
+        PieceType::KY,
+        PieceType::KE,
+        PieceType::GI,
+        PieceType::KA,
+        PieceType::HI,
+        PieceType::KI,
+        PieceType::OU,
+        PieceType::TO,
+        PieceType::NY,
+        PieceType::NK,
+        PieceType::NG,
+        PieceType::UM,
+        PieceType::RY,
+    ];
+
+    pub fn index(&self) -> usize {
+        self.0 as usize
+    }
 }
 
 impl fmt::Debug for PieceType {
@@ -54,6 +74,8 @@ impl fmt::Debug for PieceType {
 pub struct Piece(pub u8);
 
 impl Piece {
+    pub const PROMOTION_BIT_SHIFT: u8 = 3;
+    pub const PROMOTION_BIT: u8 = 1 << Piece::PROMOTION_BIT_SHIFT;
     pub const WHITE_BIT_SHIFT: u32 = 4;
     pub const WHITE_BIT: u8 = 1 << Piece::WHITE_BIT_SHIFT;
     // empty piece
@@ -89,6 +111,12 @@ impl Piece {
     pub const WUM: Piece = Piece(29);
     pub const WRY: Piece = Piece(30);
 
+    pub fn promoted(&self) -> Self {
+        Piece(self.0 | Piece::PROMOTION_BIT)
+    }
+    pub fn demoted(&self) -> Self {
+        Piece(self.0 & !Piece::PROMOTION_BIT)
+    }
     pub fn piece_type(&self) -> Option<PieceType> {
         match *self {
             Piece::EMP => None,
