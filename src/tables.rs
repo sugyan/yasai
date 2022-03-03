@@ -1,10 +1,9 @@
-use std::cmp::Ordering;
-
 use crate::bitboard::Bitboard;
 use crate::square::{File, Rank};
-use crate::{Color, Square};
+use crate::{Color, PieceType, Square};
 use bitintr::Pext;
 use once_cell::sync::Lazy;
+use std::cmp::Ordering;
 
 #[derive(Clone, Copy)]
 struct Delta {
@@ -26,6 +25,22 @@ impl Delta {
     const NNW: Delta = Delta { file:  1, rank: -2 };
     const SSE: Delta = Delta { file: -1, rank:  2 };
     const SSW: Delta = Delta { file:  1, rank:  2 };
+}
+
+trait Attack: Sync + Send {
+    fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard;
+    fn pseudo_attack(&self, sq: Square) -> Bitboard;
+}
+
+struct UnreachableAttackTable;
+
+impl Attack for UnreachableAttackTable {
+    fn attack(&self, _sq: Square, _c: Color, _occ: &Bitboard) -> Bitboard {
+        unreachable!()
+    }
+    fn pseudo_attack(&self, _sq: Square) -> Bitboard {
+        unreachable!()
+    }
 }
 
 pub struct PieceAttackTable([[Bitboard; Color::NUM]; Square::NUM]);
@@ -55,8 +70,14 @@ impl PieceAttackTable {
         }
         Self(table)
     }
-    pub fn attack(&self, sq: Square, c: Color) -> Bitboard {
+}
+
+impl Attack for PieceAttackTable {
+    fn attack(&self, sq: Square, c: Color, _occ: &Bitboard) -> Bitboard {
         self.0[sq.index()][c.index()]
+    }
+    fn pseudo_attack(&self, _sq: Square) -> Bitboard {
+        unreachable!()
     }
 }
 
@@ -126,11 +147,17 @@ impl LanceAttackTable {
         }
         Self(table)
     }
-    pub fn attack(&self, sq: Square, c: Color, occupied: &Bitboard) -> Bitboard {
-        let index = ((occupied.value(if sq.index() >= 63 { 1 } else { 0 })
+}
+
+impl Attack for LanceAttackTable {
+    fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
+        let index = ((occ.value(if sq.index() >= 63 { 1 } else { 0 })
             >> LanceAttackTable::OFFSETS[sq.index()]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
         self.0[sq.index()][c.index()][index]
+    }
+    fn pseudo_attack(&self, _sq: Square) -> Bitboard {
+        todo!()
     }
 }
 
@@ -192,41 +219,70 @@ impl SlidingAttackTable {
             offsets,
         }
     }
-    pub fn attack(&self, sq: Square, occupied: &Bitboard) -> Bitboard {
+}
+
+impl Attack for SlidingAttackTable {
+    fn attack(&self, sq: Square, _c: Color, occupied: &Bitboard) -> Bitboard {
         self.table
             [self.offsets[sq.index()] + Self::occupied_to_index(*occupied, self.masks[sq.index()])]
     }
-    pub fn pseudo_attack(&self, sq: Square) -> Bitboard {
+    fn pseudo_attack(&self, sq: Square) -> Bitboard {
         self.table[self.offsets[sq.index()]]
     }
 }
 
 pub struct AttackTable {
-    pub fu: PieceAttackTable,
-    pub ky: LanceAttackTable,
-    pub ke: PieceAttackTable,
-    pub gi: PieceAttackTable,
-    pub ki: PieceAttackTable,
-    pub ka: SlidingAttackTable,
-    pub hi: SlidingAttackTable,
-    pub ou: PieceAttackTable,
+    tables: [Box<dyn Attack>; PieceType::NUM],
+}
+
+impl AttackTable {
+    pub fn attack(&self, pt: PieceType, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
+        self.tables[pt.index()].attack(sq, c, occ)
+    }
+    pub fn pseudo_attack(&self, pt: PieceType, sq: Square) -> Bitboard {
+        self.tables[pt.index()].pseudo_attack(sq)
+    }
 }
 
 pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| AttackTable {
-    fu: PieceAttackTable::new(&[PieceAttackTable::BFU_DELTAS, PieceAttackTable::WFU_DELTAS]),
-    ky: LanceAttackTable::new(),
-    ke: PieceAttackTable::new(&[PieceAttackTable::BKE_DELTAS, PieceAttackTable::WKE_DELTAS]),
-    gi: PieceAttackTable::new(&[PieceAttackTable::BGI_DELTAS, PieceAttackTable::WGI_DELTAS]),
-    ki: PieceAttackTable::new(&[PieceAttackTable::BKI_DELTAS, PieceAttackTable::WKI_DELTAS]),
-    ka: SlidingAttackTable::new(
-        20224, // 1 * (1 << 12) + 8 * (1 << 10) + 16 * (1 << 8) + 52 * (1 << 6) + 4 * (1 << 7)
-        &[Delta::NE, Delta::SE, Delta::SW, Delta::NW],
-    ),
-    hi: SlidingAttackTable::new(
-        495616, // 4 * (1 << 14) + 28 * (1 << 13) + 49 * (1 << 12)
-        &[Delta::N, Delta::E, Delta::S, Delta::W],
-    ),
-    ou: PieceAttackTable::new(&[PieceAttackTable::BOU_DELTAS, PieceAttackTable::WOU_DELTAS]),
+    tables: [
+        Box::new(UnreachableAttackTable),
+        Box::new(PieceAttackTable::new(&[
+            PieceAttackTable::BFU_DELTAS,
+            PieceAttackTable::WFU_DELTAS,
+        ])),
+        Box::new(LanceAttackTable::new()),
+        Box::new(PieceAttackTable::new(&[
+            PieceAttackTable::BKE_DELTAS,
+            PieceAttackTable::WKE_DELTAS,
+        ])),
+        Box::new(PieceAttackTable::new(&[
+            PieceAttackTable::BGI_DELTAS,
+            PieceAttackTable::WGI_DELTAS,
+        ])),
+        Box::new(SlidingAttackTable::new(
+            20224, // 1 * (1 << 12) + 8 * (1 << 10) + 16 * (1 << 8) + 52 * (1 << 6) + 4 * (1 << 7)
+            &[Delta::NE, Delta::SE, Delta::SW, Delta::NW],
+        )),
+        Box::new(SlidingAttackTable::new(
+            495616, // 4 * (1 << 14) + 28 * (1 << 13) + 49 * (1 << 12)
+            &[Delta::N, Delta::E, Delta::S, Delta::W],
+        )),
+        Box::new(PieceAttackTable::new(&[
+            PieceAttackTable::BKI_DELTAS,
+            PieceAttackTable::WKI_DELTAS,
+        ])),
+        Box::new(PieceAttackTable::new(&[
+            PieceAttackTable::BOU_DELTAS,
+            PieceAttackTable::WOU_DELTAS,
+        ])),
+        Box::new(UnreachableAttackTable),
+        Box::new(UnreachableAttackTable),
+        Box::new(UnreachableAttackTable),
+        Box::new(UnreachableAttackTable),
+        Box::new(UnreachableAttackTable),
+        Box::new(UnreachableAttackTable),
+    ],
 });
 
 pub static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::new(|| {

@@ -1,6 +1,7 @@
 use crate::bitboard::Bitboard;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::{Color, Move, PieceType, Position, Square};
+use PieceType::*;
 
 pub struct MoveList(Vec<Move>);
 
@@ -58,7 +59,10 @@ impl MoveList {
                 }
                 checkers_count += 1;
             }
-            for to in ATTACK_TABLE.ou.attack(sq, !c) & !pos.pieces_c(c) & !checkers_attacks {
+            for to in ATTACK_TABLE.attack(OU, sq, !c, &Bitboard::ZERO)
+                & !pos.pieces_c(c)
+                & !checkers_attacks
+            {
                 self.push(Move::new_normal(sq, to, false, pos.piece_on(sq)));
             }
             // 両王手の場合は玉が逃げるしかない
@@ -85,7 +89,7 @@ impl MoveList {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, PieceType::FU) {
             let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.fu.attack(from, c) & *target {
+            for to in ATTACK_TABLE.attack(FU, from, c, &Bitboard::ZERO) & *target {
                 // TODO: (force) promote?
                 self.push(Move::new_normal(from, to, false, p_from));
             }
@@ -96,7 +100,7 @@ impl MoveList {
         for from in pos.pieces_cp(c, PieceType::KY) {
             let p_from = pos.piece_on(from);
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
-            for to in ATTACK_TABLE.ky.attack(from, c, &occupied) & *target {
+            for to in ATTACK_TABLE.attack(KY, from, c, &occupied) & *target {
                 // TODO: (force) promote?
                 self.push(Move::new_normal(from, to, false, p_from));
             }
@@ -106,7 +110,7 @@ impl MoveList {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, PieceType::KE) {
             let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.ke.attack(from, c) & *target {
+            for to in ATTACK_TABLE.attack(KE, from, c, &Bitboard::ZERO) & *target {
                 // TODO: (force) promote?
                 self.push(Move::new_normal(from, to, false, p_from));
             }
@@ -117,7 +121,7 @@ impl MoveList {
         for from in pos.pieces_cp(c, PieceType::GI) {
             let p_from = pos.piece_on(from);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
-            for to in ATTACK_TABLE.gi.attack(from, c) & *target {
+            for to in ATTACK_TABLE.attack(GI, from, c, &Bitboard::ZERO) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
                     self.push(Move::new_normal(from, to, true, p_from));
@@ -131,7 +135,7 @@ impl MoveList {
             let p_from = pos.piece_on(from);
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
-            for to in ATTACK_TABLE.ka.attack(from, &occupied) & *target {
+            for to in ATTACK_TABLE.attack(KA, from, c, &occupied) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
                     self.push(Move::new_normal(from, to, true, p_from));
@@ -145,7 +149,7 @@ impl MoveList {
             let p_from = pos.piece_on(from);
             let occupied = pos.pieces_p(PieceType::OCCUPIED);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
-            for to in ATTACK_TABLE.hi.attack(from, &occupied) & *target {
+            for to in ATTACK_TABLE.attack(HI, from, c, &occupied) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
                     self.push(Move::new_normal(from, to, true, p_from));
@@ -154,34 +158,34 @@ impl MoveList {
         }
     }
     fn generate_for_ki(&mut self, pos: &Position, target: &Bitboard) {
-        let color = pos.side_to_move();
+        let c = pos.side_to_move();
         // TODO: promoted pieces
-        for from in pos.pieces_cp(color, PieceType::KI) {
+        for from in pos.pieces_cp(c, PieceType::KI) {
             let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.ki.attack(from, color) & *target {
+            for to in ATTACK_TABLE.attack(KI, from, c, &Bitboard::ZERO) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
             }
         }
     }
     fn generate_for_ou(&mut self, pos: &Position, target: &Bitboard) {
-        let color = pos.side_to_move();
+        let c = pos.side_to_move();
         // TODO: use king_square?
-        if let Some(from) = pos.pieces_cp(color, PieceType::OU).next() {
+        if let Some(from) = pos.pieces_cp(c, PieceType::OU).next() {
             let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.ou.attack(from, color) & *target {
+            for to in ATTACK_TABLE.attack(OU, from, c, &Bitboard::ZERO) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
             }
         }
     }
     #[rustfmt::skip]
     fn pseudo_attack(pt: PieceType, sq: Square) -> Bitboard {
+        // TODO
         match pt {
-            // TODO
-            PieceType::KA => ATTACK_TABLE.ka.pseudo_attack(sq),
-            PieceType::UM => ATTACK_TABLE.ka.pseudo_attack(sq) | ATTACK_TABLE.ou.attack(sq, Color::Black),
-            PieceType::HI => ATTACK_TABLE.hi.pseudo_attack(sq),
-            PieceType::RY => ATTACK_TABLE.hi.pseudo_attack(sq) | ATTACK_TABLE.ou.attack(sq, Color::Black),
-            _ => Bitboard::ZERO,
+            PieceType::KA => ATTACK_TABLE.pseudo_attack(KA, sq),
+            PieceType::UM => ATTACK_TABLE.pseudo_attack(KA, sq) | ATTACK_TABLE.attack(OU, sq, Color::Black, &Bitboard::ZERO),
+            PieceType::HI => ATTACK_TABLE.pseudo_attack(HI, sq),
+            PieceType::RY => ATTACK_TABLE.pseudo_attack(HI, sq) | ATTACK_TABLE.attack(OU, sq, Color::Black, &Bitboard::ZERO),
+            _ => todo!()
         }
     }
 }
@@ -225,5 +229,16 @@ impl Iterator for MoveListIter {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_default() {
+        let pos = Position::default();
+        assert_eq!(30, pos.legal_moves().len());
     }
 }

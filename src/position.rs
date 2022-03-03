@@ -27,8 +27,8 @@ impl State {
             // TODO: ky
             #[rustfmt::skip]
             let snipers = (
-                  (ATTACK_TABLE.ka.pseudo_attack(sq) & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
-                | (ATTACK_TABLE.hi.pseudo_attack(sq) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
+                  (ATTACK_TABLE.pseudo_attack(PieceType::KA, sq) & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
+                | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
             ) & c_bb[c.index()];
             for sniper in snipers {
                 let blockers = BETWEEN_TABLE[sq.index()][sniper.index()]
@@ -233,13 +233,13 @@ impl Position {
     pub fn attackers_to(&self, c: Color, to: Square) -> Bitboard {
         let opp = !c;
         let occ = self.occupied();
-        (     (ATTACK_TABLE.fu.attack(to, opp) & self.pieces_p(PieceType::FU))
-            | (ATTACK_TABLE.ky.attack(to, opp, &occ) & self.pieces_p(PieceType::KY))
-            | (ATTACK_TABLE.ke.attack(to, opp) & self.pieces_p(PieceType::KE))
-            | (ATTACK_TABLE.gi.attack(to, opp) & self.pieces_ps(&[PieceType::GI, PieceType::RY, PieceType::OU]))
-            | (ATTACK_TABLE.ka.attack(to, &occ) & self.pieces_ps(&[PieceType::KA, PieceType::UM]))
-            | (ATTACK_TABLE.hi.attack(to, &occ) & self.pieces_ps(&[PieceType::HI, PieceType::RY]))
-            | (ATTACK_TABLE.ki.attack(to, opp) & self.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM, PieceType::OU]))
+        (     (ATTACK_TABLE.attack(PieceType::FU, to, opp, &occ) & self.pieces_p(PieceType::FU))
+            | (ATTACK_TABLE.attack(PieceType::KY, to, opp, &occ) & self.pieces_p(PieceType::KY))
+            | (ATTACK_TABLE.attack(PieceType::KE, to, opp, &occ) & self.pieces_p(PieceType::KE))
+            | (ATTACK_TABLE.attack(PieceType::GI, to, opp, &occ) & self.pieces_ps(&[PieceType::GI, PieceType::RY, PieceType::OU]))
+            | (ATTACK_TABLE.attack(PieceType::KA, to, opp, &occ) & self.pieces_ps(&[PieceType::KA, PieceType::UM]))
+            | (ATTACK_TABLE.attack(PieceType::HI, to, opp, &occ) & self.pieces_ps(&[PieceType::HI, PieceType::RY]))
+            | (ATTACK_TABLE.attack(PieceType::KI, to, opp, &occ) & self.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM, PieceType::OU]))
         ) & self.pieces_c(c)
     }
 }
