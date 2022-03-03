@@ -23,9 +23,10 @@ impl MoveList {
                 }
                 // 飛び駒から守っている駒が直線上から外れてしまう指し手
                 if !(pos.pinned() & Bitboard::from_square(from)).is_empty() {
-                    let sq = pos.pieces_cp(c, PieceType::OU).pop();
-                    return !((BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
-                        && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty());
+                    if let Some(sq) = pos.king(c) {
+                        return !((BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
+                            && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty());
+                    }
                 }
             }
             true
@@ -48,32 +49,34 @@ impl MoveList {
     }
     fn generate_evasions(&mut self, pos: &Position) {
         let c = pos.side_to_move();
-        let mut checkers_attacks = Bitboard::ZERO;
-        let mut checkers_count = 0;
-        for sq in pos.checkers() {
-            if let Some(pt) = pos.piece_on(sq).piece_type() {
-                checkers_attacks |= Self::pseudo_attack(pt, sq);
+        if let Some(sq) = pos.king(c) {
+            let mut checkers_attacks = Bitboard::ZERO;
+            let mut checkers_count = 0;
+            for ch in pos.checkers() {
+                if let Some(pt) = pos.piece_on(ch).piece_type() {
+                    checkers_attacks |= Self::pseudo_attack(pt, ch);
+                }
+                checkers_count += 1;
             }
-            checkers_count += 1;
+            for to in ATTACK_TABLE.ou.attack(sq, !c) & !pos.pieces_c(c) & !checkers_attacks {
+                self.push(Move::new_normal(sq, to, false, pos.piece_on(sq)));
+            }
+            // 両王手の場合は玉が逃げるしかない
+            if checkers_count > 1 {
+                return;
+            }
+            if let Some(ch) = pos.checkers().pop() {
+                let target = pos.checkers() | BETWEEN_TABLE[ch.index()][sq.index()];
+                self.generate_for_fu(pos, &target);
+                self.generate_for_ky(pos, &target);
+                self.generate_for_ke(pos, &target);
+                self.generate_for_gi(pos, &target);
+                self.generate_for_ka(pos, &target);
+                self.generate_for_hi(pos, &target);
+                self.generate_for_ki(pos, &target);
+                // TODO: drop
+            }
         }
-        let sq = pos.pieces_cp(c, PieceType::OU).pop();
-        for to in ATTACK_TABLE.ou.attack(sq, !c) & !pos.pieces_c(c) & !checkers_attacks {
-            self.push(Move::new_normal(sq, to, false, pos.piece_on(sq)));
-        }
-        // 両王手の場合は玉が逃げるしかない
-        if checkers_count > 1 {
-            return;
-        }
-        let checker = pos.checkers().pop();
-        let target = pos.checkers() | BETWEEN_TABLE[checker.index()][sq.index()];
-        self.generate_for_fu(pos, &target);
-        self.generate_for_ky(pos, &target);
-        self.generate_for_ke(pos, &target);
-        self.generate_for_gi(pos, &target);
-        self.generate_for_ka(pos, &target);
-        self.generate_for_hi(pos, &target);
-        self.generate_for_ki(pos, &target);
-        // TODO: drop
     }
     fn push(&mut self, m: Move) {
         self.0.push(m);

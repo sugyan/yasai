@@ -128,6 +128,9 @@ impl Position {
     pub fn pinned(&self) -> Bitboard {
         self.state().expect("empty states").pinned
     }
+    pub fn king(&self, c: Color) -> Option<Square> {
+        self.pieces_cp(c, PieceType::OU).next()
+    }
     pub fn do_move(&mut self, m: Move) {
         let state = if let Some(from) = m.from() {
             self.do_normal_move(from, m.to(), m.is_promotion())
@@ -172,7 +175,7 @@ impl Position {
         }
         let p_to = if promotion { p_from.promoted() } else { p_from };
         self.put_piece(to, p_to);
-        let checkers = if let Some(sq) = self.pieces_cp(!c, PieceType::OU).next() {
+        let checkers = if let Some(sq) = self.king(!c) {
             self.attackers_to(c, sq)
         } else {
             Bitboard::ZERO

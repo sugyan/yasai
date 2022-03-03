@@ -13,11 +13,13 @@ impl Bitboard {
     pub fn is_empty(&self) -> bool {
         (self.value(0) | self.value(1)) == 0
     }
-    pub fn pop(&mut self) -> Square {
+    pub fn pop(&mut self) -> Option<Square> {
         if self.value(0) != 0 {
-            self.pop0()
+            Some(self.pop0())
+        } else if self.value(1) != 0 {
+            Some(self.pop1())
         } else {
-            self.pop1()
+            None
         }
     }
     pub fn value(&self, i: usize) -> u64 {
@@ -258,11 +260,7 @@ impl Iterator for Bitboard {
     type Item = Square;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.pop())
-        }
+        self.pop()
     }
 }
 
