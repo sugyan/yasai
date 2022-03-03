@@ -1,6 +1,6 @@
 use crate::bitboard::Bitboard;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
-use crate::{Color, Move, PieceType, Position, Square};
+use crate::{Move, PieceType, Position};
 use PieceType::*;
 
 pub struct MoveList(Vec<Move>);
@@ -14,39 +14,15 @@ impl MoveList {
         } else {
             self.generate_all(pos);
         }
-        // 王手放置になってしまう指し手を除外
-        let c = pos.side_to_move();
-        self.0.retain(|m| {
-            if let Some(from) = m.from() {
-                // 玉が相手の攻撃範囲内に動いてしまう指し手
-                if pos.piece_on(from).piece_type() == Some(PieceType::OU) {
-                    return pos.attackers_to(!c, m.to()).is_empty();
-                }
-                // 飛び駒から守っている駒が直線上から外れてしまう指し手
-                if !(pos.pinned() & Bitboard::from_square(from)).is_empty() {
-                    if let Some(sq) = pos.king(c) {
-                        return !((BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
-                            && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty());
-                    }
-                }
-            }
-            true
-        });
     }
     pub fn len(&self) -> usize {
         self.0.len()
     }
     fn generate_all(&mut self, pos: &Position) {
         let target = !pos.pieces_c(pos.side_to_move());
-        self.generate_for_fu(pos, &target);
-        self.generate_for_ky(pos, &target);
-        self.generate_for_ke(pos, &target);
-        self.generate_for_gi(pos, &target);
-        self.generate_for_ka(pos, &target);
-        self.generate_for_hi(pos, &target);
-        self.generate_for_ki(pos, &target);
-        self.generate_for_ou(pos, &target);
-        // TODO: drop
+        for &pt in PieceType::ALL.iter().skip(1) {
+            self.generate_for_piece(pt, pos, &target);
+        }
     }
     fn generate_evasions(&mut self, pos: &Position) {
         let c = pos.side_to_move();
@@ -55,7 +31,7 @@ impl MoveList {
             let mut checkers_count = 0;
             for ch in pos.checkers() {
                 if let Some(pt) = pos.piece_on(ch).piece_type() {
-                    checkers_attacks |= Self::pseudo_attack(pt, ch);
+                    checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, c);
                 }
                 checkers_count += 1;
             }
@@ -63,7 +39,7 @@ impl MoveList {
                 & !pos.pieces_c(c)
                 & !checkers_attacks
             {
-                self.push(Move::new_normal(sq, to, false, pos.piece_on(sq)));
+                self.push(Move::new_normal(sq, to, false, pos.piece_on(sq)), pos);
             }
             // 両王手の場合は玉が逃げるしかない
             if checkers_count > 1 {
@@ -71,121 +47,50 @@ impl MoveList {
             }
             if let Some(ch) = pos.checkers().pop() {
                 let target = pos.checkers() | BETWEEN_TABLE[ch.index()][sq.index()];
-                self.generate_for_fu(pos, &target);
-                self.generate_for_ky(pos, &target);
-                self.generate_for_ke(pos, &target);
-                self.generate_for_gi(pos, &target);
-                self.generate_for_ka(pos, &target);
-                self.generate_for_hi(pos, &target);
-                self.generate_for_ki(pos, &target);
+                for &pt in PieceType::ALL.iter().skip(1) {
+                    if pt != PieceType::OU {
+                        self.generate_for_piece(pt, pos, &target);
+                    }
+                }
                 // TODO: drop
             }
         }
     }
-    fn push(&mut self, m: Move) {
+    fn push(&mut self, m: Move, pos: &Position) {
+        if let Some(from) = m.from() {
+            let c = pos.side_to_move();
+            // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
+            if pos.piece_on(from).piece_type() == Some(PieceType::OU)
+                && !pos.attackers_to(!c, m.to()).is_empty()
+            {
+                return;
+            }
+            // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
+            if !(pos.pinned() & from).is_empty() {
+                if let Some(sq) = pos.king(c) {
+                    if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
+                        && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
+                    {
+                        return;
+                    }
+                }
+            }
+        }
         self.0.push(m);
     }
-    fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
+    fn generate_for_piece(&mut self, pt: PieceType, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, PieceType::FU) {
-            let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.attack(FU, from, c, &Bitboard::ZERO) & *target {
-                // TODO: (force) promote?
-                self.push(Move::new_normal(from, to, false, p_from));
-            }
-        }
-    }
-    fn generate_for_ky(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, PieceType::KY) {
-            let p_from = pos.piece_on(from);
-            let occupied = pos.pieces_p(PieceType::OCCUPIED);
-            for to in ATTACK_TABLE.attack(KY, from, c, &occupied) & *target {
-                // TODO: (force) promote?
-                self.push(Move::new_normal(from, to, false, p_from));
-            }
-        }
-    }
-    fn generate_for_ke(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, PieceType::KE) {
-            let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.attack(KE, from, c, &Bitboard::ZERO) & *target {
-                // TODO: (force) promote?
-                self.push(Move::new_normal(from, to, false, p_from));
-            }
-        }
-    }
-    fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, PieceType::GI) {
+        let occ = pos.occupied();
+        for from in pos.pieces_cp(c, pt) {
             let p_from = pos.piece_on(from);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
-            for to in ATTACK_TABLE.attack(GI, from, c, &Bitboard::ZERO) & *target {
-                self.push(Move::new_normal(from, to, false, p_from));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from));
+            for to in ATTACK_TABLE.attack(pt, from, c, &occ) & *target {
+                self.push(Move::new_normal(from, to, false, p_from), pos);
+                if pt.is_promotable() && (from_is_opponent_field || to.rank().is_opponent_field(c))
+                {
+                    self.push(Move::new_normal(from, to, true, p_from), pos);
                 }
             }
-        }
-    }
-    fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, PieceType::KA) {
-            let p_from = pos.piece_on(from);
-            let occupied = pos.pieces_p(PieceType::OCCUPIED);
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
-            for to in ATTACK_TABLE.attack(KA, from, c, &occupied) & *target {
-                self.push(Move::new_normal(from, to, false, p_from));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from));
-                }
-            }
-        }
-    }
-    fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, PieceType::HI) {
-            let p_from = pos.piece_on(from);
-            let occupied = pos.pieces_p(PieceType::OCCUPIED);
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
-            for to in ATTACK_TABLE.attack(HI, from, c, &occupied) & *target {
-                self.push(Move::new_normal(from, to, false, p_from));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from));
-                }
-            }
-        }
-    }
-    fn generate_for_ki(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        // TODO: promoted pieces
-        for from in pos.pieces_cp(c, PieceType::KI) {
-            let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.attack(KI, from, c, &Bitboard::ZERO) & *target {
-                self.push(Move::new_normal(from, to, false, p_from));
-            }
-        }
-    }
-    fn generate_for_ou(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        // TODO: use king_square?
-        if let Some(from) = pos.pieces_cp(c, PieceType::OU).next() {
-            let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.attack(OU, from, c, &Bitboard::ZERO) & *target {
-                self.push(Move::new_normal(from, to, false, p_from));
-            }
-        }
-    }
-    #[rustfmt::skip]
-    fn pseudo_attack(pt: PieceType, sq: Square) -> Bitboard {
-        // TODO
-        match pt {
-            PieceType::KA => ATTACK_TABLE.pseudo_attack(KA, sq),
-            PieceType::UM => ATTACK_TABLE.pseudo_attack(KA, sq) | ATTACK_TABLE.attack(OU, sq, Color::Black, &Bitboard::ZERO),
-            PieceType::HI => ATTACK_TABLE.pseudo_attack(HI, sq),
-            PieceType::RY => ATTACK_TABLE.pseudo_attack(HI, sq) | ATTACK_TABLE.attack(OU, sq, Color::Black, &Bitboard::ZERO),
-            _ => todo!()
         }
     }
 }

@@ -44,6 +44,9 @@ impl PieceType {
     pub fn index(&self) -> usize {
         *self as usize
     }
+    pub fn is_promotable(&self) -> bool {
+        (1..=6).contains(&self.index())
+    }
 }
 
 /// Represents a piece on the game board.

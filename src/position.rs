@@ -27,8 +27,8 @@ impl State {
             // TODO: ky
             #[rustfmt::skip]
             let snipers = (
-                  (ATTACK_TABLE.pseudo_attack(PieceType::KA, sq) & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
-                | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
+                  (ATTACK_TABLE.pseudo_attack(PieceType::KA, sq, c) & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
+                | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq, c) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
             ) & c_bb[c.index()];
             for sniper in snipers {
                 let blockers = BETWEEN_TABLE[sq.index()][sniper.index()]
