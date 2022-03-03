@@ -27,7 +27,7 @@ impl Delta {
     const SSW: Delta = Delta { file:  1, rank:  2 };
 }
 
-pub struct PieceAttackTable([[Bitboard; Color::NUM]; Square::NUM]);
+struct PieceAttackTable([[Bitboard; Color::NUM]; Square::NUM]);
 
 impl PieceAttackTable {
     #[rustfmt::skip]    const BFU_DELTAS: &'static [Delta] = &[Delta::N];
@@ -74,15 +74,16 @@ fn sliding_attacks(sq: Square, occ: Bitboard, deltas: &[Delta]) -> Bitboard {
     bb
 }
 
-pub struct LanceAttackTable(
-    [[[Bitboard; LanceAttackTable::MASK_TABLE_NUM as usize]; Color::NUM]; Square::NUM],
-);
+struct LanceAttackTable {
+    table: Vec<Bitboard>,
+    offsets: [[usize; Color::NUM]; Square::NUM],
+}
 
 impl LanceAttackTable {
     const MASK_BITS: u32 = 7;
     const MASK_TABLE_NUM: usize = 1 << LanceAttackTable::MASK_BITS;
     #[rustfmt::skip]
-    const OFFSETS: [u32; Square::NUM] = [
+    const OFFSET_BITS: [u32; Square::NUM] = [
          1,  1,  1,  1,  1,  1,  1,  1,  1,
         10, 10, 10, 10, 10, 10, 10, 10, 10,
         19, 19, 19, 19, 19, 19, 19, 19, 19,
@@ -108,8 +109,10 @@ impl LanceAttackTable {
         bb
     }
     fn new() -> Self {
-        let mut table = [[[Bitboard::ZERO; LanceAttackTable::MASK_TABLE_NUM as usize]; Color::NUM];
-            Square::NUM];
+        let mut table =
+            vec![Bitboard::ZERO; Square::NUM * Color::NUM * LanceAttackTable::MASK_TABLE_NUM];
+        let mut offsets = [[0; Color::NUM]; Square::NUM];
+        let mut offset = 0;
         for sq in Square::ALL {
             let mask = Self::attack_mask(sq);
             for c in Color::ALL {
@@ -117,23 +120,27 @@ impl LanceAttackTable {
                     Color::Black => vec![Delta::N],
                     Color::White => vec![Delta::S],
                 };
+                offsets[sq.index()][c.index()] = offset;
                 for index in 0..LanceAttackTable::MASK_TABLE_NUM {
                     let occ = Self::index_to_occupied(index, mask);
-                    table[sq.index()][c.index()][index] = sliding_attacks(sq, occ, &deltas);
+                    table[offset + index] = sliding_attacks(sq, occ, &deltas);
+                    // table[sq.index()][c.index()][index] = sliding_attacks(sq, occ, &deltas);
                 }
+                offset += LanceAttackTable::MASK_TABLE_NUM;
             }
         }
-        Self(table)
+        Self { table, offsets }
     }
     fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let index = ((occ.value(if sq.index() >= 63 { 1 } else { 0 })
-            >> LanceAttackTable::OFFSETS[sq.index()]) as usize)
+            >> LanceAttackTable::OFFSET_BITS[sq.index()]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
-        self.0[sq.index()][c.index()][index]
+        // self.0[sq.index()][c.index()][index]
+        self.table[self.offsets[sq.index()][c.index()] + index]
     }
 }
 
-pub struct SlidingAttackTable {
+struct SlidingAttackTable {
     table: Vec<Bitboard>,
     masks: [Bitboard; Square::NUM],
     offsets: [usize; Square::NUM],
