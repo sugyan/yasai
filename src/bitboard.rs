@@ -8,10 +8,14 @@ pub union Bitboard {
 }
 
 impl Bitboard {
-    pub const ZERO: Bitboard = Bitboard { u: [0, 0] };
+    #[rustfmt::skip]    pub const ZERO: Bitboard = Bitboard { u: [                    0,           0] };
+    #[rustfmt::skip]    pub const ONES: Bitboard = Bitboard { u: [0x7fff_ffff_ffff_ffff, 0x0003_ffff] };
 
     pub fn is_empty(&self) -> bool {
         (self.value(0) | self.value(1)) == 0
+    }
+    pub fn count_ones(&self) -> u32 {
+        self.value(0).count_ones() + self.value(1).count_ones()
     }
     pub fn pop(&mut self) -> Option<Square> {
         if self.value(0) != 0 {
@@ -37,9 +41,6 @@ impl Bitboard {
     pub fn merge(&self) -> u64 {
         self.value(0) | self.value(1)
     }
-    pub fn count_ones(&self) -> u32 {
-        self.value(0).count_ones() + self.value(1).count_ones()
-    }
     fn pop0(&mut self) -> Square {
         let sq = Square(self.value(0).trailing_zeros() as i8);
         unsafe {
@@ -57,15 +58,15 @@ impl Bitboard {
 
     #[rustfmt::skip]
     pub const FILES: [Bitboard; File::NUM] = [
-        Bitboard { u: [0x01ff      , 0] },
-        Bitboard { u: [0x01ff <<  9, 0] },
-        Bitboard { u: [0x01ff << 18, 0] },
-        Bitboard { u: [0x01ff << 27, 0] },
-        Bitboard { u: [0x01ff << 36, 0] },
-        Bitboard { u: [0x01ff << 45, 0] },
-        Bitboard { u: [0x01ff << 54, 0] },
-        Bitboard { u: [0, 0x01ff      ] },
-        Bitboard { u: [0, 0x01ff <<  9] }
+        Bitboard { u: [0x01ff      ,            0] },
+        Bitboard { u: [0x01ff <<  9,            0] },
+        Bitboard { u: [0x01ff << 18,            0] },
+        Bitboard { u: [0x01ff << 27,            0] },
+        Bitboard { u: [0x01ff << 36,            0] },
+        Bitboard { u: [0x01ff << 45,            0] },
+        Bitboard { u: [0x01ff << 54,            0] },
+        Bitboard { u: [           0, 0x01ff      ] },
+        Bitboard { u: [           0, 0x01ff <<  9] }
     ];
     #[rustfmt::skip]
     pub const RANKS: [Bitboard; Rank::NUM] = [

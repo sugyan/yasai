@@ -23,6 +23,7 @@ impl MoveList {
         for &pt in PieceType::ALL.iter().skip(1) {
             self.generate_for_piece(pt, pos, &target);
         }
+        self.generate_drop(pos, &(!pos.occupied() & Bitboard::ONES));
     }
     fn generate_evasions(&mut self, pos: &Position) {
         let c = pos.side_to_move();
@@ -93,6 +94,28 @@ impl MoveList {
             }
         }
     }
+    fn generate_drop(&mut self, pos: &Position, target: &Bitboard) {
+        let c = pos.side_to_move();
+        let hand = pos.hand(pos.side_to_move());
+        for pt in PieceType::ALL_HAND {
+            if hand.num(pt) > 0 {
+                if pt == PieceType::FU {
+                    // 二歩回避
+                    let mut bb = *target;
+                    for sq in pos.pieces_cp(c, pt) {
+                        bb &= !Bitboard::from_file(sq.file());
+                    }
+                    for to in bb {
+                        self.push(Move::new_drop(to, pt), pos);
+                    }
+                } else {
+                    for to in *target {
+                        self.push(Move::new_drop(to, pt), pos);
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl Default for MoveList {
@@ -140,10 +163,38 @@ impl Iterator for MoveListIter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Color, Piece};
 
     #[test]
     fn test_from_default() {
         let pos = Position::default();
         assert_eq!(30, pos.legal_moves().len());
+    }
+
+    #[test]
+    fn test_drop_moves() {
+        use Piece::*;
+        #[rustfmt::skip]
+        let pos = Position::new([
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            WKE, WGI, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
+            EMP, EMP, EMP, WFU, EMP, EMP, BFU, EMP, BGI,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WGI, EMP, WFU, EMP, EMP, BFU, EMP, EMP, BGI,
+            WKE, WHI, WFU, EMP, EMP, EMP, BFU, EMP, BKE,
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+        ], [
+            [0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 1, 0],
+        ], Color::Black);
+        assert_eq!(
+            43,
+            pos.legal_moves()
+                .into_iter()
+                .filter(|m| m.is_drop())
+                .count()
+        );
     }
 }

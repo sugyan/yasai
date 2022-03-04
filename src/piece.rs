@@ -23,6 +23,7 @@ pub enum PieceType {
 
 impl PieceType {
     pub const NUM: usize = 15;
+    pub const NUM_HAND: usize = 7;
     pub const ALL: [PieceType; PieceType::NUM] = [
         PieceType::OCCUPIED,
         PieceType::FU,
@@ -40,12 +41,47 @@ impl PieceType {
         PieceType::UM,
         PieceType::RY,
     ];
+    pub const ALL_HAND: [PieceType; PieceType::NUM_HAND] = [
+        PieceType::FU,
+        PieceType::KY,
+        PieceType::KE,
+        PieceType::GI,
+        PieceType::KI,
+        PieceType::KA,
+        PieceType::HI,
+    ];
 
     pub fn index(&self) -> usize {
         *self as usize
     }
     pub fn is_promotable(&self) -> bool {
         (1..=6).contains(&self.index())
+    }
+}
+
+impl fmt::Display for PieceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match *self {
+                PieceType::OCCUPIED => "  ",
+                PieceType::FU => "FU",
+                PieceType::KY => "KY",
+                PieceType::KE => "KE",
+                PieceType::GI => "GI",
+                PieceType::KI => "KI",
+                PieceType::KA => "KA",
+                PieceType::HI => "HI",
+                PieceType::OU => "OU",
+                PieceType::TO => "TO",
+                PieceType::NY => "NY",
+                PieceType::NK => "NK",
+                PieceType::NG => "NG",
+                PieceType::UM => "UM",
+                PieceType::RY => "RY",
+            }
+        )
     }
 }
 

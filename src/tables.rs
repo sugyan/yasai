@@ -238,7 +238,7 @@ impl AttackTable {
         use PieceType::*;
         match pt {
             KA => self.ka.pseudo_attack(sq),
-            HI => self.ka.pseudo_attack(sq),
+            HI => self.hi.pseudo_attack(sq),
             UM => self.ka.pseudo_attack(sq) | self.ou.attack(sq, c),
             RY => self.hi.pseudo_attack(sq) | self.ou.attack(sq, c),
             _ => todo!(),

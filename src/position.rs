@@ -1,4 +1,5 @@
 use crate::bitboard::Bitboard;
+use crate::hand::Hand;
 use crate::movegen::MoveList;
 use crate::piece::PieceType;
 use crate::square::{File, Rank};
@@ -34,7 +35,7 @@ impl State {
                 let blockers = BETWEEN_TABLE[sq.index()][sniper.index()]
                     & c_bb[(!c).index()]
                     & pt_bb[PieceType::OCCUPIED.index()];
-                if blockers.count() == 1 {
+                if blockers.count_ones() == 1 {
                     bb |= blockers;
                 }
             }
@@ -47,14 +48,19 @@ impl State {
 #[derive(Debug)]
 pub struct Position {
     board: [Piece; Square::NUM],
+    hands: [Hand; Color::NUM],
+    color: Color,
     c_bb: [Bitboard; Color::NUM],
     pt_bb: [Bitboard; PieceType::NUM],
-    color: Color,
     states: Vec<State>,
 }
 
 impl Position {
-    pub fn new(board: [Piece; Square::NUM], side_to_move: Color) -> Position {
+    pub fn new(
+        board: [Piece; Square::NUM],
+        hand_nums: [[u8; PieceType::NUM_HAND]; Color::NUM],
+        side_to_move: Color,
+    ) -> Position {
         // board
         let mut c_bb = [Bitboard::ZERO; Color::NUM];
         let mut pt_bb = [Bitboard::ZERO; PieceType::NUM];
@@ -66,6 +72,15 @@ impl Position {
             if let Some(pt) = piece.piece_type() {
                 pt_bb[PieceType::OCCUPIED.index()] |= sq;
                 pt_bb[pt.index()] |= sq;
+            }
+        }
+        // hands
+        let mut hands = [Hand::new(); Color::NUM];
+        for c in Color::ALL {
+            for (i, &num) in hand_nums[c.index()].iter().enumerate() {
+                for _ in 0..num {
+                    hands[c.index()].increment(PieceType::ALL_HAND[i]);
+                }
             }
         }
         // initial state
@@ -83,19 +98,12 @@ impl Position {
         };
         Self {
             board,
+            hands,
+            color: side_to_move,
             pt_bb,
             c_bb,
-            color: side_to_move,
             states: vec![state],
         }
-    }
-    pub fn side_to_move(&self) -> Color {
-        self.color
-    }
-    pub fn legal_moves(&self) -> MoveList {
-        let mut ml = MoveList::default();
-        ml.generate_legals(self);
-        ml
     }
     pub fn piece_on(&self, sq: Square) -> Piece {
         self.board[sq.index()]
@@ -110,11 +118,8 @@ impl Position {
         self.pt_bb[pt.index()]
     }
     pub fn pieces_ps(&self, pts: &[PieceType]) -> Bitboard {
-        let mut bb = Bitboard::ZERO;
-        for &pt in pts {
-            bb |= self.pieces_p(pt);
-        }
-        bb
+        pts.iter()
+            .fold(Bitboard::ZERO, |acc, pt| acc | self.pieces_p(*pt))
     }
     pub fn occupied(&self) -> Bitboard {
         self.pt_bb[PieceType::OCCUPIED.index()]
@@ -131,23 +136,38 @@ impl Position {
     pub fn king(&self, c: Color) -> Option<Square> {
         self.pieces_cp(c, PieceType::OU).next()
     }
+    pub fn hand(&self, c: Color) -> Hand {
+        self.hands[c.index()]
+    }
+    pub fn side_to_move(&self) -> Color {
+        self.color
+    }
+    pub fn legal_moves(&self) -> MoveList {
+        let mut ml = MoveList::default();
+        ml.generate_legals(self);
+        ml
+    }
     pub fn do_move(&mut self, m: Move) {
         let state = if let Some(from) = m.from() {
             self.do_normal_move(from, m.to(), m.is_promotion())
         } else {
-            self.do_drop_move(m.to(), m.piece())
+            self.do_drop_move(m.to(), m.piece_type())
         };
         self.states.push(state);
         self.color = !self.color;
     }
     pub fn undo_move(&mut self, m: Move) {
+        let c = self.side_to_move();
         let to = m.to();
         // 駒移動
         if let Some(from) = m.from() {
             let p_to = self.piece_on(to);
             self.remove_piece(to, p_to);
             if let Some(p_cap) = self.captured() {
-                self.put_piece(to, p_cap)
+                self.put_piece(to, p_cap);
+                if let Some(pt) = p_cap.piece_type() {
+                    self.hands[(!c).index()].decrement(pt);
+                }
             }
             let p_from = if m.is_promotion() {
                 p_to.demoted()
@@ -172,6 +192,7 @@ impl Position {
         // 移動先に駒がある場合
         if let Some(pt) = p_cap.piece_type() {
             self.xor_bbs(!c, pt, to);
+            self.hands[c.index()].increment(pt);
         }
         let p_to = if promotion { p_from.promoted() } else { p_from };
         self.put_piece(to, p_to);
@@ -187,7 +208,7 @@ impl Position {
         )
     }
     // 駒打ち
-    fn do_drop_move(&mut self, _to: Square, _p: Piece) -> State {
+    fn do_drop_move(&mut self, _to: Square, _pt: PieceType) -> State {
         let c = self.side_to_move();
         // TODO
         State::new(
@@ -246,26 +267,20 @@ impl Position {
 
 impl Default for Position {
     fn default() -> Self {
+        use Piece::*;
         #[rustfmt::skip]
-        let initial_board = [
-            [Piece::WKY, Piece::WKE, Piece::WGI, Piece::WKI, Piece::WOU, Piece::WKI, Piece::WGI, Piece::WKE, Piece::WKY],
-            [Piece::EMP, Piece::WHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::WKA, Piece::EMP],
-            [Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU, Piece::WFU],
-            [Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP],
-            [Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP],
-            [Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP],
-            [Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU, Piece::BFU],
-            [Piece::EMP, Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BHI, Piece::EMP],
-            [Piece::BKY, Piece::BKE, Piece::BGI, Piece::BKI, Piece::BOU, Piece::BKI, Piece::BGI, Piece::BKE, Piece::BKY]
+        let board = [
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            WKE, WKA, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
+            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
+            WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
         ];
-        let mut board = [Piece::EMP; Square::NUM];
-        for i in 0..9 {
-            for j in 0..9 {
-                let (file, rank) = (File(8 - j), Rank(i));
-                board[Square::new(file, rank).index()] = initial_board[i as usize][j as usize];
-            }
-        }
-        Self::new(board, Color::Black)
+        Self::new(board, [[0; 7]; 2], Color::Black)
     }
 }
 
@@ -278,6 +293,32 @@ impl fmt::Display for Position {
             }
             writeln!(f)?;
         }
+        for c in Color::ALL {
+            if !self.hands[c.index()].is_empty() {
+                write!(
+                    f,
+                    "P{}",
+                    match c {
+                        Color::Black => "+",
+                        Color::White => "-",
+                    }
+                )?;
+                for &pt in PieceType::ALL_HAND.iter().rev() {
+                    for _ in 0..self.hands[c.index()].num(pt) {
+                        write!(f, "00{}", pt)?;
+                    }
+                }
+                writeln!(f)?;
+            }
+        }
+        writeln!(
+            f,
+            "{}",
+            match self.side_to_move() {
+                Color::Black => "+",
+                Color::White => "-",
+            }
+        )?;
         Ok(())
     }
 }
@@ -312,6 +353,11 @@ mod tests {
             };
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
         }
+        for c in Color::ALL {
+            for pt in PieceType::ALL_HAND {
+                assert_eq!(0, pos.hand(c).num(pt));
+            }
+        }
         assert_eq!(Color::Black, pos.side_to_move());
         assert!(!pos.in_check());
     }
@@ -338,6 +384,8 @@ mod tests {
         ] {
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
         }
+        assert!(!pos.hand(Color::Black).is_empty());
+        assert!(pos.hand(Color::White).is_empty());
         assert_eq!(Color::White, pos.side_to_move());
         assert!(pos.in_check());
         // revert to default position
