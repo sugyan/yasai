@@ -11,14 +11,15 @@ use std::fmt;
 pub struct Move(u32);
 
 impl Move {
-    const SQUARE_MASK: u32 = 0x0000_007f;
-    const FROM_MASK: u32 = 0x0000_7f00;
+    const TO_MASK: u32 = 0x0000_007f;
     const FROM_SHIFT: u32 = 8;
+    const FROM_MASK: u32 = 0x0000_7f00;
     const PROMOTION_FLAG: u32 = 1 << 7;
     const DROP_FLAG: u32 = 1 << 15;
-    const PIECE_MASK: u32 = 0x001f_0000;
     const PIECE_SHIFT: u32 = 16;
+    const PIECE_MASK: u32 = 0x001f_0000;
     const CAPTURED_SHIFT: u32 = 24;
+    const CAPTURED_MASK: u32 = 0x1f00_0000;
 
     pub fn new_normal(
         from: Square,
@@ -52,7 +53,7 @@ impl Move {
         }
     }
     pub fn to(&self) -> Square {
-        Square((self.0 & Move::SQUARE_MASK) as i8)
+        Square((self.0 & Move::TO_MASK) as i8)
     }
     pub fn is_promotion(&self) -> bool {
         (self.0 & Move::PROMOTION_FLAG) != 0
@@ -62,6 +63,14 @@ impl Move {
     }
     pub fn piece(&self) -> Piece {
         Piece(((self.0 & Move::PIECE_MASK) >> Move::PIECE_SHIFT) as u8)
+    }
+    pub fn captured(&self) -> Option<Piece> {
+        let val = ((self.0 & Move::CAPTURED_MASK) >> Move::CAPTURED_SHIFT) as u8;
+        if val == 0 {
+            None
+        } else {
+            Some(Piece(val))
+        }
     }
 }
 

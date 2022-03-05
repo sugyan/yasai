@@ -9,18 +9,13 @@ use std::fmt;
 
 #[derive(Debug)]
 struct State {
-    captured: Piece,    // 直前の指し手で取られた駒
     checkers: Bitboard, // 王手をかけている駒の位置
     pinned: Bitboard,   // 飛び駒から玉を守っている駒の位置
 }
 
 impl State {
-    fn new(captured: Piece, checkers: Bitboard, pinned: Bitboard) -> Self {
-        Self {
-            captured,
-            checkers,
-            pinned,
-        }
+    fn new(checkers: Bitboard, pinned: Bitboard) -> Self {
+        Self { checkers, pinned }
     }
     fn calculate_pinned(c_bb: &[Bitboard], pt_bb: &[Bitboard], c: Color) -> Bitboard {
         let mut bb = Bitboard::ZERO;
@@ -90,11 +85,7 @@ impl Position {
             if let Some(_sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
                 // TODO
             }
-            State::new(
-                Piece::EMP,
-                checkers,
-                State::calculate_pinned(&c_bb, &pt_bb, c),
-            )
+            State::new(checkers, State::calculate_pinned(&c_bb, &pt_bb, c))
         };
         Self {
             board,
@@ -163,7 +154,7 @@ impl Position {
         // 駒移動
         if let Some(from) = m.from() {
             self.remove_piece(to, p_to);
-            if let Some(p_cap) = self.captured() {
+            if let Some(p_cap) = m.captured() {
                 self.put_piece(to, p_cap);
                 if let Some(pt) = p_cap.piece_type() {
                     self.hands[(!c).index()].decrement(pt);
@@ -190,10 +181,9 @@ impl Position {
     fn do_normal_move(&mut self, from: Square, to: Square, promotion: bool) -> State {
         let c = self.side_to_move();
         let p_from = self.piece_on(from);
-        let p_cap = self.piece_on(to);
         self.remove_piece(from, p_from);
         // 移動先に駒がある場合
-        if let Some(pt) = p_cap.piece_type() {
+        if let Some(pt) = self.piece_on(to).piece_type() {
             self.xor_bbs(!c, pt, to);
             self.hands[c.index()].increment(pt);
         }
@@ -205,7 +195,6 @@ impl Position {
             Bitboard::ZERO
         };
         State::new(
-            p_cap,
             checkers,
             State::calculate_pinned(&self.c_bb, &self.pt_bb, c),
         )
@@ -224,22 +213,12 @@ impl Position {
             Bitboard::ZERO
         };
         State::new(
-            Piece::EMP,
             checkers,
             State::calculate_pinned(&self.c_bb, &self.pt_bb, c),
         )
     }
     fn state(&self) -> Option<&State> {
         self.states.last()
-    }
-    fn captured(&self) -> Option<Piece> {
-        self.state().and_then(|s| {
-            if s.captured != Piece::EMP {
-                Some(s.captured)
-            } else {
-                None
-            }
-        })
     }
     fn put_piece(&mut self, sq: Square, p: Piece) {
         if let (Some(c), Some(pt)) = (p.color(), p.piece_type()) {

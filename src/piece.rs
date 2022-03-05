@@ -5,7 +5,6 @@ use std::fmt;
 pub struct PieceType(u8);
 
 impl PieceType {
-    // constant values
     pub const OCCUPIED: PieceType = PieceType(0);
     pub const FU: PieceType = PieceType(1);
     pub const KY: PieceType = PieceType(2);
