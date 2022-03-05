@@ -27,9 +27,8 @@ impl State {
                 | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq, c) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
             ) & c_bb[c.index()];
             for sniper in snipers {
-                let blockers = BETWEEN_TABLE[sq.index()][sniper.index()]
-                    & c_bb[(!c).index()]
-                    & pt_bb[PieceType::OCCUPIED.index()];
+                let blockers =
+                    BETWEEN_TABLE[sq.index()][sniper.index()] & pt_bb[PieceType::OCCUPIED.index()];
                 if blockers.count_ones() == 1 {
                     bb |= blockers;
                 }

@@ -50,13 +50,14 @@ impl MoveList {
                 return;
             }
             if let Some(ch) = pos.checkers().pop() {
-                let target = pos.checkers() | BETWEEN_TABLE[ch.index()][ou.index()];
+                let target_drop = BETWEEN_TABLE[ch.index()][ou.index()];
+                let target_move = target_drop | pos.checkers();
                 for &pt in PieceType::ALL.iter().skip(1) {
                     if pt != PieceType::OU {
-                        self.generate_for_piece(pt, pos, &target);
+                        self.generate_for_piece(pt, pos, &target_move);
                     }
                 }
-                self.generate_drop(pos, &target);
+                self.generate_drop(pos, &target_drop);
             }
         }
     }
