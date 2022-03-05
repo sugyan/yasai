@@ -3,8 +3,8 @@ use std::ops;
 /// Represent a color.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Color {
-    Black,
-    White,
+    Black = 0,
+    White = 1,
 }
 
 impl Color {

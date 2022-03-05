@@ -1,7 +1,7 @@
 use crate::bitboard::Bitboard;
+use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
-use crate::{Move, PieceType, Position};
-use PieceType::*;
+use crate::{Color, Move, Piece, PieceType, Position};
 
 pub struct MoveList(Vec<Move>);
 
@@ -27,7 +27,7 @@ impl MoveList {
     }
     fn generate_evasions(&mut self, pos: &Position) {
         let c = pos.side_to_move();
-        if let Some(sq) = pos.king(c) {
+        if let Some(ou) = pos.king(c) {
             let mut checkers_attacks = Bitboard::ZERO;
             let mut checkers_count = 0;
             for ch in pos.checkers() {
@@ -36,24 +36,27 @@ impl MoveList {
                 }
                 checkers_count += 1;
             }
-            for to in ATTACK_TABLE.attack(OU, sq, !c, &Bitboard::ZERO)
+            for to in ATTACK_TABLE.attack(PieceType::OU, ou, !c, &Bitboard::ZERO)
                 & !pos.pieces_c(c)
                 & !checkers_attacks
             {
-                self.push(Move::new_normal(sq, to, false, pos.piece_on(sq)), pos);
+                self.push(
+                    Move::new_normal(ou, to, false, pos.piece_on(ou), pos.piece_on(to)),
+                    pos,
+                );
             }
             // 両王手の場合は玉が逃げるしかない
             if checkers_count > 1 {
                 return;
             }
             if let Some(ch) = pos.checkers().pop() {
-                let target = pos.checkers() | BETWEEN_TABLE[ch.index()][sq.index()];
+                let target = pos.checkers() | BETWEEN_TABLE[ch.index()][ou.index()];
                 for &pt in PieceType::ALL.iter().skip(1) {
                     if pt != PieceType::OU {
                         self.generate_for_piece(pt, pos, &target);
                     }
                 }
-                // TODO: drop
+                self.generate_drop(pos, &target);
             }
         }
     }
@@ -86,10 +89,16 @@ impl MoveList {
             let p_from = pos.piece_on(from);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.attack(pt, from, c, &occ) & *target {
-                self.push(Move::new_normal(from, to, false, p_from), pos);
+                self.push(
+                    Move::new_normal(from, to, false, p_from, pos.piece_on(to)),
+                    pos,
+                );
                 if pt.is_promotable() && (from_is_opponent_field || to.rank().is_opponent_field(c))
                 {
-                    self.push(Move::new_normal(from, to, true, p_from), pos);
+                    self.push(
+                        Move::new_normal(from, to, true, p_from.promoted(), pos.piece_on(to)),
+                        pos,
+                    );
                 }
             }
         }
@@ -98,20 +107,42 @@ impl MoveList {
         let c = pos.side_to_move();
         let hand = pos.hand(pos.side_to_move());
         for pt in PieceType::ALL_HAND {
-            if hand.num(pt) > 0 {
-                if pt == PieceType::FU {
+            if hand.num(pt) == 0 {
+                continue;
+            }
+            let mut exclude = Bitboard::ZERO;
+            match pt {
+                PieceType::FU => {
                     // 二歩回避
-                    let mut bb = *target;
                     for sq in pos.pieces_cp(c, pt) {
-                        bb &= !Bitboard::from_file(sq.file());
+                        exclude |= Bitboard::from_file(sq.file());
                     }
-                    for to in bb {
-                        self.push(Move::new_drop(to, pt), pos);
-                    }
-                } else {
-                    for to in *target {
-                        self.push(Move::new_drop(to, pt), pos);
-                    }
+                    exclude |= match c {
+                        Color::Black => Bitboard::from_rank(Rank::RANK1),
+                        Color::White => Bitboard::from_rank(Rank::RANK9),
+                    };
+                }
+                PieceType::KY => {
+                    exclude |= match c {
+                        Color::Black => Bitboard::from_rank(Rank::RANK1),
+                        Color::White => Bitboard::from_rank(Rank::RANK9),
+                    };
+                }
+                PieceType::KE => {
+                    exclude |= match c {
+                        Color::Black => {
+                            Bitboard::from_rank(Rank::RANK1) | Bitboard::from_rank(Rank::RANK2)
+                        }
+                        Color::White => {
+                            Bitboard::from_rank(Rank::RANK9) | Bitboard::from_rank(Rank::RANK8)
+                        }
+                    };
+                }
+                _ => {}
+            }
+            for to in *target & !exclude {
+                if let Some(p) = Piece::from_cp(c, pt) {
+                    self.push(Move::new_drop(to, p), pos);
                 }
             }
         }
@@ -173,18 +204,17 @@ mod tests {
 
     #[test]
     fn test_drop_moves() {
-        use Piece::*;
         #[rustfmt::skip]
         let pos = Position::new([
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
-            WKE, WGI, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
-            EMP, EMP, EMP, WFU, EMP, EMP, BFU, EMP, BGI,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WGI, EMP, WFU, EMP, EMP, BFU, EMP, EMP, BGI,
-            WKE, WHI, WFU, EMP, EMP, EMP, BFU, EMP, BKE,
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            Piece::WKY, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKY,
+            Piece::WKE, Piece::WGI, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::BHI, Piece::BKE,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BGI,
+            Piece::WKI, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKI,
+            Piece::WOU, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BOU,
+            Piece::WKI, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKI,
+            Piece::WGI, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::EMP, Piece::BGI,
+            Piece::WKE, Piece::WHI, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKE,
+            Piece::WKY, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKY,
         ], [
             [0, 0, 0, 0, 0, 1, 0],
             [0, 0, 0, 0, 0, 1, 0],

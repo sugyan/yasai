@@ -54,6 +54,12 @@ impl ops::Sub for File {
     }
 }
 
+impl fmt::Display for File {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0 + 1)
+    }
+}
+
 impl fmt::Debug for File {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("File").field(&(self.0 + 1)).finish()
@@ -117,6 +123,12 @@ impl ops::Sub for Rank {
 
     fn sub(self, rhs: Self) -> Self::Output {
         self.0 - rhs.0
+    }
+}
+
+impl fmt::Display for Rank {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0 + 1)
     }
 }
 
@@ -246,6 +258,12 @@ impl Square {
     }
     pub fn index(&self) -> usize {
         self.0 as usize
+    }
+}
+
+impl fmt::Display for Square {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}", self.file(), self.rank())
     }
 }
 

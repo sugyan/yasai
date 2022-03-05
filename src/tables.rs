@@ -218,29 +218,28 @@ pub struct AttackTable {
 }
 
 impl AttackTable {
+    #[rustfmt::skip]
     pub fn attack(&self, pt: PieceType, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
-        use PieceType::*;
         match pt {
-            OCCUPIED => unreachable!(),
-            FU => self.fu.attack(sq, c),
-            KY => self.ky.attack(sq, c, occ),
-            KE => self.ke.attack(sq, c),
-            GI => self.gi.attack(sq, c),
-            KA => self.ka.attack(sq, occ),
-            HI => self.hi.attack(sq, occ),
-            KI | TO | NY | NK | NG => self.ki.attack(sq, c),
-            OU => self.ou.attack(sq, c),
-            UM => self.ka.attack(sq, occ) | self.ou.attack(sq, c),
-            RY => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
+            PieceType::FU => self.fu.attack(sq, c),
+            PieceType::KY => self.ky.attack(sq, c, occ),
+            PieceType::KE => self.ke.attack(sq, c),
+            PieceType::GI => self.gi.attack(sq, c),
+            PieceType::KA => self.ka.attack(sq, occ),
+            PieceType::HI => self.hi.attack(sq, occ),
+            PieceType::KI | PieceType::TO | PieceType::NY | PieceType::NK | PieceType::NG => self.ki.attack(sq, c),
+            PieceType::OU => self.ou.attack(sq, c),
+            PieceType::UM => self.ka.attack(sq, occ) | self.ou.attack(sq, c),
+            PieceType::RY => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
+            _ => unreachable!(),
         }
     }
     pub fn pseudo_attack(&self, pt: PieceType, sq: Square, c: Color) -> Bitboard {
-        use PieceType::*;
         match pt {
-            KA => self.ka.pseudo_attack(sq),
-            HI => self.hi.pseudo_attack(sq),
-            UM => self.ka.pseudo_attack(sq) | self.ou.attack(sq, c),
-            RY => self.hi.pseudo_attack(sq) | self.ou.attack(sq, c),
+            PieceType::KA => self.ka.pseudo_attack(sq),
+            PieceType::HI => self.hi.pseudo_attack(sq),
+            PieceType::UM => self.ka.pseudo_attack(sq) | self.ou.attack(sq, c),
+            PieceType::RY => self.hi.pseudo_attack(sq) | self.ou.attack(sq, c),
             _ => todo!(),
         }
     }

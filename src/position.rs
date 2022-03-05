@@ -151,7 +151,7 @@ impl Position {
         let state = if let Some(from) = m.from() {
             self.do_normal_move(from, m.to(), m.is_promotion())
         } else {
-            self.do_drop_move(m.to(), m.piece_type())
+            self.do_drop_move(m.to(), m.piece())
         };
         self.states.push(state);
         self.color = !self.color;
@@ -159,9 +159,9 @@ impl Position {
     pub fn undo_move(&mut self, m: Move) {
         let c = self.side_to_move();
         let to = m.to();
+        let p_to = self.piece_on(to);
         // 駒移動
         if let Some(from) = m.from() {
-            let p_to = self.piece_on(to);
             self.remove_piece(to, p_to);
             if let Some(p_cap) = self.captured() {
                 self.put_piece(to, p_cap);
@@ -178,7 +178,10 @@ impl Position {
         }
         // 駒打ち
         else {
-            // TODO
+            self.remove_piece(to, p_to);
+            if let Some(pt) = p_to.piece_type() {
+                self.hands[(!c).index()].increment(pt);
+            }
         }
         self.color = !self.color;
         self.states.pop();
@@ -208,12 +211,21 @@ impl Position {
         )
     }
     // 駒打ち
-    fn do_drop_move(&mut self, _to: Square, _pt: PieceType) -> State {
+    fn do_drop_move(&mut self, to: Square, p: Piece) -> State {
         let c = self.side_to_move();
-        // TODO
+        let pt = p.piece_type().unwrap();
+        self.put_piece(to, p);
+        self.hands[c.index()].decrement(pt);
+        let checkers = if self.king(!c).map_or(false, |sq| {
+            !(ATTACK_TABLE.attack(pt, to, c, &self.occupied()) & sq).is_empty()
+        }) {
+            Bitboard::from_square(to)
+        } else {
+            Bitboard::ZERO
+        };
         State::new(
             Piece::EMP,
-            Bitboard::ZERO,
+            checkers,
             State::calculate_pinned(&self.c_bb, &self.pt_bb, c),
         )
     }
@@ -267,18 +279,17 @@ impl Position {
 
 impl Default for Position {
     fn default() -> Self {
-        use Piece::*;
         #[rustfmt::skip]
         let board = [
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
-            WKE, WKA, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
-            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
-            WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            Piece::WKY, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKY,
+            Piece::WKE, Piece::WKA, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::BHI, Piece::BKE,
+            Piece::WGI, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BGI,
+            Piece::WKI, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKI,
+            Piece::WOU, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BOU,
+            Piece::WKI, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKI,
+            Piece::WGI, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BGI,
+            Piece::WKE, Piece::WHI, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::BKA, Piece::BKE,
+            Piece::WKY, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKY,
         ];
         Self::new(board, [[0; 7]; 2], Color::Black)
     }
@@ -363,12 +374,14 @@ mod tests {
     }
 
     #[test]
-    fn test_move_unmove() {
+    fn test_do_undo_move() {
         let mut pos = Position::default();
         let moves = [
-            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
-            Move::new_normal(Square::SQ83, Square::SQ84, false, Piece::WFU),
-            Move::new_normal(Square::SQ88, Square::SQ33, true, Piece::BUM),
+            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU, Piece::EMP),
+            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU, Piece::EMP),
+            Move::new_normal(Square::SQ88, Square::SQ22, true, Piece::BUM, Piece::WKA),
+            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WGI, Piece::BUM),
+            Move::new_drop(Square::SQ33, Piece::BKA),
         ];
         // do moves
         for &m in moves.iter() {
@@ -376,16 +389,16 @@ mod tests {
         }
         // check moved pieces, position states
         for (sq, expected) in [
-            (Square::SQ77, Piece::EMP),
+            (Square::SQ22, Piece::WGI),
+            (Square::SQ31, Piece::EMP),
+            (Square::SQ33, Piece::BKA),
             (Square::SQ76, Piece::BFU),
-            (Square::SQ83, Piece::EMP),
-            (Square::SQ84, Piece::WFU),
-            (Square::SQ33, Piece::BUM),
+            (Square::SQ77, Piece::EMP),
         ] {
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
         }
-        assert!(!pos.hand(Color::Black).is_empty());
-        assert!(pos.hand(Color::White).is_empty());
+        assert!(pos.hand(Color::Black).is_empty());
+        assert!(!pos.hand(Color::White).is_empty());
         assert_eq!(Color::White, pos.side_to_move());
         assert!(pos.in_check());
         // revert to default position

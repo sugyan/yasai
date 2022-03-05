@@ -37,7 +37,7 @@ fn perft(pos: &mut Position, depth: usize, is_root: bool) -> usize {
         };
         ret += count;
         if is_root {
-            println!("{:?}: {count}", m);
+            println!("{}: {count}", m);
         }
     }
     ret
