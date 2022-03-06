@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 mod bitboard;
 mod color;
 mod hand;
