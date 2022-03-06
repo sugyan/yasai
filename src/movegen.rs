@@ -2,8 +2,9 @@ use crate::bitboard::Bitboard;
 use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::{Color, Move, Piece, PieceType, Position};
+use arrayvec::ArrayVec;
 
-pub struct MoveList(Vec<Move>);
+pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
 impl MoveList {
     const MAX_LEGAL_MOVES: usize = 593;
@@ -152,7 +153,7 @@ impl MoveList {
 
 impl Default for MoveList {
     fn default() -> Self {
-        Self(Vec::with_capacity(MoveList::MAX_LEGAL_MOVES))
+        Self(ArrayVec::new())
     }
 }
 
