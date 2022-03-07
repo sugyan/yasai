@@ -128,7 +128,7 @@ impl Rank {
             [false, false, false, false, false, false, false, false, false], // OCCUPIED
             [ true,  true,  true,  true,  true,  true,  true,  true, false], // FU
             [ true,  true,  true,  true,  true,  true,  true,  true, false], // KY
-            [ true, false,  true,  true,  true,  true,  true, false, false], // KE
+            [ true,  true,  true,  true,  true,  true,  true, false, false], // KE
             [ true,  true,  true,  true,  true,  true,  true,  true,  true], // GI
             [ true,  true,  true,  true,  true,  true,  true,  true,  true], // KA
             [ true,  true,  true,  true,  true,  true,  true,  true,  true], // HI

@@ -18,6 +18,9 @@ impl MoveList {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
     fn generate_all(&mut self, pos: &Position) {
         let target = !pos.pieces_c(pos.side_to_move());
         for &pt in PieceType::ALL.iter().skip(1) {
@@ -32,7 +35,7 @@ impl MoveList {
             let mut checkers_count = 0;
             for ch in pos.checkers() {
                 if let Some(pt) = pos.piece_on(ch).piece_type() {
-                    checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, c);
+                    checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, !c);
                 }
                 checkers_count += 1;
             }
