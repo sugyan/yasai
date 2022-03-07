@@ -9,32 +9,34 @@ use std::fmt;
 
 #[derive(Debug)]
 struct State {
-    checkers: Bitboard, // 王手をかけている駒の位置
-    pinned: Bitboard,   // 飛び駒から玉を守っている駒の位置
+    checkers: Bitboard,             // 王手をかけている駒の位置
+    pinned: [Bitboard; Color::NUM], // 飛び駒から玉を守っている駒の位置
 }
 
 impl State {
-    fn new(checkers: Bitboard, pinned: Bitboard) -> Self {
+    fn new(checkers: Bitboard, pinned: [Bitboard; Color::NUM]) -> Self {
         Self { checkers, pinned }
     }
-    fn calculate_pinned(c_bb: &[Bitboard], pt_bb: &[Bitboard], c: Color) -> Bitboard {
-        let mut bb = Bitboard::ZERO;
-        if let Some(sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
-            // TODO: ky
-            #[rustfmt::skip]
-            let snipers = (
-                  (ATTACK_TABLE.pseudo_attack(PieceType::KA, sq, c) & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
-                | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq, c) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
-            ) & c_bb[c.index()];
-            for sniper in snipers {
-                let blockers =
-                    BETWEEN_TABLE[sq.index()][sniper.index()] & pt_bb[PieceType::OCCUPIED.index()];
-                if blockers.count_ones() == 1 {
-                    bb |= blockers;
+    fn calculate_pinned(c_bb: &[Bitboard], pt_bb: &[Bitboard]) -> [Bitboard; Color::NUM] {
+        let mut bbs = [Bitboard::ZERO, Bitboard::ZERO];
+        for c in Color::ALL {
+            if let Some(sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
+                #[rustfmt::skip]
+                let snipers = (
+                      (ATTACK_TABLE.pseudo_attack(PieceType::KY, sq, c) & pt_bb[PieceType::KY.index()])
+                    | (ATTACK_TABLE.pseudo_attack(PieceType::KA, sq, c) & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
+                    | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq, c) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
+                ) & c_bb[c.index()];
+                for sniper in snipers {
+                    let blockers = BETWEEN_TABLE[sq.index()][sniper.index()]
+                        & pt_bb[PieceType::OCCUPIED.index()];
+                    if blockers.count_ones() == 1 {
+                        bbs[c.index()] |= blockers;
+                    }
                 }
             }
         }
-        bb
+        bbs
     }
 }
 
@@ -84,7 +86,7 @@ impl Position {
             if let Some(_sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
                 // TODO
             }
-            State::new(checkers, State::calculate_pinned(&c_bb, &pt_bb, c))
+            State::new(checkers, State::calculate_pinned(&c_bb, &pt_bb))
         };
         Self {
             board,
@@ -120,7 +122,7 @@ impl Position {
     pub fn checkers(&self) -> Bitboard {
         self.state().expect("empty states").checkers
     }
-    pub fn pinned(&self) -> Bitboard {
+    pub fn pinned(&self) -> [Bitboard; Color::NUM] {
         self.state().expect("empty states").pinned
     }
     pub fn king(&self, c: Color) -> Option<Square> {
@@ -193,10 +195,7 @@ impl Position {
         } else {
             Bitboard::ZERO
         };
-        State::new(
-            checkers,
-            State::calculate_pinned(&self.c_bb, &self.pt_bb, c),
-        )
+        State::new(checkers, State::calculate_pinned(&self.c_bb, &self.pt_bb))
     }
     // 駒打ち
     fn do_drop_move(&mut self, to: Square, p: Piece) -> State {
@@ -211,10 +210,7 @@ impl Position {
         } else {
             Bitboard::ZERO
         };
-        State::new(
-            checkers,
-            State::calculate_pinned(&self.c_bb, &self.pt_bb, c),
-        )
+        State::new(checkers, State::calculate_pinned(&self.c_bb, &self.pt_bb))
     }
     fn state(&self) -> Option<&State> {
         self.states.last()

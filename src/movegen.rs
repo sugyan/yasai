@@ -1,9 +1,10 @@
 use crate::bitboard::Bitboard;
 use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
-use crate::{Color, Move, Piece, PieceType, Position};
+use crate::{Color, Move, Piece, PieceType, Position, Square};
+use arrayvec::ArrayVec;
 
-pub struct MoveList(Vec<Move>);
+pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
 impl MoveList {
     const MAX_LEGAL_MOVES: usize = 593;
@@ -17,6 +18,9 @@ impl MoveList {
     }
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
     fn generate_all(&mut self, pos: &Position) {
         let target = !pos.pieces_c(pos.side_to_move());
@@ -32,7 +36,7 @@ impl MoveList {
             let mut checkers_count = 0;
             for ch in pos.checkers() {
                 if let Some(pt) = pos.piece_on(ch).piece_type() {
-                    checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, c);
+                    checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, !c);
                 }
                 checkers_count += 1;
             }
@@ -71,7 +75,7 @@ impl MoveList {
                 return;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if !(pos.pinned() & from).is_empty() {
+            if !(pos.pinned()[(!c).index()] & from).is_empty() {
                 if let Some(sq) = pos.king(c) {
                     if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
                         && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
@@ -90,10 +94,12 @@ impl MoveList {
             let p_from = pos.piece_on(from);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.attack(pt, from, c, &occ) & *target {
-                self.push(
-                    Move::new_normal(from, to, false, p_from, pos.piece_on(to)),
-                    pos,
-                );
+                if to.rank().is_valid_for_piece(c, pt) {
+                    self.push(
+                        Move::new_normal(from, to, false, p_from, pos.piece_on(to)),
+                        pos,
+                    );
+                }
                 if pt.is_promotable() && (from_is_opponent_field || to.rank().is_opponent_field(c))
                 {
                     self.push(
@@ -112,47 +118,75 @@ impl MoveList {
                 continue;
             }
             let mut exclude = Bitboard::ZERO;
-            match pt {
-                PieceType::FU => {
-                    // 二歩回避
-                    for sq in pos.pieces_cp(c, pt) {
-                        exclude |= Bitboard::from_file(sq.file());
+            if pt == PieceType::FU {
+                // 二歩
+                for sq in pos.pieces_cp(c, pt) {
+                    exclude |= Bitboard::from_file(sq.file());
+                }
+                // 打ち歩詰めチェック
+                if let Some(sq) = pos.king(!c) {
+                    if let Some(to) = ATTACK_TABLE
+                        .attack(PieceType::FU, sq, !c, &pos.occupied())
+                        .pop()
+                    {
+                        if !(*target & to).is_empty() && Self::is_uchifuzume(pos, to) {
+                            exclude |= to;
+                        }
                     }
-                    exclude |= match c {
-                        Color::Black => Bitboard::from_rank(Rank::RANK1),
-                        Color::White => Bitboard::from_rank(Rank::RANK9),
-                    };
                 }
-                PieceType::KY => {
-                    exclude |= match c {
-                        Color::Black => Bitboard::from_rank(Rank::RANK1),
-                        Color::White => Bitboard::from_rank(Rank::RANK9),
-                    };
-                }
-                PieceType::KE => {
-                    exclude |= match c {
-                        Color::Black => {
-                            Bitboard::from_rank(Rank::RANK1) | Bitboard::from_rank(Rank::RANK2)
-                        }
-                        Color::White => {
-                            Bitboard::from_rank(Rank::RANK9) | Bitboard::from_rank(Rank::RANK8)
-                        }
-                    };
-                }
-                _ => {}
+                exclude |= match c {
+                    Color::Black => Bitboard::from_rank(Rank::RANK1),
+                    Color::White => Bitboard::from_rank(Rank::RANK9),
+                };
             }
             for to in *target & !exclude {
-                if let Some(p) = Piece::from_cp(c, pt) {
-                    self.push(Move::new_drop(to, p), pos);
+                if to.rank().is_valid_for_piece(c, pt) {
+                    if let Some(p) = Piece::from_cp(c, pt) {
+                        self.push(Move::new_drop(to, p), pos);
+                    }
                 }
             }
         }
+    }
+    fn is_uchifuzume(pos: &Position, sq: Square) -> bool {
+        let c = pos.side_to_move();
+        // 玉自身が歩を取れる
+        if pos.attackers_to(c, sq).is_empty() {
+            return false;
+        }
+        // 他の駒が歩を取れる
+        let capture_candidates = Self::attackers_to_except_klp(pos, !c, sq);
+        if !(capture_candidates & !pos.pinned()[c.index()]).is_empty() {
+            return false;
+        }
+        // 玉が逃げられる
+        if let Some(king) = pos.king(!c) {
+            let escape =
+                ATTACK_TABLE.attack(PieceType::OU, king, !c, &pos.occupied()) & !pos.pieces_c(!c);
+            for to in escape ^ sq {
+                if pos.attackers_to(c, to).is_empty() {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+    #[rustfmt::skip]
+    fn attackers_to_except_klp(pos: &Position, c: Color, to: Square) -> Bitboard {
+        let opp = !c;
+        let occ = pos.occupied();
+        (     (ATTACK_TABLE.attack(PieceType::KE, to, opp, &occ) & pos.pieces_p(PieceType::KE))
+            | (ATTACK_TABLE.attack(PieceType::GI, to, opp, &occ) & pos.pieces_ps(&[PieceType::GI, PieceType::RY]))
+            | (ATTACK_TABLE.attack(PieceType::KA, to, opp, &occ) & pos.pieces_ps(&[PieceType::KA, PieceType::UM]))
+            | (ATTACK_TABLE.attack(PieceType::HI, to, opp, &occ) & pos.pieces_ps(&[PieceType::HI, PieceType::RY]))
+            | (ATTACK_TABLE.attack(PieceType::KI, to, opp, &occ) & pos.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM]))
+        ) & pos.pieces_c(c)
     }
 }
 
 impl Default for MoveList {
     fn default() -> Self {
-        Self(Vec::with_capacity(MoveList::MAX_LEGAL_MOVES))
+        Self(ArrayVec::new())
     }
 }
 
@@ -226,6 +260,187 @@ mod tests {
                 .into_iter()
                 .filter(|m| m.is_drop())
                 .count()
+        );
+    }
+
+    #[test]
+    fn test_maximum_moves() {
+        // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
+        #[rustfmt::skip]
+        let pos = Position::new([
+            Piece::EMP, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::BGI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::BGI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
+            Piece::EMP, Piece::BGI, Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
+            Piece::EMP, Piece::BOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
+            Piece::BHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+        ], [
+            [ 1, 1, 1, 1, 1, 1, 1],
+            [17, 0, 3, 0, 3, 0, 0],
+        ], Color::Black);
+        assert_eq!(593, pos.legal_moves().len());
+    }
+
+    #[allow(clippy::bool_assert_comparison)]
+    #[test]
+    fn test_uchifuzume() {
+        // 打ち歩詰め
+        // P1 *  *  *  *  *  *  *  *  *
+        // P2 *  *  *  *  *  *  * -FU-FU
+        // P3 *  *  *  *  *  *  *  * -OU
+        // P4 *  *  *  *  *  *  * +FU *
+        // P5 *  *  *  *  *  *  * +KI *
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 *  *  *  *  *  *  *  *  *
+        // P+00FU
+        // P-00AL
+        // +
+        #[rustfmt::skip]
+        assert_eq!(
+            true,
+            MoveList::is_uchifuzume(&Position::new([
+                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::WFU, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            ], [
+                [ 1, 0, 0, 0, 0, 0, 0],
+                [14, 4, 4, 4, 3, 2, 2],
+            ], Color::Black), Square::SQ14)
+        );
+        // 金で歩を取れる
+        // P1 *  *  *  *  *  *  *  *  *
+        // P2 *  *  *  *  *  *  * -FU-FU
+        // P3 *  *  *  *  *  *  * -KI-OU
+        // P4 *  *  *  *  *  *  *  *  *
+        // P5 *  *  *  *  *  *  * +KI *
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 *  *  *  *  *  *  *  *  *
+        // P+00FU
+        // P-00AL
+        // +
+        #[rustfmt::skip]
+        assert_eq!(
+            false,
+            MoveList::is_uchifuzume(&Position::new([
+                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::WFU, Piece::WKI, Piece::EMP, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            ], [
+                [ 1, 0, 0, 0, 0, 0, 0],
+                [15, 4, 4, 4, 2, 2, 2],
+            ], Color::Black), Square::SQ14)
+        );
+        // 飛がいるので金が動けない
+        // P1 *  *  *  *  *  *  *  *  *
+        // P2 *  *  *  *  *  *  * -FU-FU
+        // P3 *  *  *  *  *  * +HI-KI-OU
+        // P4 *  *  *  *  *  *  *  *  *
+        // P5 *  *  *  *  *  *  * +KI *
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 *  *  *  *  *  *  *  *  *
+        // P+00FU
+        // P-00AL
+        // +
+        #[rustfmt::skip]
+        assert_eq!(
+            true,
+            MoveList::is_uchifuzume(&Position::new([
+                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::WFU, Piece::WKI, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::BHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            ], [
+                [ 1, 0, 0, 0, 0, 0, 0],
+                [15, 4, 4, 4, 2, 2, 1],
+            ], Color::Black), Square::SQ14)
+        );
+        // 桂で歩を取れる
+        // P1 *  *  *  *  *  *  *  *  *
+        // P2 *  *  *  *  *  *  * -KE-FU
+        // P3 *  *  *  *  *  *  *  * -OU
+        // P4 *  *  *  *  *  *  * +FU *
+        // P5 *  *  *  *  *  *  * +KI *
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 *  *  *  *  *  *  *  *  *
+        // P+00FU
+        // P-00AL
+        // +
+        #[rustfmt::skip]
+        assert_eq!(
+            false,
+            MoveList::is_uchifuzume(&Position::new([
+                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::WKE, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            ], [
+                [ 1, 0, 0, 0, 0, 0, 0],
+                [15, 4, 3, 4, 3, 2, 2],
+            ], Color::Black), Square::SQ14)
+        );
+        // 角がいるので桂が動けない
+        // P1 *  *  *  *  *  * +KA *  *
+        // P2 *  *  *  *  *  *  * -KE-FU
+        // P3 *  *  *  *  *  *  *  * -OU
+        // P4 *  *  *  *  *  *  * +FU *
+        // P5 *  *  *  *  *  *  * +KI *
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 *  *  *  *  *  *  *  *  *
+        // P+00FU
+        // P-00AL
+        // +
+        #[rustfmt::skip]
+        assert_eq!(
+            true,
+            MoveList::is_uchifuzume(&Position::new([
+                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::WKE, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            ], [
+                [ 1, 0, 0, 0, 0, 0, 0],
+                [15, 4, 3, 4, 3, 1, 2],
+            ], Color::Black), Square::SQ14)
         );
     }
 }

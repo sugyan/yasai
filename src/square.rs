@@ -1,4 +1,4 @@
-use crate::Color;
+use crate::{Color, PieceType};
 use std::{fmt, ops};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -103,12 +103,54 @@ impl Rank {
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
     ];
+    #[rustfmt::skip]
+    const VALID_FOR_PIECES: [[[bool; 9]; PieceType::NUM]; Color::NUM] = [
+        // Black
+        [
+            [false, false, false, false, false, false, false, false, false], // OCCUPIED
+            [false,  true,  true,  true,  true,  true,  true,  true,  true], // FU
+            [false,  true,  true,  true,  true,  true,  true,  true,  true], // KY
+            [false, false,  true,  true,  true,  true,  true,  true,  true], // KE
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // GI
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // KA
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // HI
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // KI
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // OU
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // TO
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // NY
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // NK
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // NG
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // UM
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // RY
+        ],
+        // White
+        [
+            [false, false, false, false, false, false, false, false, false], // OCCUPIED
+            [ true,  true,  true,  true,  true,  true,  true,  true, false], // FU
+            [ true,  true,  true,  true,  true,  true,  true,  true, false], // KY
+            [ true,  true,  true,  true,  true,  true,  true, false, false], // KE
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // GI
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // KA
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // HI
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // KI
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // OU
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // TO
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // NY
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // NK
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // NG
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // UM
+            [ true,  true,  true,  true,  true,  true,  true,  true,  true], // RY
+        ],
+    ];
 
     pub fn is_opponent_field(&self, c: Color) -> bool {
         match c {
             Color::Black => (1 << self.0) & 0x0007 != 0,
             Color::White => (1 << self.0) & 0x01c0 != 0,
         }
+    }
+    pub fn is_valid_for_piece(&self, c: Color, pt: PieceType) -> bool {
+        Rank::VALID_FOR_PIECES[c.index()][pt.index()][self.0 as usize]
     }
 }
 

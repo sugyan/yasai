@@ -14,7 +14,7 @@ fn main() {
         println!(
             "Searched: {total} nodes: {} nps",
             (total as u128) * 1_000_000_000 / duration.as_nanos()
-        )
+        );
     } else {
         println!("usage: perft <depth>");
     }

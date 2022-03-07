@@ -201,6 +201,24 @@ impl ops::BitOr<Square> for Bitboard {
     }
 }
 
+impl ops::BitXor<Bitboard> for Bitboard {
+    type Output = Bitboard;
+
+    fn bitxor(self, rhs: Bitboard) -> Self::Output {
+        Bitboard {
+            u: [self.value(0) ^ rhs.value(0), self.value(1) ^ rhs.value(1)],
+        }
+    }
+}
+
+impl ops::BitXor<Square> for Bitboard {
+    type Output = Bitboard;
+
+    fn bitxor(self, rhs: Square) -> Self::Output {
+        self ^ Bitboard::from_square(rhs)
+    }
+}
+
 impl ops::BitAndAssign<Bitboard> for Bitboard {
     fn bitand_assign(&mut self, rhs: Bitboard) {
         self.0 &= rhs.0;
