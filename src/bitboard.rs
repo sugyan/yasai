@@ -205,9 +205,7 @@ impl ops::BitXor<Bitboard> for Bitboard {
     type Output = Bitboard;
 
     fn bitxor(self, rhs: Bitboard) -> Self::Output {
-        Bitboard {
-            u: [self.value(0) ^ rhs.value(0), self.value(1) ^ rhs.value(1)],
-        }
+        Bitboard(self.0 ^ rhs.0)
     }
 }
 
