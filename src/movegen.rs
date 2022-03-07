@@ -91,10 +91,12 @@ impl MoveList {
             let p_from = pos.piece_on(from);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.attack(pt, from, c, &occ) & *target {
-                self.push(
-                    Move::new_normal(from, to, false, p_from, pos.piece_on(to)),
-                    pos,
-                );
+                if to.rank().is_valid_for_piece(c, pt) {
+                    self.push(
+                        Move::new_normal(from, to, false, p_from, pos.piece_on(to)),
+                        pos,
+                    );
+                }
                 if pt.is_promotable() && (from_is_opponent_field || to.rank().is_opponent_field(c))
                 {
                     self.push(
@@ -113,38 +115,21 @@ impl MoveList {
                 continue;
             }
             let mut exclude = Bitboard::ZERO;
-            match pt {
-                PieceType::FU => {
-                    // 二歩回避
-                    for sq in pos.pieces_cp(c, pt) {
-                        exclude |= Bitboard::from_file(sq.file());
-                    }
-                    exclude |= match c {
-                        Color::Black => Bitboard::from_rank(Rank::RANK1),
-                        Color::White => Bitboard::from_rank(Rank::RANK9),
-                    };
+            if pt == PieceType::FU {
+                // 二歩回避
+                for sq in pos.pieces_cp(c, pt) {
+                    exclude |= Bitboard::from_file(sq.file());
                 }
-                PieceType::KY => {
-                    exclude |= match c {
-                        Color::Black => Bitboard::from_rank(Rank::RANK1),
-                        Color::White => Bitboard::from_rank(Rank::RANK9),
-                    };
-                }
-                PieceType::KE => {
-                    exclude |= match c {
-                        Color::Black => {
-                            Bitboard::from_rank(Rank::RANK1) | Bitboard::from_rank(Rank::RANK2)
-                        }
-                        Color::White => {
-                            Bitboard::from_rank(Rank::RANK9) | Bitboard::from_rank(Rank::RANK8)
-                        }
-                    };
-                }
-                _ => {}
+                exclude |= match c {
+                    Color::Black => Bitboard::from_rank(Rank::RANK1),
+                    Color::White => Bitboard::from_rank(Rank::RANK9),
+                };
             }
             for to in *target & !exclude {
-                if let Some(p) = Piece::from_cp(c, pt) {
-                    self.push(Move::new_drop(to, p), pos);
+                if to.rank().is_valid_for_piece(c, pt) {
+                    if let Some(p) = Piece::from_cp(c, pt) {
+                        self.push(Move::new_drop(to, p), pos);
+                    }
                 }
             }
         }
