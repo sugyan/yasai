@@ -76,8 +76,8 @@ impl Attack for PieceAttackTable {
     fn attack(&self, sq: Square, c: Color, _: &Bitboard) -> Bitboard {
         self.0[sq.index()][c.index()]
     }
-    fn pseudo_attack(&self, _: Square, _: Color) -> Bitboard {
-        unreachable!()
+    fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
+        self.0[sq.index()][c.index()]
     }
 }
 
