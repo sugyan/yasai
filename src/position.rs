@@ -6,6 +6,7 @@ use crate::square::{File, Rank};
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::{Color, Move, Piece, Square};
 use std::fmt;
+use std::ops::Not;
 
 #[derive(Debug)]
 struct State {
@@ -111,13 +112,13 @@ impl Position {
     }
     pub fn pieces_ps(&self, pts: &[PieceType]) -> Bitboard {
         pts.iter()
-            .fold(Bitboard::ZERO, |acc, pt| acc | self.pieces_p(*pt))
+            .fold(Bitboard::ZERO, |acc, &pt| acc | self.pieces_p(pt))
     }
     pub fn occupied(&self) -> Bitboard {
         self.pt_bb[PieceType::OCCUPIED.index()]
     }
     pub fn in_check(&self) -> bool {
-        !self.checkers().is_empty()
+        self.checkers().is_empty().not()
     }
     pub fn checkers(&self) -> Bitboard {
         self.state().expect("empty states").checkers
@@ -204,7 +205,9 @@ impl Position {
         self.put_piece(to, p);
         self.hands[c.index()].decrement(pt);
         let checkers = if self.king(!c).map_or(false, |sq| {
-            !(ATTACK_TABLE.attack(pt, to, c, &self.occupied()) & sq).is_empty()
+            (ATTACK_TABLE.attack(pt, to, c, &self.occupied()) & sq)
+                .is_empty()
+                .not()
         }) {
             Bitboard::from_square(to)
         } else {
@@ -385,5 +388,51 @@ mod tests {
             .all(|&sq| pos.piece_on(sq) == default.piece_on(sq)));
         assert_eq!(Color::Black, pos.side_to_move());
         assert!(!pos.in_check());
+    }
+
+    #[test]
+    fn test_perft() {
+        fn perft(pos: &mut Position, depth: usize) -> u64 {
+            if depth == 0 {
+                return 1;
+            }
+            let mut count = 0;
+            for m in pos.legal_moves() {
+                pos.do_move(m);
+                count += perft(pos, depth - 1);
+                pos.undo_move(m);
+            }
+            count
+        }
+
+        // from default position
+        {
+            let mut pos = Position::default();
+            assert_eq!(30, perft(&mut pos, 1));
+            assert_eq!(900, perft(&mut pos, 2));
+            assert_eq!(25470, perft(&mut pos, 3));
+            assert_eq!(719731, perft(&mut pos, 4));
+        }
+        // from maximum moves
+        {
+            // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
+            #[rustfmt::skip]
+            let mut pos = Position::new([
+                Piece::EMP, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::BGI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::BGI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
+                Piece::EMP, Piece::BGI, Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
+                Piece::EMP, Piece::BOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
+                Piece::BHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            ], [
+                [ 1, 1, 1, 1, 1, 1, 1],
+                [17, 0, 3, 0, 3, 0, 0],
+            ], Color::Black);
+            assert_eq!(593, perft(&mut pos, 1));
+            assert_eq!(105677, perft(&mut pos, 2));
+        }
     }
 }

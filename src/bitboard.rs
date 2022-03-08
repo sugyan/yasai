@@ -10,23 +10,17 @@ impl Bitboard {
     #[rustfmt::skip]    pub const ZERO: Bitboard = Bitboard(u64x2::from_array([                    0,           0]));
     #[rustfmt::skip]    pub const ONES: Bitboard = Bitboard(u64x2::from_array([0x7fff_ffff_ffff_ffff, 0x0003_ffff]));
 
+    pub fn value(&self, i: usize) -> u64 {
+        self.0.as_array()[i]
+    }
+    pub fn merge(&self) -> u64 {
+        self.value(0) | self.value(1)
+    }
     pub fn is_empty(&self) -> bool {
-        (self.value(0) | self.value(1)) == 0
+        self.merge() == 0
     }
     pub fn count_ones(&self) -> u32 {
         self.value(0).count_ones() + self.value(1).count_ones()
-    }
-    pub fn pop(&mut self) -> Option<Square> {
-        if self.value(0) != 0 {
-            Some(self.pop0())
-        } else if self.value(1) != 0 {
-            Some(self.pop1())
-        } else {
-            None
-        }
-    }
-    pub fn value(&self, i: usize) -> u64 {
-        self.0.as_array()[i]
     }
     pub fn from_square(sq: Square) -> Bitboard {
         Bitboard::SQUARE[sq.index()]
@@ -37,8 +31,14 @@ impl Bitboard {
     pub fn from_rank(rank: Rank) -> Bitboard {
         Bitboard::RANKS[rank.0 as usize]
     }
-    pub fn merge(&self) -> u64 {
-        self.value(0) | self.value(1)
+    pub fn pop(&mut self) -> Option<Square> {
+        if self.value(0) != 0 {
+            Some(self.pop0())
+        } else if self.value(1) != 0 {
+            Some(self.pop1())
+        } else {
+            None
+        }
     }
     fn pop0(&mut self) -> Square {
         let sq = Square(self.value(0).trailing_zeros() as i8);
@@ -263,15 +263,11 @@ impl Iterator for Bitboard {
 
 impl fmt::Debug for Bitboard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut s = String::new();
-        for &rank in Rank::ALL.iter() {
-            s.push(' ');
-            for &file in File::ALL.iter().rev() {
-                let b = !(*self & Square::new(file, rank)).is_empty();
-                s.push(if b { '#' } else { '.' });
-            }
-            s += "\n";
-        }
-        write!(f, "Bitboard(\n{})", s)
+        write!(
+            f,
+            "Bitboard({:#016x}, {:#016x}",
+            self.value(1),
+            self.value(0)
+        )
     }
 }
