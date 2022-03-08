@@ -142,12 +142,10 @@ impl Rank {
             [ true,  true,  true,  true,  true,  true,  true,  true,  true], // RY
         ],
     ];
+    const OPPONENT_FIELD_MASK: [u32; 2] = [0x0007, 0x01c0];
 
     pub fn is_opponent_field(&self, c: Color) -> bool {
-        match c {
-            Color::Black => (1 << self.0) & 0x0007 != 0,
-            Color::White => (1 << self.0) & 0x01c0 != 0,
-        }
+        (1 << self.0) & Self::OPPONENT_FIELD_MASK[c.index()] != 0
     }
     pub fn is_valid_for_piece(&self, c: Color, pt: PieceType) -> bool {
         Rank::VALID_FOR_PIECES[c.index()][pt.index()][self.0 as usize]

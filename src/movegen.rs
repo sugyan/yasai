@@ -103,17 +103,22 @@ impl MoveList {
         let c = pos.side_to_move();
         for from in pos.pieces_cp(c, pt) {
             let p_from = pos.piece_on(from);
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.attack(pt, from, c, &pos.occupied()) & *target {
-                if to.rank().is_valid_for_piece(c, pt) {
-                    self.push(
-                        Move::new_normal(from, to, false, p_from, pos.piece_on(to)),
-                        pos,
-                    );
-                }
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                let rank = to.rank();
+                if rank.is_opponent_field(c) {
                     self.push(
                         Move::new_normal(from, to, true, p_from.promoted(), pos.piece_on(to)),
+                        pos,
+                    );
+                    if rank.is_valid_for_piece(c, pt) {
+                        self.push(
+                            Move::new_normal(from, to, false, p_from, pos.piece_on(to)),
+                            pos,
+                        );
+                    }
+                } else {
+                    self.push(
+                        Move::new_normal(from, to, false, p_from, pos.piece_on(to)),
                         pos,
                     );
                 }
