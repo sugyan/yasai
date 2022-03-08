@@ -112,7 +112,7 @@ impl Position {
     }
     pub fn pieces_ps(&self, pts: &[PieceType]) -> Bitboard {
         pts.iter()
-            .fold(Bitboard::ZERO, |acc, pt| acc | self.pieces_p(*pt))
+            .fold(Bitboard::ZERO, |acc, &pt| acc | self.pieces_p(pt))
     }
     pub fn occupied(&self) -> Bitboard {
         self.pt_bb[PieceType::OCCUPIED.index()]
