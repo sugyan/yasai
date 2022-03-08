@@ -3,6 +3,7 @@ use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::{Color, Move, Piece, PieceType, Position, Square};
 use arrayvec::ArrayVec;
+use std::ops::Not;
 
 pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
@@ -70,12 +71,12 @@ impl MoveList {
             let c = pos.side_to_move();
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
             if pos.piece_on(from).piece_type() == Some(PieceType::OU)
-                && !pos.attackers_to(!c, m.to()).is_empty()
+                && pos.attackers_to(!c, m.to()).is_empty().not()
             {
                 return;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if !(pos.pinned()[(!c).index()] & from).is_empty() {
+            if (pos.pinned()[(!c).index()] & from).is_empty().not() {
                 if let Some(sq) = pos.king(c) {
                     if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
                         && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
@@ -129,7 +130,7 @@ impl MoveList {
                         .attack(PieceType::FU, sq, !c, &pos.occupied())
                         .pop()
                     {
-                        if !(*target & to).is_empty() && Self::is_uchifuzume(pos, to) {
+                        if (*target & to).is_empty().not() && Self::is_uchifuzume(pos, to) {
                             exclude |= to;
                         }
                     }
@@ -156,7 +157,10 @@ impl MoveList {
         }
         // 他の駒が歩を取れる
         let capture_candidates = Self::attackers_to_except_klp(pos, !c, sq);
-        if !(capture_candidates & !pos.pinned()[c.index()]).is_empty() {
+        if (capture_candidates & !pos.pinned()[c.index()])
+            .is_empty()
+            .not()
+        {
             return false;
         }
         // 玉が逃げられる
