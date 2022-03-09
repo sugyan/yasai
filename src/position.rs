@@ -252,6 +252,28 @@ impl Position {
             | (ATTACK_TABLE.attack(PieceType::KI, to, opp, &occ) & self.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM, PieceType::OU]))
         ) & self.pieces_c(c)
     }
+    pub fn is_legal_move(&self, m: Move) -> bool {
+        if let Some(from) = m.from() {
+            let c = self.side_to_move();
+            // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
+            if self.piece_on(from).piece_type() == Some(PieceType::OU)
+                && self.attackers_to(!c, m.to()).is_empty().not()
+            {
+                return false;
+            }
+            // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
+            if (self.pinned()[(!c).index()] & from).is_empty().not() {
+                if let Some(sq) = self.king(c) {
+                    if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
+                        && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
 }
 
 impl Default for Position {
