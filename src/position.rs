@@ -10,13 +10,18 @@ use std::ops::Not;
 
 #[derive(Debug)]
 struct State {
+    captured: Option<Piece>,
     checkers: Bitboard,             // 王手をかけている駒の位置
     pinned: [Bitboard; Color::NUM], // 飛び駒から玉を守っている駒の位置
 }
 
 impl State {
-    fn new(checkers: Bitboard, pinned: [Bitboard; Color::NUM]) -> Self {
-        Self { checkers, pinned }
+    fn new(captured: Option<Piece>, checkers: Bitboard, pinned: [Bitboard; Color::NUM]) -> Self {
+        Self {
+            captured,
+            checkers,
+            pinned,
+        }
     }
     fn calculate_pinned(c_bb: &[Bitboard], pt_bb: &[Bitboard]) -> [Bitboard; Color::NUM] {
         let mut bbs = [Bitboard::ZERO, Bitboard::ZERO];
@@ -87,7 +92,7 @@ impl Position {
             if let Some(_sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
                 // TODO
             }
-            State::new(checkers, State::calculate_pinned(&c_bb, &pt_bb))
+            State::new(None, checkers, State::calculate_pinned(&c_bb, &pt_bb))
         };
         Self {
             board,
@@ -119,6 +124,9 @@ impl Position {
     }
     pub fn in_check(&self) -> bool {
         self.checkers().is_empty().not()
+    }
+    pub fn captured(&self) -> Option<Piece> {
+        self.state().and_then(|state| state.captured)
     }
     pub fn checkers(&self) -> Bitboard {
         self.state().expect("empty states").checkers
@@ -156,7 +164,7 @@ impl Position {
         // 駒移動
         if let Some(from) = m.from() {
             self.remove_piece(to, p_to);
-            if let Some(p_cap) = m.captured() {
+            if let Some(p_cap) = self.captured() {
                 self.put_piece(to, p_cap);
                 if let Some(pt) = p_cap.piece_type() {
                     self.hands[(!c).index()].decrement(pt);
@@ -185,7 +193,8 @@ impl Position {
         let p_from = self.piece_on(from);
         self.remove_piece(from, p_from);
         // 移動先に駒がある場合
-        if let Some(pt) = self.piece_on(to).piece_type() {
+        let p_cap = self.piece_on(to);
+        if let Some(pt) = p_cap.piece_type() {
             self.xor_bbs(!c, pt, to);
             self.hands[c.index()].increment(pt);
         }
@@ -196,7 +205,15 @@ impl Position {
         } else {
             Bitboard::ZERO
         };
-        State::new(checkers, State::calculate_pinned(&self.c_bb, &self.pt_bb))
+        State::new(
+            if p_cap != Piece::EMP {
+                Some(p_cap)
+            } else {
+                None
+            },
+            checkers,
+            State::calculate_pinned(&self.c_bb, &self.pt_bb),
+        )
     }
     // 駒打ち
     fn do_drop_move(&mut self, to: Square, p: Piece) -> State {
@@ -213,7 +230,11 @@ impl Position {
         } else {
             Bitboard::ZERO
         };
-        State::new(checkers, State::calculate_pinned(&self.c_bb, &self.pt_bb))
+        State::new(
+            None,
+            checkers,
+            State::calculate_pinned(&self.c_bb, &self.pt_bb),
+        )
     }
     fn state(&self) -> Option<&State> {
         self.states.last()
@@ -376,10 +397,10 @@ mod tests {
     fn test_do_undo_move() {
         let mut pos = Position::default();
         let moves = [
-            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU, Piece::EMP),
-            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU, Piece::EMP),
-            Move::new_normal(Square::SQ88, Square::SQ22, true, Piece::BUM, Piece::WKA),
-            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WGI, Piece::BUM),
+            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
+            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU),
+            Move::new_normal(Square::SQ88, Square::SQ22, true, Piece::BUM),
+            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WGI),
             Move::new_drop(Square::SQ33, Piece::BKA),
         ];
         // do moves

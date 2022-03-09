@@ -63,13 +63,7 @@ impl MoveList {
                 & !pos.pieces_c(c)
                 & !checkers_attacks
             {
-                self.push(Move::new_normal(
-                    ou,
-                    to,
-                    false,
-                    pos.piece_on(ou),
-                    pos.piece_on(to),
-                ));
+                self.push(Move::new_normal(ou, to, false, pos.piece_on(ou)));
             }
             // 両王手の場合は玉が逃げるしかない
             if checkers_count > 1 {
@@ -101,18 +95,12 @@ impl MoveList {
             for to in ATTACK_TABLE.attack(pt, from, c, &pos.occupied()) & *target {
                 let rank = to.rank();
                 if rank.is_opponent_field(c) {
-                    self.push(Move::new_normal(
-                        from,
-                        to,
-                        true,
-                        p_from.promoted(),
-                        pos.piece_on(to),
-                    ));
+                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
                     if rank.is_valid_for_piece(c, pt) {
-                        self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
+                        self.push(Move::new_normal(from, to, false, p_from));
                     }
                 } else {
-                    self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
+                    self.push(Move::new_normal(from, to, false, p_from));
                 }
             }
         }
@@ -123,15 +111,9 @@ impl MoveList {
             let p_from = pos.piece_on(from);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.attack(pt, from, c, &pos.occupied()) & *target {
-                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
+                self.push(Move::new_normal(from, to, false, p_from));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(
-                        from,
-                        to,
-                        true,
-                        p_from.promoted(),
-                        pos.piece_on(to),
-                    ));
+                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
                 }
             }
         }
@@ -142,7 +124,7 @@ impl MoveList {
         for from in pos.pieces_cp(c, pt) {
             let p_from = pos.piece_on(from);
             for to in ATTACK_TABLE.attack(pt, from, c, &occ) & *target {
-                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
+                self.push(Move::new_normal(from, to, false, p_from));
             }
         }
     }
@@ -157,7 +139,7 @@ impl MoveList {
         {
             let p_from = pos.piece_on(from);
             for to in ATTACK_TABLE.attack(PieceType::KI, from, c, &pos.occupied()) & *target {
-                self.push(Move::new_normal(from, to, false, p_from, pos.piece_on(to)));
+                self.push(Move::new_normal(from, to, false, p_from));
             }
         }
     }
