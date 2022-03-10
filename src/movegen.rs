@@ -36,16 +36,16 @@ impl MoveList {
     }
     fn generate_all(&mut self, pos: &Position) {
         let target = !pos.pieces_c(pos.side_to_move());
-        self.generate_for_fukyke(PieceType::FU, pos, &target);
-        self.generate_for_fukyke(PieceType::KY, pos, &target);
-        self.generate_for_fukyke(PieceType::KE, pos, &target);
-        self.generate_for_gikahi(PieceType::GI, pos, &target);
-        self.generate_for_gikahi(PieceType::KA, pos, &target);
-        self.generate_for_gikahi(PieceType::HI, pos, &target);
+        self.generate_for_fu(pos, &target);
+        self.generate_for_ky(pos, &target);
+        self.generate_for_ke(pos, &target);
+        self.generate_for_gi(pos, &target);
+        self.generate_for_ka(pos, &target);
+        self.generate_for_hi(pos, &target);
         self.generate_for_ki(pos, &target);
-        self.generate_for_ouumry(PieceType::OU, pos, &target);
-        self.generate_for_ouumry(PieceType::UM, pos, &target);
-        self.generate_for_ouumry(PieceType::RY, pos, &target);
+        self.generate_for_ou(pos, &target);
+        self.generate_for_um(pos, &target);
+        self.generate_for_ry(pos, &target);
         self.generate_drop(pos, &(!pos.occupied() & Bitboard::ONES));
     }
     fn generate_evasions(&mut self, pos: &Position) {
@@ -59,10 +59,7 @@ impl MoveList {
                 }
                 checkers_count += 1;
             }
-            for to in ATTACK_TABLE.attack(PieceType::OU, ou, !c, &Bitboard::ZERO)
-                & !pos.pieces_c(c)
-                & !checkers_attacks
-            {
+            for to in ATTACK_TABLE.ou.attack(ou, c) & !pos.pieces_c(c) & !checkers_attacks {
                 self.push(Move::new_normal(ou, to, false, pos.piece_on(ou)));
             }
             // 両王手の場合は玉が逃げるしかない
@@ -72,15 +69,15 @@ impl MoveList {
             if let Some(ch) = pos.checkers().pop() {
                 let target_drop = BETWEEN_TABLE[ch.index()][ou.index()];
                 let target_move = target_drop | pos.checkers();
-                self.generate_for_fukyke(PieceType::FU, pos, &target_move);
-                self.generate_for_fukyke(PieceType::KY, pos, &target_move);
-                self.generate_for_fukyke(PieceType::KE, pos, &target_move);
-                self.generate_for_gikahi(PieceType::GI, pos, &target_move);
-                self.generate_for_gikahi(PieceType::KA, pos, &target_move);
-                self.generate_for_gikahi(PieceType::HI, pos, &target_move);
+                self.generate_for_fu(pos, &target_move);
+                self.generate_for_ky(pos, &target_move);
+                self.generate_for_ke(pos, &target_move);
+                self.generate_for_gi(pos, &target_move);
+                self.generate_for_ka(pos, &target_move);
+                self.generate_for_hi(pos, &target_move);
                 self.generate_for_ki(pos, &target_move);
-                self.generate_for_ouumry(PieceType::UM, pos, &target_move);
-                self.generate_for_ouumry(PieceType::RY, pos, &target_move);
+                self.generate_for_um(pos, &target_move);
+                self.generate_for_ry(pos, &target_move);
                 self.generate_drop(pos, &target_drop);
             }
         }
@@ -88,15 +85,15 @@ impl MoveList {
     fn push(&mut self, m: Move) {
         self.0.push(m);
     }
-    fn generate_for_fukyke(&mut self, pt: PieceType, pos: &Position, target: &Bitboard) {
+    fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, pt) {
+        for from in pos.pieces_cp(c, PieceType::FU) {
             let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.attack(pt, from, c, &pos.occupied()) & *target {
+            for to in ATTACK_TABLE.fu.attack(from, c) & *target {
                 let rank = to.rank();
                 if rank.is_opponent_field(c) {
                     self.push(Move::new_normal(from, to, true, p_from.promoted()));
-                    if rank.is_valid_for_piece(c, pt) {
+                    if rank.is_valid_for_piece(c, PieceType::FU) {
                         self.push(Move::new_normal(from, to, false, p_from));
                     }
                 } else {
@@ -105,12 +102,46 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_gikahi(&mut self, pt: PieceType, pos: &Position, target: &Bitboard) {
+    fn generate_for_ky(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, pt) {
+        for from in pos.pieces_cp(c, PieceType::KY) {
+            let p_from = pos.piece_on(from);
+            for to in ATTACK_TABLE.ky.attack(from, c, &pos.occupied()) & *target {
+                let rank = to.rank();
+                if rank.is_opponent_field(c) {
+                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                    if rank.is_valid_for_piece(c, PieceType::KY) {
+                        self.push(Move::new_normal(from, to, false, p_from));
+                    }
+                } else {
+                    self.push(Move::new_normal(from, to, false, p_from));
+                }
+            }
+        }
+    }
+    fn generate_for_ke(&mut self, pos: &Position, target: &Bitboard) {
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::KE) {
+            let p_from = pos.piece_on(from);
+            for to in ATTACK_TABLE.ke.attack(from, c) & *target {
+                let rank = to.rank();
+                if rank.is_opponent_field(c) {
+                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                    if rank.is_valid_for_piece(c, PieceType::KE) {
+                        self.push(Move::new_normal(from, to, false, p_from));
+                    }
+                } else {
+                    self.push(Move::new_normal(from, to, false, p_from));
+                }
+            }
+        }
+    }
+    fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::GI) {
             let p_from = pos.piece_on(from);
             let from_is_opponent_field = from.rank().is_opponent_field(c);
-            for to in ATTACK_TABLE.attack(pt, from, c, &pos.occupied()) & *target {
+            for to in ATTACK_TABLE.gi.attack(from, c) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
                     self.push(Move::new_normal(from, to, true, p_from.promoted()));
@@ -118,13 +149,29 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_ouumry(&mut self, pt: PieceType, pos: &Position, target: &Bitboard) {
+    fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let occ = pos.occupied();
-        for from in pos.pieces_cp(c, pt) {
+        for from in pos.pieces_cp(c, PieceType::KA) {
             let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.attack(pt, from, c, &occ) & *target {
+            let from_is_opponent_field = from.rank().is_opponent_field(c);
+            for to in ATTACK_TABLE.ka.attack(from, &pos.occupied()) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
+                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                }
+            }
+        }
+    }
+    fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::HI) {
+            let p_from = pos.piece_on(from);
+            let from_is_opponent_field = from.rank().is_opponent_field(c);
+            for to in ATTACK_TABLE.hi.attack(from, &pos.occupied()) & *target {
+                self.push(Move::new_normal(from, to, false, p_from));
+                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                }
             }
         }
     }
@@ -138,7 +185,41 @@ impl MoveList {
             & pos.pieces_c(c)
         {
             let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.attack(PieceType::KI, from, c, &pos.occupied()) & *target {
+            for to in ATTACK_TABLE.ki.attack(from, c) & *target {
+                self.push(Move::new_normal(from, to, false, p_from));
+            }
+        }
+    }
+    fn generate_for_ou(&mut self, pos: &Position, target: &Bitboard) {
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::OU) {
+            let p_from = pos.piece_on(from);
+            for to in ATTACK_TABLE.ou.attack(from, c) & *target {
+                self.push(Move::new_normal(from, to, false, p_from));
+            }
+        }
+    }
+    fn generate_for_um(&mut self, pos: &Position, target: &Bitboard) {
+        let c = pos.side_to_move();
+        for from in pos.pieces_cp(c, PieceType::UM) {
+            let p_from = pos.piece_on(from);
+            for to in (ATTACK_TABLE.ka.attack(from, &pos.occupied())
+                | ATTACK_TABLE.ou.attack(from, c))
+                & *target
+            {
+                self.push(Move::new_normal(from, to, false, p_from));
+            }
+        }
+    }
+    fn generate_for_ry(&mut self, pos: &Position, target: &Bitboard) {
+        let c = pos.side_to_move();
+
+        for from in pos.pieces_cp(c, PieceType::RY) {
+            let p_from = pos.piece_on(from);
+            for to in (ATTACK_TABLE.hi.attack(from, &pos.occupied())
+                | ATTACK_TABLE.ou.attack(from, c))
+                & *target
+            {
                 self.push(Move::new_normal(from, to, false, p_from));
             }
         }
@@ -158,10 +239,7 @@ impl MoveList {
                 }
                 // 打ち歩詰めチェック
                 if let Some(sq) = pos.king(!c) {
-                    if let Some(to) = ATTACK_TABLE
-                        .attack(PieceType::FU, sq, !c, &pos.occupied())
-                        .pop()
-                    {
+                    if let Some(to) = ATTACK_TABLE.fu.attack(sq, !c).pop() {
                         if (*target & to).is_empty().not() && Self::is_uchifuzume(pos, to) {
                             exclude |= to;
                         }
@@ -197,8 +275,7 @@ impl MoveList {
         }
         // 玉が逃げられる
         if let Some(king) = pos.king(!c) {
-            let escape =
-                ATTACK_TABLE.attack(PieceType::OU, king, !c, &pos.occupied()) & !pos.pieces_c(!c);
+            let escape = ATTACK_TABLE.ou.attack(king, !c) & !pos.pieces_c(!c);
             for to in escape ^ sq {
                 if pos.attackers_to(c, to).is_empty() {
                     return false;
@@ -211,11 +288,11 @@ impl MoveList {
     fn attackers_to_except_klp(pos: &Position, c: Color, to: Square) -> Bitboard {
         let opp = !c;
         let occ = pos.occupied();
-        (     (ATTACK_TABLE.attack(PieceType::KE, to, opp, &occ) & pos.pieces_p(PieceType::KE))
-            | (ATTACK_TABLE.attack(PieceType::GI, to, opp, &occ) & pos.pieces_ps(&[PieceType::GI, PieceType::RY]))
-            | (ATTACK_TABLE.attack(PieceType::KA, to, opp, &occ) & pos.pieces_ps(&[PieceType::KA, PieceType::UM]))
-            | (ATTACK_TABLE.attack(PieceType::HI, to, opp, &occ) & pos.pieces_ps(&[PieceType::HI, PieceType::RY]))
-            | (ATTACK_TABLE.attack(PieceType::KI, to, opp, &occ) & pos.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM]))
+        (     (ATTACK_TABLE.ke.attack(to, opp)  & pos.pieces_p(PieceType::KE))
+            | (ATTACK_TABLE.gi.attack(to, opp)  & pos.pieces_ps(&[PieceType::GI, PieceType::RY]))
+            | (ATTACK_TABLE.ka.attack(to, &occ) & pos.pieces_ps(&[PieceType::KA, PieceType::UM]))
+            | (ATTACK_TABLE.hi.attack(to, &occ) & pos.pieces_ps(&[PieceType::HI, PieceType::RY]))
+            | (ATTACK_TABLE.ki.attack(to, opp)  & pos.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM]))
         ) & pos.pieces_c(c)
     }
 }

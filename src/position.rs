@@ -264,13 +264,13 @@ impl Position {
     pub fn attackers_to(&self, c: Color, to: Square) -> Bitboard {
         let opp = !c;
         let occ = self.occupied();
-        (     (ATTACK_TABLE.attack(PieceType::FU, to, opp, &occ) & self.pieces_p(PieceType::FU))
-            | (ATTACK_TABLE.attack(PieceType::KY, to, opp, &occ) & self.pieces_p(PieceType::KY))
-            | (ATTACK_TABLE.attack(PieceType::KE, to, opp, &occ) & self.pieces_p(PieceType::KE))
-            | (ATTACK_TABLE.attack(PieceType::GI, to, opp, &occ) & self.pieces_ps(&[PieceType::GI, PieceType::RY, PieceType::OU]))
-            | (ATTACK_TABLE.attack(PieceType::KA, to, opp, &occ) & self.pieces_ps(&[PieceType::KA, PieceType::UM]))
-            | (ATTACK_TABLE.attack(PieceType::HI, to, opp, &occ) & self.pieces_ps(&[PieceType::HI, PieceType::RY]))
-            | (ATTACK_TABLE.attack(PieceType::KI, to, opp, &occ) & self.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM, PieceType::OU]))
+        (     (ATTACK_TABLE.fu.attack(to, opp)       & self.pieces_p(PieceType::FU))
+            | (ATTACK_TABLE.ky.attack(to, opp, &occ) & self.pieces_p(PieceType::KY))
+            | (ATTACK_TABLE.ke.attack(to, opp)       & self.pieces_p(PieceType::KE))
+            | (ATTACK_TABLE.gi.attack(to, opp)       & self.pieces_ps(&[PieceType::GI, PieceType::RY, PieceType::OU]))
+            | (ATTACK_TABLE.ka.attack(to, &occ)      & self.pieces_ps(&[PieceType::KA, PieceType::UM]))
+            | (ATTACK_TABLE.hi.attack(to, &occ)      & self.pieces_ps(&[PieceType::HI, PieceType::RY]))
+            | (ATTACK_TABLE.ki.attack(to, opp)       & self.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM, PieceType::OU]))
         ) & self.pieces_c(c)
     }
     pub fn is_legal_move(&self, m: Move) -> bool {
