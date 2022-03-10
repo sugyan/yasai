@@ -87,18 +87,20 @@ impl MoveList {
     }
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        for from in pos.pieces_cp(c, PieceType::FU) {
-            let p_from = pos.piece_on(from);
-            for to in ATTACK_TABLE.fu.attack(from, c) & *target {
-                let rank = to.rank();
-                if rank.is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
-                    if rank.is_valid_for_piece(c, PieceType::FU) {
-                        self.push(Move::new_normal(from, to, false, p_from));
-                    }
-                } else {
+        let (to_bb, delta, p_from) = match c {
+            Color::Black => (pos.pieces_cp(c, PieceType::FU).shr(), 1, Piece::BFU),
+            Color::White => (pos.pieces_cp(c, PieceType::FU).shl(), -1, Piece::WFU),
+        };
+        for to in to_bb & *target {
+            let rank = to.rank();
+            let from = Square(to.0 + delta);
+            if rank.is_opponent_field(c) {
+                self.push(Move::new_normal(from, to, true, p_from));
+                if rank.is_valid_for_piece(c, PieceType::FU) {
                     self.push(Move::new_normal(from, to, false, p_from));
                 }
+            } else {
+                self.push(Move::new_normal(from, to, false, p_from));
             }
         }
     }
@@ -109,7 +111,7 @@ impl MoveList {
             for to in ATTACK_TABLE.ky.attack(from, c, &pos.occupied()) & *target {
                 let rank = to.rank();
                 if rank.is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                    self.push(Move::new_normal(from, to, true, p_from));
                     if rank.is_valid_for_piece(c, PieceType::KY) {
                         self.push(Move::new_normal(from, to, false, p_from));
                     }
@@ -126,7 +128,7 @@ impl MoveList {
             for to in ATTACK_TABLE.ke.attack(from, c) & *target {
                 let rank = to.rank();
                 if rank.is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                    self.push(Move::new_normal(from, to, true, p_from));
                     if rank.is_valid_for_piece(c, PieceType::KE) {
                         self.push(Move::new_normal(from, to, false, p_from));
                     }
@@ -144,7 +146,7 @@ impl MoveList {
             for to in ATTACK_TABLE.gi.attack(from, c) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                    self.push(Move::new_normal(from, to, true, p_from));
                 }
             }
         }
@@ -157,7 +159,7 @@ impl MoveList {
             for to in ATTACK_TABLE.ka.attack(from, &pos.occupied()) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                    self.push(Move::new_normal(from, to, true, p_from));
                 }
             }
         }
@@ -170,7 +172,7 @@ impl MoveList {
             for to in ATTACK_TABLE.hi.attack(from, &pos.occupied()) & *target {
                 self.push(Move::new_normal(from, to, false, p_from));
                 if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p_from.promoted()));
+                    self.push(Move::new_normal(from, to, true, p_from));
                 }
             }
         }

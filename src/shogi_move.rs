@@ -72,10 +72,15 @@ impl fmt::Display for Move {
             write!(f, "00")?;
         }
         write!(f, "{}{}", self.to().file(), self.to().rank())?;
+        let pt = self.piece().piece_type().expect("failed to get piece type");
         write!(
             f,
             "{}",
-            self.piece().piece_type().expect("failed to get piece type")
+            if self.is_promotion() {
+                pt.promoted().expect("failed to promote piece type")
+            } else {
+                pt
+            }
         )?;
         Ok(())
     }
