@@ -269,7 +269,7 @@ impl MoveList {
         }
         // 他の駒が歩を取れる
         let capture_candidates = Self::attackers_to_except_klp(pos, !c, sq);
-        if (capture_candidates & !pos.pinned()[c.index()])
+        if (capture_candidates & !pos.pinned()[(!c).index()])
             .is_empty()
             .not()
         {
@@ -402,160 +402,165 @@ mod tests {
     #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn test_uchifuzume() {
-        // 打ち歩詰め
-        // P1 *  *  *  *  *  *  *  *  *
-        // P2 *  *  *  *  *  *  * -FU-FU
-        // P3 *  *  *  *  *  *  *  * -OU
-        // P4 *  *  *  *  *  *  * +FU *
-        // P5 *  *  *  *  *  *  * +KI *
-        // P6 *  *  *  *  *  *  *  *  *
-        // P7 *  *  *  *  *  *  *  *  *
-        // P8 *  *  *  *  *  *  *  *  *
-        // P9 *  *  *  *  *  *  *  *  *
-        // P+00FU
-        // P-00AL
-        // +
         #[rustfmt::skip]
-        assert_eq!(
-            true,
-            MoveList::is_uchifuzume(&Position::new([
-                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::WFU, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-            ], [
-                [ 1, 0, 0, 0, 0, 0, 0],
-                [14, 4, 4, 4, 3, 2, 2],
-            ], Color::Black), Square::SQ14)
-        );
-        // 金で歩を取れる
-        // P1 *  *  *  *  *  *  *  *  *
-        // P2 *  *  *  *  *  *  * -FU-FU
-        // P3 *  *  *  *  *  *  * -KI-OU
-        // P4 *  *  *  *  *  *  *  *  *
-        // P5 *  *  *  *  *  *  * +KI *
-        // P6 *  *  *  *  *  *  *  *  *
-        // P7 *  *  *  *  *  *  *  *  *
-        // P8 *  *  *  *  *  *  *  *  *
-        // P9 *  *  *  *  *  *  *  *  *
-        // P+00FU
-        // P-00AL
-        // +
-        #[rustfmt::skip]
-        assert_eq!(
-            false,
-            MoveList::is_uchifuzume(&Position::new([
-                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::WFU, Piece::WKI, Piece::EMP, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-            ], [
-                [ 1, 0, 0, 0, 0, 0, 0],
-                [15, 4, 4, 4, 2, 2, 2],
-            ], Color::Black), Square::SQ14)
-        );
-        // 飛がいるので金が動けない
-        // P1 *  *  *  *  *  *  *  *  *
-        // P2 *  *  *  *  *  *  * -FU-FU
-        // P3 *  *  *  *  *  * +HI-KI-OU
-        // P4 *  *  *  *  *  *  *  *  *
-        // P5 *  *  *  *  *  *  * +KI *
-        // P6 *  *  *  *  *  *  *  *  *
-        // P7 *  *  *  *  *  *  *  *  *
-        // P8 *  *  *  *  *  *  *  *  *
-        // P9 *  *  *  *  *  *  *  *  *
-        // P+00FU
-        // P-00AL
-        // +
-        #[rustfmt::skip]
-        assert_eq!(
-            true,
-            MoveList::is_uchifuzume(&Position::new([
-                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::WFU, Piece::WKI, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::BHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-            ], [
-                [ 1, 0, 0, 0, 0, 0, 0],
-                [15, 4, 4, 4, 2, 2, 1],
-            ], Color::Black), Square::SQ14)
-        );
-        // 桂で歩を取れる
-        // P1 *  *  *  *  *  *  *  *  *
-        // P2 *  *  *  *  *  *  * -KE-FU
-        // P3 *  *  *  *  *  *  *  * -OU
-        // P4 *  *  *  *  *  *  * +FU *
-        // P5 *  *  *  *  *  *  * +KI *
-        // P6 *  *  *  *  *  *  *  *  *
-        // P7 *  *  *  *  *  *  *  *  *
-        // P8 *  *  *  *  *  *  *  *  *
-        // P9 *  *  *  *  *  *  *  *  *
-        // P+00FU
-        // P-00AL
-        // +
-        #[rustfmt::skip]
-        assert_eq!(
-            false,
-            MoveList::is_uchifuzume(&Position::new([
-                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::WKE, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-            ], [
-                [ 1, 0, 0, 0, 0, 0, 0],
-                [15, 4, 3, 4, 3, 2, 2],
-            ], Color::Black), Square::SQ14)
-        );
-        // 角がいるので桂が動けない
-        // P1 *  *  *  *  *  * +KA *  *
-        // P2 *  *  *  *  *  *  * -KE-FU
-        // P3 *  *  *  *  *  *  *  * -OU
-        // P4 *  *  *  *  *  *  * +FU *
-        // P5 *  *  *  *  *  *  * +KI *
-        // P6 *  *  *  *  *  *  *  *  *
-        // P7 *  *  *  *  *  *  *  *  *
-        // P8 *  *  *  *  *  *  *  *  *
-        // P9 *  *  *  *  *  *  *  *  *
-        // P+00FU
-        // P-00AL
-        // +
-        #[rustfmt::skip]
-        assert_eq!(
-            true,
-            MoveList::is_uchifuzume(&Position::new([
-                Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::WKE, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-            ], [
-                [ 1, 0, 0, 0, 0, 0, 0],
-                [15, 4, 3, 4, 3, 1, 2],
-            ], Color::Black), Square::SQ14)
-        );
+        let test_cases = [
+            // 打ち歩詰め
+            // P1 *  *  *  *  *  *  *  *  *
+            // P2 *  *  *  *  *  *  * -FU-FU
+            // P3 *  *  *  *  *  *  *  * -OU
+            // P4 *  *  *  *  *  *  * +FU *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
+            // P+00FU
+            // P-00AL
+            // +
+            (
+                Position::new([
+                    Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::WFU, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                ], [
+                    [ 1, 0, 0, 0, 0, 0, 0],
+                    [14, 4, 4, 4, 3, 2, 2],
+                ], Color::Black),
+                true,
+            ),
+            // 金で歩を取れる
+            // P1 *  *  *  *  *  *  *  *  *
+            // P2 *  *  *  *  *  *  * -FU-FU
+            // P3 *  *  *  *  *  *  * -KI-OU
+            // P4 *  *  *  *  *  *  *  *  *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
+            // P+00FU
+            // P-00AL
+            // +
+            (
+                Position::new([
+                    Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::WFU, Piece::WKI, Piece::EMP, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                ], [
+                    [ 1, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 4, 4, 2, 2, 2],
+                ], Color::Black),
+                false,
+            ),
+            // 飛がいるので金が動けない
+            // P1 *  *  *  *  *  *  *  *  *
+            // P2 *  *  *  *  *  *  * -FU-FU
+            // P3 *  *  *  *  *  * +HI-KI-OU
+            // P4 *  *  *  *  *  *  *  *  *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
+            // P+00FU
+            // P-00AL
+            // +
+            (
+                Position::new([
+                    Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::WFU, Piece::WKI, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::BHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                ], [
+                    [ 1, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 4, 4, 2, 2, 1],
+                ], Color::Black),
+                true,
+            ),
+            // 桂で歩を取れる
+            // P1 *  *  *  *  *  *  *  *  *
+            // P2 *  *  *  *  *  *  * -KE-FU
+            // P3 *  *  *  *  *  *  *  * -OU
+            // P4 *  *  *  *  *  *  * +FU *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
+            // P+00FU
+            // P-00AL
+            // +
+            (
+                Position::new([
+                    Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::WKE, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                ], [
+                    [ 1, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 2, 2],
+                ], Color::Black),
+                false,
+            ),
+            // 角がいるので桂が動けない
+            // P1 *  *  *  *  *  * +KA *  *
+            // P2 *  *  *  *  *  *  * -KE-FU
+            // P3 *  *  *  *  *  *  *  * -OU
+            // P4 *  *  *  *  *  *  * +FU *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
+            // P+00FU
+            // P-00AL
+            // +
+            (
+                Position::new([
+                    Piece::EMP, Piece::WFU, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::WKE, Piece::EMP, Piece::BFU, Piece::BKI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                    Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                ], [
+                    [ 1, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 1, 2],
+                ], Color::Black),
+                true,
+            ),
+        ];
+        for (pos, expected) in test_cases {
+            assert_eq!(
+                expected,
+                MoveList::is_uchifuzume(&pos, Square::SQ14),
+                "\n{pos}"
+            );
+        }
     }
 }
