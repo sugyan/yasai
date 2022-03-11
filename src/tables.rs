@@ -27,23 +27,7 @@ impl Delta {
     const SSW: Delta = Delta { file:  1, rank:  2 };
 }
 
-trait Attack: Sync + Send {
-    fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard;
-    fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard;
-}
-
-struct UnreachableAttackTable;
-
-impl Attack for UnreachableAttackTable {
-    fn attack(&self, _: Square, _: Color, _: &Bitboard) -> Bitboard {
-        unreachable!()
-    }
-    fn pseudo_attack(&self, _: Square, _: Color) -> Bitboard {
-        unreachable!()
-    }
-}
-
-struct PieceAttackTable([[Bitboard; Color::NUM]; Square::NUM]);
+pub struct PieceAttackTable([[Bitboard; Color::NUM]; Square::NUM]);
 
 impl PieceAttackTable {
     #[rustfmt::skip]    const BFU_DELTAS: &'static [Delta] = &[Delta::N];
@@ -70,13 +54,7 @@ impl PieceAttackTable {
         }
         Self(table)
     }
-}
-
-impl Attack for PieceAttackTable {
-    fn attack(&self, sq: Square, c: Color, _: &Bitboard) -> Bitboard {
-        self.0[sq.index()][c.index()]
-    }
-    fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
+    pub fn attack(&self, sq: Square, c: Color) -> Bitboard {
         self.0[sq.index()][c.index()]
     }
 }
@@ -96,7 +74,7 @@ fn sliding_attacks(sq: Square, occ: Bitboard, deltas: &[Delta]) -> Bitboard {
     bb
 }
 
-struct LanceAttackTable {
+pub struct LanceAttackTable {
     table: Vec<Bitboard>,
     offsets: [[usize; Color::NUM]; Square::NUM],
 }
@@ -152,21 +130,18 @@ impl LanceAttackTable {
         }
         Self { table, offsets }
     }
-}
-
-impl Attack for LanceAttackTable {
-    fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
+    fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
+        self.table[self.offsets[sq.index()][c.index()]]
+    }
+    pub fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let index = ((occ.value(if sq.index() >= 63 { 1 } else { 0 })
             >> LanceAttackTable::OFFSET_BITS[sq.index()]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
         self.table[self.offsets[sq.index()][c.index()] + index]
     }
-    fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
-        self.table[self.offsets[sq.index()][c.index()]]
-    }
 }
 
-struct SlidingAttackTable {
+pub struct SlidingAttackTable {
     table: Vec<Bitboard>,
     masks: [Bitboard; Square::NUM],
     offsets: [usize; Square::NUM],
@@ -224,94 +199,70 @@ impl SlidingAttackTable {
             offsets,
         }
     }
-}
-
-impl Attack for SlidingAttackTable {
-    fn attack(&self, sq: Square, _: Color, occ: &Bitboard) -> Bitboard {
-        self.table[self.offsets[sq.index()] + Self::occupied_to_index(*occ, self.masks[sq.index()])]
-    }
-    fn pseudo_attack(&self, sq: Square, _: Color) -> Bitboard {
+    fn pseudo_attack(&self, sq: Square) -> Bitboard {
         self.table[self.offsets[sq.index()]]
     }
+    pub fn attack(&self, sq: Square, occ: &Bitboard) -> Bitboard {
+        self.table[self.offsets[sq.index()] + Self::occupied_to_index(*occ, self.masks[sq.index()])]
+    }
 }
 
-// [
-//     0: UnreachableAttacTable,
-//     1: PieceAttackTable with FU
-//     2: PieceAttackTable with KE
-//     3: PieceAttackTable with GI
-//     4: PieceAttackTable with KI
-//     5: PieceAttackTable with OU
-//     6: LanceAttackTable
-//     7: SlidingAttackTable with KA
-//     8: SlidingAttackTable with HI
-// ]
-pub struct AttackTable([Box<dyn Attack>; 9]);
+pub struct AttackTable {
+    pub fu: PieceAttackTable,
+    pub ky: LanceAttackTable,
+    pub ke: PieceAttackTable,
+    pub gi: PieceAttackTable,
+    pub ka: SlidingAttackTable,
+    pub hi: SlidingAttackTable,
+    pub ki: PieceAttackTable,
+    pub ou: PieceAttackTable,
+}
 
 impl AttackTable {
-    const PIECE_TYPE_INDEX: [usize; PieceType::NUM] = [
-        0, // OCCUPIED => unreachable!
-        1, // FU => PieceAttackTable with FU
-        6, // KY => LanceAttackTable
-        2, // KE => PieceAttackTable with KE
-        3, // GI => PieceAttackTable with GI
-        7, // KA => SlidingAttackTable with KA
-        8, // HI => SlidingAttackTable with HI
-        4, // KI => PieceAttackTable with KI
-        5, // OU => PieceAttackTable with OU
-        4, // TO => PieceAttackTable with KI
-        4, // NY => PieceAttackTable with KI
-        4, // NK => PieceAttackTable with KI
-        4, // NG => PieceAttackTable with KI
-        7, // UM => SlidingAttackTable with KA
-        8, // RY => SlidingAttackTable with HI
-    ];
     pub fn attack(&self, pt: PieceType, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
-        self.0[Self::PIECE_TYPE_INDEX[pt.index()]].attack(sq, c, occ)
-            | if pt.index() >= PieceType::UM.index() {
-                self.0[5].attack(sq, c, occ)
-            } else {
-                Bitboard::ZERO
+        match pt {
+            PieceType::FU => self.fu.attack(sq, c),
+            PieceType::KY => self.ky.attack(sq, c, occ),
+            PieceType::KE => self.ke.attack(sq, c),
+            PieceType::GI => self.gi.attack(sq, c),
+            PieceType::KA => self.ka.attack(sq, occ),
+            PieceType::HI => self.hi.attack(sq, occ),
+            PieceType::KI | PieceType::TO | PieceType::NY | PieceType::NK | PieceType::NG => {
+                self.ki.attack(sq, c)
             }
+            PieceType::OU => self.ou.attack(sq, c),
+            PieceType::UM => self.ka.attack(sq, occ) | self.ou.attack(sq, c),
+            PieceType::RY => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
+            _ => unreachable!(),
+        }
     }
     pub fn pseudo_attack(&self, pt: PieceType, sq: Square, c: Color) -> Bitboard {
-        self.0[Self::PIECE_TYPE_INDEX[pt.index()]].pseudo_attack(sq, c)
+        match pt {
+            PieceType::KY => self.ky.pseudo_attack(sq, c),
+            PieceType::KA | PieceType::UM => self.ka.pseudo_attack(sq),
+            PieceType::HI | PieceType::RY => self.hi.pseudo_attack(sq),
+            pt => self.attack(pt, sq, c, &Bitboard::ZERO),
+        }
     }
 }
 
 pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| {
-    AttackTable([
-        Box::new(UnreachableAttackTable),
-        Box::new(PieceAttackTable::new(&[
-            PieceAttackTable::BFU_DELTAS,
-            PieceAttackTable::WFU_DELTAS,
-        ])),
-        Box::new(PieceAttackTable::new(&[
-            PieceAttackTable::BKE_DELTAS,
-            PieceAttackTable::WKE_DELTAS,
-        ])),
-        Box::new(PieceAttackTable::new(&[
-            PieceAttackTable::BGI_DELTAS,
-            PieceAttackTable::WGI_DELTAS,
-        ])),
-        Box::new(PieceAttackTable::new(&[
-            PieceAttackTable::BKI_DELTAS,
-            PieceAttackTable::WKI_DELTAS,
-        ])),
-        Box::new(PieceAttackTable::new(&[
-            PieceAttackTable::BOU_DELTAS,
-            PieceAttackTable::WOU_DELTAS,
-        ])),
-        Box::new(LanceAttackTable::new()),
-        Box::new(SlidingAttackTable::new(
+    AttackTable {
+        fu: PieceAttackTable::new(&[PieceAttackTable::BFU_DELTAS, PieceAttackTable::WFU_DELTAS]),
+        ky: LanceAttackTable::new(),
+        ke: PieceAttackTable::new(&[PieceAttackTable::BKE_DELTAS, PieceAttackTable::WKE_DELTAS]),
+        gi: PieceAttackTable::new(&[PieceAttackTable::BGI_DELTAS, PieceAttackTable::WGI_DELTAS]),
+        ka: SlidingAttackTable::new(
             20224, // 1 * (1 << 12) + 8 * (1 << 10) + 16 * (1 << 8) + 52 * (1 << 6) + 4 * (1 << 7)
             &[Delta::NE, Delta::SE, Delta::SW, Delta::NW],
-        )),
-        Box::new(SlidingAttackTable::new(
+        ),
+        hi: SlidingAttackTable::new(
             495616, // 4 * (1 << 14) + 28 * (1 << 13) + 49 * (1 << 12)
             &[Delta::N, Delta::E, Delta::S, Delta::W],
-        )),
-    ])
+        ),
+        ki: PieceAttackTable::new(&[PieceAttackTable::BKI_DELTAS, PieceAttackTable::WKI_DELTAS]),
+        ou: PieceAttackTable::new(&[PieceAttackTable::BOU_DELTAS, PieceAttackTable::WOU_DELTAS]),
+    }
 });
 
 pub static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::new(|| {

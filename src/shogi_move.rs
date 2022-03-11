@@ -6,7 +6,6 @@ use std::fmt;
 // ........ ........ .####### ........ : from (0 if drop move)
 // ........ ........ #....... ........ : drop flag
 // ........ ...##### ........ ........ : moved piece or dropped piece type
-// ...##### ........ ........ ........ : captured piece (if moved)
 #[derive(Clone, Copy)]
 pub struct Move(u32);
 
@@ -18,16 +17,8 @@ impl Move {
     const DROP_FLAG: u32 = 1 << 15;
     const PIECE_SHIFT: u32 = 16;
     const PIECE_MASK: u32 = 0x001f_0000;
-    const CAPTURED_SHIFT: u32 = 24;
-    const CAPTURED_MASK: u32 = 0x1f00_0000;
 
-    pub fn new_normal(
-        from: Square,
-        to: Square,
-        is_promotion: bool,
-        piece: Piece,
-        captured: Piece,
-    ) -> Self {
+    pub fn new_normal(from: Square, to: Square, is_promotion: bool, piece: Piece) -> Self {
         Move(
             to.index() as u32
                 | ((from.0 as u32) << Move::FROM_SHIFT)
@@ -36,8 +27,7 @@ impl Move {
                 } else {
                     0
                 }
-                | (piece.0 as u32) << Move::PIECE_SHIFT
-                | (captured.0 as u32) << Move::CAPTURED_SHIFT,
+                | (piece.0 as u32) << Move::PIECE_SHIFT,
         )
     }
     pub fn new_drop(to: Square, piece: Piece) -> Self {
@@ -64,14 +54,6 @@ impl Move {
     pub fn piece(&self) -> Piece {
         Piece(((self.0 & Move::PIECE_MASK) >> Move::PIECE_SHIFT) as u8)
     }
-    pub fn captured(&self) -> Option<Piece> {
-        let val = ((self.0 & Move::CAPTURED_MASK) >> Move::CAPTURED_SHIFT) as u8;
-        if val == 0 {
-            None
-        } else {
-            Some(Piece(val))
-        }
-    }
 }
 
 impl fmt::Display for Move {
@@ -90,10 +72,15 @@ impl fmt::Display for Move {
             write!(f, "00")?;
         }
         write!(f, "{}{}", self.to().file(), self.to().rank())?;
+        let pt = self.piece().piece_type().expect("failed to get piece type");
         write!(
             f,
             "{}",
-            self.piece().piece_type().expect("failed to get piece type")
+            if self.is_promotion() {
+                pt.promoted().expect("failed to promote piece type")
+            } else {
+                pt
+            }
         )?;
         Ok(())
     }

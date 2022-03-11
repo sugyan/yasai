@@ -59,6 +59,13 @@ impl PieceType {
     pub fn is_demotable(&self) -> bool {
         (9..=14).contains(&self.index())
     }
+    pub fn promoted(&self) -> Option<PieceType> {
+        if self.is_promotable() {
+            Some(PieceType(self.0 + 8))
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for PieceType {
