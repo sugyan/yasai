@@ -55,7 +55,12 @@ impl MoveList {
             let mut checkers_count = 0;
             for ch in pos.checkers() {
                 if let Some(pt) = pos.piece_on(ch).piece_type() {
-                    checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, !c);
+                    // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
+                    if pt == PieceType::RY && ch.file() != ou.file() && ch.rank() != ou.rank() {
+                        checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &pos.occupied());
+                    } else {
+                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, !c);
+                    }
                 }
                 checkers_count += 1;
             }

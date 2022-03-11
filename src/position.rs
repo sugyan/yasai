@@ -345,13 +345,22 @@ impl Position {
     pub fn is_check_move(&self, m: Move) -> bool {
         let to = m.to();
         let p = m.piece();
-        if let Some(_from) = m.from() {
+        if let Some(from) = m.from() {
+            // 直接王手
             let p_to = if m.is_promotion() { p.promoted() } else { p };
-            let pt = p_to.piece_type().expect("empty piece for drop move");
-            if self.checkable(pt, to) {
-                return true;
+            if let Some(pt) = p_to.piece_type() {
+                if self.checkable(pt, to) {
+                    return true;
+                }
             }
-            // TODO: 開き王手
+            // 開き王手
+            let c = self.side_to_move();
+            if (self.pinned()[(!c).index()] & from).is_empty().not() {
+                if let Some(sq) = self.king(!c) {
+                    return (BETWEEN_TABLE[sq.index()][from.index()] & to).is_empty()
+                        && (BETWEEN_TABLE[sq.index()][to.index()] & from).is_empty();
+                }
+            }
         } else {
             let pt = p.piece_type().expect("empty piece for drop move");
             return self.checkable(pt, to);
@@ -539,6 +548,64 @@ mod tests {
             ], Color::Black);
             assert_eq!(593, perft(&mut pos, 1));
             assert_eq!(105677, perft(&mut pos, 2));
+        }
+    }
+
+    #[allow(clippy::bool_assert_comparison)]
+    #[test]
+    fn test_is_check_move() {
+        // P1 *  *  *  *  *  * -FU * -OU
+        // P2 *  *  *  *  *  *  *  *  *
+        // P3 *  *  *  *  *  * +FU * +KI
+        // P4 *  *  *  *  *  *  *  *  *
+        // P5 *  *  *  *  *  *  *  * +KY
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 *  *  *  *  *  *  *  *  *
+        // P-00AL
+        // +
+        #[rustfmt::skip]
+        let pos = Position::new([
+            Piece::WOU, Piece::EMP, Piece::BKI, Piece::EMP, Piece::BKY, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::WFU, Piece::EMP, Piece::BFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+        ], [
+            [ 0, 1, 0, 0, 0, 1, 1],
+            [16, 2, 4, 4, 3, 1, 1],
+        ], Color::Black);
+        let test_cases = [
+            (Move::new_drop(Square::SQ12, Piece::BKY), true),
+            (Move::new_drop(Square::SQ14, Piece::BKY), false),
+            (Move::new_drop(Square::SQ22, Piece::BKA), true),
+            (Move::new_drop(Square::SQ55, Piece::BKA), false),
+            (Move::new_drop(Square::SQ21, Piece::BHI), true),
+            (Move::new_drop(Square::SQ51, Piece::BHI), false),
+            (
+                Move::new_normal(Square::SQ13, Square::SQ12, false, Piece::BKI),
+                true,
+            ),
+            (
+                Move::new_normal(Square::SQ13, Square::SQ22, false, Piece::BKI),
+                true,
+            ),
+            (
+                Move::new_normal(Square::SQ13, Square::SQ23, false, Piece::BKI),
+                true,
+            ),
+            (
+                Move::new_normal(Square::SQ13, Square::SQ14, false, Piece::BKI),
+                false,
+            ),
+        ];
+        for (m, expected) in test_cases {
+            assert_eq!(expected, pos.is_check_move(m), "{m}");
         }
     }
 }
