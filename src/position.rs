@@ -9,35 +9,97 @@ use std::fmt;
 use std::ops::Not;
 
 #[derive(Debug)]
-struct State {
-    checkers: Bitboard,             // 王手をかけている駒の位置
-    pinned: [Bitboard; Color::NUM], // 飛び駒から玉を守っている駒の位置
+struct AttackInfo {
+    checkers: Bitboard,                     // 王手をかけている駒の位置
+    checkables: [Bitboard; PieceType::NUM], // 各駒種が王手になり得る位置
+    pinned: [Bitboard; Color::NUM],         // 飛び駒から玉を守っている駒の位置
 }
 
-impl State {
-    fn new(checkers: Bitboard, pinned: [Bitboard; Color::NUM]) -> Self {
-        Self { checkers, pinned }
-    }
-    fn calculate_pinned(c_bb: &[Bitboard], pt_bb: &[Bitboard]) -> [Bitboard; Color::NUM] {
-        let mut bbs = [Bitboard::ZERO, Bitboard::ZERO];
+impl AttackInfo {
+    fn new(checkers: Bitboard, c_bb: &[Bitboard], pt_bb: &[Bitboard], c: Color) -> Self {
+        let mut pinned = [Bitboard::ZERO, Bitboard::ZERO];
+        let occ = pt_bb[PieceType::OCCUPIED.index()];
         for c in Color::ALL {
-            if let Some(sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
+            if let Some(sq) = (c_bb[c.index()] & pt_bb[PieceType::OU.index()]).pop() {
                 #[rustfmt::skip]
                 let snipers = (
                       (ATTACK_TABLE.pseudo_attack(PieceType::KY, sq, c) & pt_bb[PieceType::KY.index()])
                     | (ATTACK_TABLE.pseudo_attack(PieceType::KA, sq, c) & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
                     | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq, c) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
-                ) & c_bb[c.index()];
+                ) & c_bb[(!c).index()];
                 for sniper in snipers {
-                    let blockers = BETWEEN_TABLE[sq.index()][sniper.index()]
-                        & pt_bb[PieceType::OCCUPIED.index()];
+                    let blockers = BETWEEN_TABLE[sq.index()][sniper.index()] & occ;
                     if blockers.count_ones() == 1 {
-                        bbs[c.index()] |= blockers;
+                        pinned[c.index()] |= blockers;
                     }
                 }
             }
         }
-        bbs
+        if let Some(sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).pop() {
+            let ka = ATTACK_TABLE.ka.attack(sq, &occ);
+            let hi = ATTACK_TABLE.hi.attack(sq, &occ);
+            let ki = ATTACK_TABLE.ki.attack(sq, !c);
+            let ou = ATTACK_TABLE.ou.attack(sq, !c);
+            Self {
+                checkers,
+                checkables: [
+                    Bitboard::ZERO,
+                    ATTACK_TABLE.fu.attack(sq, !c),
+                    ATTACK_TABLE.ky.attack(sq, !c, &occ),
+                    ATTACK_TABLE.ke.attack(sq, !c),
+                    ATTACK_TABLE.gi.attack(sq, !c),
+                    ka,
+                    hi,
+                    ki,
+                    Bitboard::ZERO,
+                    ki,
+                    ki,
+                    ki,
+                    ki,
+                    ka | ou,
+                    hi | ou,
+                ],
+                pinned,
+            }
+        } else {
+            Self {
+                checkers,
+                checkables: [Bitboard::ZERO; PieceType::NUM],
+                pinned,
+            }
+        }
+    }
+    #[rustfmt::skip]
+    fn calculate_checkers(c_bb: &[Bitboard], pt_bb: &[Bitboard], c: Color) -> Bitboard {
+        let opp = !c;
+        if let Some(sq) = (c_bb[opp.index()] & pt_bb[PieceType::OU.index()]).pop() {
+            let occ = &pt_bb[PieceType::OCCUPIED.index()];
+            (     (ATTACK_TABLE.fu.attack(sq, opp)      & pt_bb[PieceType::FU.index()])
+                | (ATTACK_TABLE.ky.attack(sq, opp, occ) & pt_bb[PieceType::KY.index()])
+                | (ATTACK_TABLE.ke.attack(sq, opp)      & pt_bb[PieceType::KE.index()])
+                | (ATTACK_TABLE.gi.attack(sq, opp)      & (pt_bb[PieceType::GI.index()] | pt_bb[PieceType::RY.index()]))
+                | (ATTACK_TABLE.ka.attack(sq, occ)      & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
+                | (ATTACK_TABLE.hi.attack(sq, occ)      & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
+                | (ATTACK_TABLE.ki.attack(sq, opp)      & (pt_bb[PieceType::KI.index()] | pt_bb[PieceType::TO.index()] | pt_bb[PieceType::NY.index()] | pt_bb[PieceType::NK.index()] | pt_bb[PieceType::NG.index()] | pt_bb[PieceType::UM.index()]))
+            ) & c_bb[c.index()]
+        } else {
+            Bitboard::ZERO
+        }
+    }
+}
+
+#[derive(Debug)]
+struct State {
+    captured: Piece,
+    attack_info: AttackInfo,
+}
+
+impl State {
+    fn new(captured: Piece, attack_info: AttackInfo) -> Self {
+        Self {
+            captured,
+            attack_info,
+        }
     }
 }
 
@@ -81,21 +143,17 @@ impl Position {
             }
         }
         // initial state
-        let state = {
-            let c = side_to_move;
-            let checkers = Bitboard::ZERO;
-            if let Some(_sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
-                // TODO
-            }
-            State::new(checkers, State::calculate_pinned(&c_bb, &pt_bb))
-        };
+        let checkers = AttackInfo::calculate_checkers(&c_bb, &pt_bb, side_to_move);
         Self {
             board,
             hands,
             color: side_to_move,
             pt_bb,
             c_bb,
-            states: vec![state],
+            states: vec![State::new(
+                Piece::EMP,
+                AttackInfo::new(checkers, &c_bb, &pt_bb, side_to_move),
+            )],
         }
     }
     pub fn piece_on(&self, sq: Square) -> Piece {
@@ -120,14 +178,22 @@ impl Position {
     pub fn in_check(&self) -> bool {
         self.checkers().is_empty().not()
     }
+    pub fn captured(&self) -> Piece {
+        self.state().captured
+    }
     pub fn checkers(&self) -> Bitboard {
-        self.state().expect("empty states").checkers
+        self.state().attack_info.checkers
+    }
+    fn checkable(&self, pt: PieceType, sq: Square) -> bool {
+        (self.state().attack_info.checkables[pt.index()] & sq)
+            .is_empty()
+            .not()
     }
     pub fn pinned(&self) -> [Bitboard; Color::NUM] {
-        self.state().expect("empty states").pinned
+        self.state().attack_info.pinned
     }
     pub fn king(&self, c: Color) -> Option<Square> {
-        self.pieces_cp(c, PieceType::OU).next()
+        self.pieces_cp(c, PieceType::OU).pop()
     }
     pub fn hand(&self, c: Color) -> Hand {
         self.hands[c.index()]
@@ -141,12 +207,51 @@ impl Position {
         ml
     }
     pub fn do_move(&mut self, m: Move) {
-        let state = if let Some(from) = m.from() {
-            self.do_normal_move(from, m.to(), m.is_promotion())
-        } else {
-            self.do_drop_move(m.to(), m.piece())
+        let is_check = self.is_check_move(m);
+        let c = self.side_to_move();
+        let to = m.to();
+        // 駒移動
+        if let Some(from) = m.from() {
+            let p_from = self.piece_on(from);
+            self.remove_piece(from, p_from);
+            // 移動先に駒がある場合
+            let p_cap = self.piece_on(to);
+            if let Some(pt) = p_cap.piece_type() {
+                self.xor_bbs(!c, pt, to);
+                self.hands[c.index()].increment(pt);
+            }
+            let p_to = if m.is_promotion() {
+                p_from.promoted()
+            } else {
+                p_from
+            };
+            self.put_piece(to, p_to);
+            let checkers = if is_check {
+                AttackInfo::calculate_checkers(&self.c_bb, &self.pt_bb, c)
+            } else {
+                Bitboard::ZERO
+            };
+            self.states.push(State::new(
+                p_cap,
+                AttackInfo::new(checkers, &self.c_bb, &self.pt_bb, !c),
+            ));
+        }
+        // 駒打ち
+        else {
+            let p = m.piece();
+            let pt = p.piece_type().expect("empty piece for drop move");
+            self.put_piece(to, p);
+            self.hands[c.index()].decrement(pt);
+            let checkers = if is_check {
+                Bitboard::from_square(to)
+            } else {
+                Bitboard::ZERO
+            };
+            self.states.push(State::new(
+                Piece::EMP,
+                AttackInfo::new(checkers, &self.c_bb, &self.pt_bb, !c),
+            ));
         };
-        self.states.push(state);
         self.color = !self.color;
     }
     pub fn undo_move(&mut self, m: Move) {
@@ -156,11 +261,10 @@ impl Position {
         // 駒移動
         if let Some(from) = m.from() {
             self.remove_piece(to, p_to);
-            if let Some(p_cap) = m.captured() {
+            let p_cap = self.captured();
+            if let Some(pt) = p_cap.piece_type() {
                 self.put_piece(to, p_cap);
-                if let Some(pt) = p_cap.piece_type() {
-                    self.hands[(!c).index()].decrement(pt);
-                }
+                self.hands[(!c).index()].decrement(pt);
             }
             let p_from = if m.is_promotion() {
                 p_to.demoted()
@@ -179,44 +283,8 @@ impl Position {
         self.color = !self.color;
         self.states.pop();
     }
-    // 駒移動
-    fn do_normal_move(&mut self, from: Square, to: Square, promotion: bool) -> State {
-        let c = self.side_to_move();
-        let p_from = self.piece_on(from);
-        self.remove_piece(from, p_from);
-        // 移動先に駒がある場合
-        if let Some(pt) = self.piece_on(to).piece_type() {
-            self.xor_bbs(!c, pt, to);
-            self.hands[c.index()].increment(pt);
-        }
-        let p_to = if promotion { p_from.promoted() } else { p_from };
-        self.put_piece(to, p_to);
-        let checkers = if let Some(sq) = self.king(!c) {
-            self.attackers_to(c, sq)
-        } else {
-            Bitboard::ZERO
-        };
-        State::new(checkers, State::calculate_pinned(&self.c_bb, &self.pt_bb))
-    }
-    // 駒打ち
-    fn do_drop_move(&mut self, to: Square, p: Piece) -> State {
-        let c = self.side_to_move();
-        let pt = p.piece_type().unwrap();
-        self.put_piece(to, p);
-        self.hands[c.index()].decrement(pt);
-        let checkers = if self.king(!c).map_or(false, |sq| {
-            (ATTACK_TABLE.attack(pt, to, c, &self.occupied()) & sq)
-                .is_empty()
-                .not()
-        }) {
-            Bitboard::from_square(to)
-        } else {
-            Bitboard::ZERO
-        };
-        State::new(checkers, State::calculate_pinned(&self.c_bb, &self.pt_bb))
-    }
-    fn state(&self) -> Option<&State> {
-        self.states.last()
+    fn state(&self) -> &State {
+        self.states.last().expect("empty states")
     }
     fn put_piece(&mut self, sq: Square, p: Piece) {
         if let (Some(c), Some(pt)) = (p.color(), p.piece_type()) {
@@ -242,15 +310,62 @@ impl Position {
     #[rustfmt::skip]
     pub fn attackers_to(&self, c: Color, to: Square) -> Bitboard {
         let opp = !c;
-        let occ = self.occupied();
-        (     (ATTACK_TABLE.attack(PieceType::FU, to, opp, &occ) & self.pieces_p(PieceType::FU))
-            | (ATTACK_TABLE.attack(PieceType::KY, to, opp, &occ) & self.pieces_p(PieceType::KY))
-            | (ATTACK_TABLE.attack(PieceType::KE, to, opp, &occ) & self.pieces_p(PieceType::KE))
-            | (ATTACK_TABLE.attack(PieceType::GI, to, opp, &occ) & self.pieces_ps(&[PieceType::GI, PieceType::RY, PieceType::OU]))
-            | (ATTACK_TABLE.attack(PieceType::KA, to, opp, &occ) & self.pieces_ps(&[PieceType::KA, PieceType::UM]))
-            | (ATTACK_TABLE.attack(PieceType::HI, to, opp, &occ) & self.pieces_ps(&[PieceType::HI, PieceType::RY]))
-            | (ATTACK_TABLE.attack(PieceType::KI, to, opp, &occ) & self.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM, PieceType::OU]))
+        let occ = &self.occupied();
+        (     (ATTACK_TABLE.fu.attack(to, opp)      & self.pieces_p(PieceType::FU))
+            | (ATTACK_TABLE.ky.attack(to, opp, occ) & self.pieces_p(PieceType::KY))
+            | (ATTACK_TABLE.ke.attack(to, opp)      & self.pieces_p(PieceType::KE))
+            | (ATTACK_TABLE.gi.attack(to, opp)      & self.pieces_ps(&[PieceType::GI, PieceType::RY, PieceType::OU]))
+            | (ATTACK_TABLE.ka.attack(to, occ)      & self.pieces_ps(&[PieceType::KA, PieceType::UM]))
+            | (ATTACK_TABLE.hi.attack(to, occ)      & self.pieces_ps(&[PieceType::HI, PieceType::RY]))
+            | (ATTACK_TABLE.ki.attack(to, opp)      & self.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM, PieceType::OU]))
         ) & self.pieces_c(c)
+    }
+    pub fn is_legal_move(&self, m: Move) -> bool {
+        if let Some(from) = m.from() {
+            let c = self.side_to_move();
+            // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
+            if self.piece_on(from).piece_type() == Some(PieceType::OU)
+                && self.attackers_to(!c, m.to()).is_empty().not()
+            {
+                return false;
+            }
+            // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
+            if (self.pinned()[c.index()] & from).is_empty().not() {
+                if let Some(sq) = self.king(c) {
+                    if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
+                        && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+    pub fn is_check_move(&self, m: Move) -> bool {
+        let to = m.to();
+        let p = m.piece();
+        if let Some(from) = m.from() {
+            // 直接王手
+            let p_to = if m.is_promotion() { p.promoted() } else { p };
+            if let Some(pt) = p_to.piece_type() {
+                if self.checkable(pt, to) {
+                    return true;
+                }
+            }
+            // 開き王手
+            let c = self.side_to_move();
+            if (self.pinned()[(!c).index()] & from).is_empty().not() {
+                if let Some(sq) = self.king(!c) {
+                    return (BETWEEN_TABLE[sq.index()][from.index()] & to).is_empty()
+                        && (BETWEEN_TABLE[sq.index()][to.index()] & from).is_empty();
+                }
+            }
+        } else {
+            let pt = p.piece_type().expect("empty piece for drop move");
+            return self.checkable(pt, to);
+        }
+        false
     }
 }
 
@@ -354,10 +469,10 @@ mod tests {
     fn test_do_undo_move() {
         let mut pos = Position::default();
         let moves = [
-            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU, Piece::EMP),
-            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU, Piece::EMP),
-            Move::new_normal(Square::SQ88, Square::SQ22, true, Piece::BUM, Piece::WKA),
-            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WGI, Piece::BUM),
+            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
+            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU),
+            Move::new_normal(Square::SQ88, Square::SQ22, true, Piece::BUM),
+            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WGI),
             Move::new_drop(Square::SQ33, Piece::BKA),
         ];
         // do moves
@@ -433,6 +548,64 @@ mod tests {
             ], Color::Black);
             assert_eq!(593, perft(&mut pos, 1));
             assert_eq!(105677, perft(&mut pos, 2));
+        }
+    }
+
+    #[allow(clippy::bool_assert_comparison)]
+    #[test]
+    fn test_is_check_move() {
+        // P1 *  *  *  *  *  * -FU * -OU
+        // P2 *  *  *  *  *  *  *  *  *
+        // P3 *  *  *  *  *  * +FU * +KI
+        // P4 *  *  *  *  *  *  *  *  *
+        // P5 *  *  *  *  *  *  *  * +KY
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 *  *  *  *  *  *  *  *  *
+        // P-00AL
+        // +
+        #[rustfmt::skip]
+        let pos = Position::new([
+            Piece::WOU, Piece::EMP, Piece::BKI, Piece::EMP, Piece::BKY, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::WFU, Piece::EMP, Piece::BFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+            Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+        ], [
+            [ 0, 1, 0, 0, 0, 1, 1],
+            [16, 2, 4, 4, 3, 1, 1],
+        ], Color::Black);
+        let test_cases = [
+            (Move::new_drop(Square::SQ12, Piece::BKY), true),
+            (Move::new_drop(Square::SQ14, Piece::BKY), false),
+            (Move::new_drop(Square::SQ22, Piece::BKA), true),
+            (Move::new_drop(Square::SQ55, Piece::BKA), false),
+            (Move::new_drop(Square::SQ21, Piece::BHI), true),
+            (Move::new_drop(Square::SQ51, Piece::BHI), false),
+            (
+                Move::new_normal(Square::SQ13, Square::SQ12, false, Piece::BKI),
+                true,
+            ),
+            (
+                Move::new_normal(Square::SQ13, Square::SQ22, false, Piece::BKI),
+                true,
+            ),
+            (
+                Move::new_normal(Square::SQ13, Square::SQ23, false, Piece::BKI),
+                true,
+            ),
+            (
+                Move::new_normal(Square::SQ13, Square::SQ14, false, Piece::BKI),
+                false,
+            ),
+        ];
+        for (m, expected) in test_cases {
+            assert_eq!(expected, pos.is_check_move(m), "{m}");
         }
     }
 }

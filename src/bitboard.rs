@@ -22,6 +22,16 @@ impl Bitboard {
     pub fn count_ones(&self) -> u32 {
         self.value(0).count_ones() + self.value(1).count_ones()
     }
+    pub fn shl(&self) -> Bitboard {
+        Bitboard {
+            u: [self.value(0) << 1, self.value(1) << 1],
+        }
+    }
+    pub fn shr(&self) -> Bitboard {
+        Bitboard {
+            u: [self.value(0) >> 1, self.value(1) >> 1],
+        }
+    }
     pub fn from_square(sq: Square) -> Bitboard {
         Bitboard::SQUARE[sq.index()]
     }
