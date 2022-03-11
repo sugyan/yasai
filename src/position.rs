@@ -9,22 +9,15 @@ use std::fmt;
 use std::ops::Not;
 
 #[derive(Debug)]
-struct State {
-    captured: Option<Piece>,
-    checkers: Bitboard,             // 王手をかけている駒の位置
-    pinned: [Bitboard; Color::NUM], // 飛び駒から玉を守っている駒の位置
+struct AttackInfo {
+    checkers: Bitboard,                     // 王手をかけている駒の位置
+    checkables: [Bitboard; PieceType::NUM], // 各駒種が王手になり得る位置
+    pinned: [Bitboard; Color::NUM],         // 飛び駒から玉を守っている駒の位置
 }
 
-impl State {
-    fn new(captured: Option<Piece>, checkers: Bitboard, pinned: [Bitboard; Color::NUM]) -> Self {
-        Self {
-            captured,
-            checkers,
-            pinned,
-        }
-    }
-    fn calculate_pinned(c_bb: &[Bitboard], pt_bb: &[Bitboard]) -> [Bitboard; Color::NUM] {
-        let mut bbs = [Bitboard::ZERO, Bitboard::ZERO];
+impl AttackInfo {
+    fn new(checkers: Bitboard, c_bb: &[Bitboard], pt_bb: &[Bitboard], c: Color) -> Self {
+        let mut pinned = [Bitboard::ZERO, Bitboard::ZERO];
         for c in Color::ALL {
             if let Some(sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
                 #[rustfmt::skip]
@@ -37,12 +30,58 @@ impl State {
                     let blockers = BETWEEN_TABLE[sq.index()][sniper.index()]
                         & pt_bb[PieceType::OCCUPIED.index()];
                     if blockers.count_ones() == 1 {
-                        bbs[c.index()] |= blockers;
+                        pinned[c.index()] |= blockers;
                     }
                 }
             }
         }
-        bbs
+        let checkables = if let Some(sq) = (c_bb[(c).index()] & pt_bb[PieceType::OU.index()]).pop()
+        {
+            let occ = pt_bb[PieceType::OCCUPIED.index()];
+            let ka = ATTACK_TABLE.ka.attack(sq, &occ);
+            let hi = ATTACK_TABLE.hi.attack(sq, &occ);
+            let ki = ATTACK_TABLE.ki.attack(sq, c);
+            let ou = ATTACK_TABLE.ou.attack(sq, c);
+            [
+                Bitboard::ZERO,
+                ATTACK_TABLE.fu.attack(sq, c),
+                ATTACK_TABLE.ky.attack(sq, c, &occ),
+                ATTACK_TABLE.ke.attack(sq, c),
+                ATTACK_TABLE.gi.attack(sq, c),
+                ka,
+                hi,
+                ki,
+                Bitboard::ZERO,
+                ki,
+                ki,
+                ki,
+                ki,
+                ka | ou,
+                hi | ou,
+            ]
+        } else {
+            [Bitboard::ZERO; PieceType::NUM]
+        };
+        Self {
+            checkers,
+            checkables,
+            pinned,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct State {
+    captured: Option<Piece>,
+    attack_info: AttackInfo,
+}
+
+impl State {
+    fn new(captured: Option<Piece>, attack_info: AttackInfo) -> Self {
+        Self {
+            captured,
+            attack_info,
+        }
     }
 }
 
@@ -86,21 +125,17 @@ impl Position {
             }
         }
         // initial state
-        let state = {
-            let c = side_to_move;
-            let checkers = Bitboard::ZERO;
-            if let Some(_sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).next() {
-                // TODO
-            }
-            State::new(None, checkers, State::calculate_pinned(&c_bb, &pt_bb))
-        };
+        let checkers = Bitboard::ZERO; // TODO
         Self {
             board,
             hands,
             color: side_to_move,
             pt_bb,
             c_bb,
-            states: vec![state],
+            states: vec![State::new(
+                None,
+                AttackInfo::new(checkers, &c_bb, &pt_bb, side_to_move),
+            )],
         }
     }
     pub fn piece_on(&self, sq: Square) -> Piece {
@@ -126,13 +161,18 @@ impl Position {
         self.checkers().is_empty().not()
     }
     pub fn captured(&self) -> Option<Piece> {
-        self.state().and_then(|state| state.captured)
+        self.state().captured
     }
     pub fn checkers(&self) -> Bitboard {
-        self.state().expect("empty states").checkers
+        self.state().attack_info.checkers
+    }
+    fn checkable(&self, pt: PieceType, sq: Square) -> bool {
+        (self.state().attack_info.checkables[pt.index()] & sq)
+            .is_empty()
+            .not()
     }
     pub fn pinned(&self) -> [Bitboard; Color::NUM] {
-        self.state().expect("empty states").pinned
+        self.state().attack_info.pinned
     }
     pub fn king(&self, c: Color) -> Option<Square> {
         self.pieces_cp(c, PieceType::OU).next()
@@ -149,12 +189,54 @@ impl Position {
         ml
     }
     pub fn do_move(&mut self, m: Move) {
-        let state = if let Some(from) = m.from() {
-            self.do_normal_move(from, m.to(), m.is_promotion())
-        } else {
-            self.do_drop_move(m.to(), m.piece())
+        let c = self.side_to_move();
+        let to = m.to();
+        // 駒移動
+        if let Some(from) = m.from() {
+            let p_from = self.piece_on(from);
+            self.remove_piece(from, p_from);
+            // 移動先に駒がある場合
+            let p_cap = self.piece_on(to);
+            if let Some(pt) = p_cap.piece_type() {
+                self.xor_bbs(!c, pt, to);
+                self.hands[c.index()].increment(pt);
+            }
+            let p_to = if m.is_promotion() {
+                p_from.promoted()
+            } else {
+                p_from
+            };
+            self.put_piece(to, p_to);
+            let checkers = if let Some(sq) = self.king(!c) {
+                self.attackers_to(c, sq)
+            } else {
+                Bitboard::ZERO
+            };
+            self.states.push(State::new(
+                if p_cap != Piece::EMP {
+                    Some(p_cap)
+                } else {
+                    None
+                },
+                AttackInfo::new(checkers, &self.c_bb, &self.pt_bb, c),
+            ));
+        }
+        // 駒打ち
+        else {
+            let p = m.piece();
+            let pt = p.piece_type().expect("empty piece for drop move");
+            self.put_piece(to, p);
+            self.hands[c.index()].decrement(pt);
+            let checkers = if self.is_check_move(m) {
+                Bitboard::from_square(to)
+            } else {
+                Bitboard::ZERO
+            };
+            self.states.push(State::new(
+                None,
+                AttackInfo::new(checkers, &self.c_bb, &self.pt_bb, c),
+            ));
         };
-        self.states.push(state);
         self.color = !self.color;
     }
     pub fn undo_move(&mut self, m: Move) {
@@ -187,57 +269,8 @@ impl Position {
         self.color = !self.color;
         self.states.pop();
     }
-    // 駒移動
-    fn do_normal_move(&mut self, from: Square, to: Square, promotion: bool) -> State {
-        let c = self.side_to_move();
-        let p_from = self.piece_on(from);
-        self.remove_piece(from, p_from);
-        // 移動先に駒がある場合
-        let p_cap = self.piece_on(to);
-        if let Some(pt) = p_cap.piece_type() {
-            self.xor_bbs(!c, pt, to);
-            self.hands[c.index()].increment(pt);
-        }
-        let p_to = if promotion { p_from.promoted() } else { p_from };
-        self.put_piece(to, p_to);
-        let checkers = if let Some(sq) = self.king(!c) {
-            self.attackers_to(c, sq)
-        } else {
-            Bitboard::ZERO
-        };
-        State::new(
-            if p_cap != Piece::EMP {
-                Some(p_cap)
-            } else {
-                None
-            },
-            checkers,
-            State::calculate_pinned(&self.c_bb, &self.pt_bb),
-        )
-    }
-    // 駒打ち
-    fn do_drop_move(&mut self, to: Square, p: Piece) -> State {
-        let c = self.side_to_move();
-        let pt = p.piece_type().unwrap();
-        self.put_piece(to, p);
-        self.hands[c.index()].decrement(pt);
-        let checkers = if self.king(!c).map_or(false, |sq| {
-            (ATTACK_TABLE.attack(pt, to, c, &self.occupied()) & sq)
-                .is_empty()
-                .not()
-        }) {
-            Bitboard::from_square(to)
-        } else {
-            Bitboard::ZERO
-        };
-        State::new(
-            None,
-            checkers,
-            State::calculate_pinned(&self.c_bb, &self.pt_bb),
-        )
-    }
-    fn state(&self) -> Option<&State> {
-        self.states.last()
+    fn state(&self) -> &State {
+        self.states.last().expect("empty states")
     }
     fn put_piece(&mut self, sq: Square, p: Piece) {
         if let (Some(c), Some(pt)) = (p.color(), p.piece_type()) {
@@ -294,6 +327,22 @@ impl Position {
             }
         }
         true
+    }
+    pub fn is_check_move(&self, m: Move) -> bool {
+        let to = m.to();
+        let p = m.piece();
+        if let Some(_from) = m.from() {
+            let p_to = if m.is_promotion() { p.promoted() } else { p };
+            let pt = p_to.piece_type().expect("empty piece for drop move");
+            if self.checkable(pt, to) {
+                return true;
+            }
+            // TODO: 開き王手
+        } else {
+            let pt = p.piece_type().expect("empty piece for drop move");
+            return self.checkable(pt, to);
+        }
+        false
     }
 }
 
