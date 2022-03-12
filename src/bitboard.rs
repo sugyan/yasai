@@ -2,8 +2,9 @@ use crate::square::{File, Rank};
 use crate::Square;
 use std::{fmt, ops};
 
+#[repr(align(16))]
 #[derive(Clone, Copy)]
-pub union Bitboard {
+pub struct Bitboard {
     u: [u64; 2],
 }
 
@@ -12,7 +13,7 @@ impl Bitboard {
     #[rustfmt::skip]    pub const ONES: Bitboard = Bitboard { u: [0x7fff_ffff_ffff_ffff, 0x0003_ffff] };
 
     pub fn value(&self, i: usize) -> u64 {
-        unsafe { self.u[i] }
+        self.u[i]
     }
     pub fn merge(&self) -> u64 {
         self.value(0) | self.value(1)
@@ -53,16 +54,12 @@ impl Bitboard {
     }
     fn pop0(&mut self) -> Square {
         let sq = Square(self.value(0).trailing_zeros() as i8);
-        unsafe {
-            self.u[0] &= self.u[0] - 1;
-        }
+        self.u[0] &= self.u[0] - 1;
         sq
     }
     fn pop1(&mut self) -> Square {
         let sq = Square(self.value(1).trailing_zeros() as i8 + 63);
-        unsafe {
-            self.u[1] &= self.u[1] - 1;
-        }
+        self.u[1] &= self.u[1] - 1;
         sq
     }
 
@@ -242,10 +239,8 @@ impl ops::BitXor<Square> for Bitboard {
 
 impl ops::BitAndAssign<Bitboard> for Bitboard {
     fn bitand_assign(&mut self, rhs: Bitboard) {
-        unsafe {
-            self.u[0] &= rhs.u[0];
-            self.u[1] &= rhs.u[1];
-        }
+        self.u[0] &= rhs.u[0];
+        self.u[1] &= rhs.u[1];
     }
 }
 
@@ -257,10 +252,8 @@ impl ops::BitAndAssign<Square> for Bitboard {
 
 impl ops::BitOrAssign<Bitboard> for Bitboard {
     fn bitor_assign(&mut self, rhs: Bitboard) {
-        unsafe {
-            self.u[0] |= rhs.u[0];
-            self.u[1] |= rhs.u[1];
-        }
+        self.u[0] |= rhs.u[0];
+        self.u[1] |= rhs.u[1];
     }
 }
 
@@ -272,10 +265,8 @@ impl ops::BitOrAssign<Square> for Bitboard {
 
 impl ops::BitXorAssign<Bitboard> for Bitboard {
     fn bitxor_assign(&mut self, rhs: Bitboard) {
-        unsafe {
-            self.u[0] ^= rhs.u[0];
-            self.u[1] ^= rhs.u[1];
-        }
+        self.u[0] ^= rhs.u[0];
+        self.u[1] ^= rhs.u[1];
     }
 }
 
