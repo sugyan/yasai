@@ -431,7 +431,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default() {
+    fn default() {
         let pos = Position::default();
         for sq in Square::ALL {
             #[rustfmt::skip]
@@ -466,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn test_do_undo_move() {
+    fn do_undo_move() {
         let mut pos = Position::default();
         let moves = [
             Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
@@ -506,7 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn test_perft() {
+    fn perft() {
         fn perft(pos: &mut Position, depth: usize) -> u64 {
             if depth == 0 {
                 return 1;
@@ -553,7 +553,7 @@ mod tests {
 
     #[allow(clippy::bool_assert_comparison)]
     #[test]
-    fn test_is_check_move() {
+    fn is_check_move() {
         // P1 *  *  *  *  *  * -FU * -OU
         // P2 *  *  *  *  *  *  *  *  *
         // P3 *  *  *  *  *  * +FU * +KI

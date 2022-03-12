@@ -352,13 +352,13 @@ mod tests {
     use crate::{Color, Piece};
 
     #[test]
-    fn test_from_default() {
+    fn from_default() {
         let pos = Position::default();
         assert_eq!(30, pos.legal_moves().len());
     }
 
     #[test]
-    fn test_drop_moves() {
+    fn drop_moves() {
         #[rustfmt::skip]
         let pos = Position::new([
             Piece::WKY, Piece::EMP, Piece::WFU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BFU, Piece::EMP, Piece::BKY,
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn test_maximum_moves() {
+    fn maximum_moves() {
         // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
         #[rustfmt::skip]
         let pos = Position::new([
@@ -406,7 +406,7 @@ mod tests {
 
     #[allow(clippy::bool_assert_comparison)]
     #[test]
-    fn test_uchifuzume() {
+    fn is_uchifuzume() {
         #[rustfmt::skip]
         let test_cases = [
             // 打ち歩詰め

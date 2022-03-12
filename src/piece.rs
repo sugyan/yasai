@@ -250,7 +250,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_piece_type_is_promotable() {
+    fn piece_type_is_promotable() {
         for pt in PieceType::ALL {
             let expected = matches!(
                 pt,
@@ -266,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn test_piece_promoted() {
+    fn piece_promoted() {
         for p in Piece::ALL {
             let expected = match p {
                 Piece::BFU => Piece::BTO,
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn test_piece_demoted() {
+    fn piece_demoted() {
         for p in Piece::ALL {
             let expected = match p {
                 Piece::BTO => Piece::BFU,
