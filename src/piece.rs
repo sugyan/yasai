@@ -2,7 +2,7 @@ use crate::Color;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PieceType(u8);
+pub struct PieceType(pub(crate) u8);
 
 impl PieceType {
     pub const FU: PieceType = PieceType(0);
@@ -51,19 +51,6 @@ impl PieceType {
     pub fn index(&self) -> usize {
         self.0 as usize
     }
-    pub fn is_promotable(&self) -> bool {
-        self.index() < 6
-    }
-    pub fn is_demotable(&self) -> bool {
-        self.index() >= 8
-    }
-    pub fn promoted(&self) -> Option<PieceType> {
-        if self.is_promotable() {
-            Some(PieceType(self.0 + 8))
-        } else {
-            None
-        }
-    }
 }
 
 impl fmt::Display for PieceType {
@@ -94,7 +81,7 @@ impl fmt::Display for PieceType {
 
 /// Represents a piece on the game board.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Piece(pub u8);
+pub struct Piece(pub(crate) u8);
 
 impl Piece {
     // black pieces
@@ -127,20 +114,10 @@ impl Piece {
     pub const WNG: Piece = Piece(27);
     pub const WUM: Piece = Piece(28);
     pub const WRY: Piece = Piece(29);
-    // empty
-    pub const EMP: Piece = Piece(255);
     // other constants
-    pub const NUM: usize = 29;
-    pub const PROMOTION_FLAG: u8 = 1 << 3;
-    pub const COLOR_MASK: u8 = 1 << 4;
-    #[rustfmt::skip]
-    pub const ALL: [Piece; Piece::NUM] = [
-        Piece::EMP,
-        Piece::BFU, Piece::BKY, Piece::BKE, Piece::BGI, Piece::BKA, Piece::BHI, Piece::BKI, Piece::BOU,
-        Piece::BTO, Piece::BNY, Piece::BNK, Piece::BNG, Piece::BUM, Piece::BRY,
-        Piece::WFU, Piece::WKY, Piece::WKE, Piece::WGI, Piece::WKA, Piece::WHI, Piece::WKI, Piece::WOU,
-        Piece::WTO, Piece::WNY, Piece::WNK, Piece::WNG, Piece::WUM, Piece::WRY,
-    ];
+    const PROMOTION_FLAG: u8 = 1 << 3;
+    const PROMOTABLE_MASK: u8 = 0x06;
+    const COLOR_MASK: u8 = 1 << 4;
 
     pub fn from_cp(color: Color, piece_type: PieceType) -> Self {
         Piece(
@@ -150,91 +127,44 @@ impl Piece {
             } | piece_type.0 as u8,
         )
     }
-    pub fn promoted(&self) -> Self {
-        if self.piece_type().map_or(false, |pt| pt.is_promotable()) {
-            Self(self.0 | Piece::PROMOTION_FLAG)
-        } else {
+    pub fn promoted(&self) -> Piece {
+        if self.0 & Piece::PROMOTABLE_MASK == Piece::PROMOTABLE_MASK {
             *self
+        } else {
+            Piece(self.0 | Piece::PROMOTION_FLAG)
         }
     }
-    pub fn demoted(&self) -> Self {
-        if self.piece_type().map_or(false, |pt| pt.is_demotable()) {
-            Self(self.0 & !Piece::PROMOTION_FLAG)
-        } else {
+    pub fn demoted(&self) -> Piece {
+        if self.0 & Piece::PROMOTABLE_MASK == Piece::PROMOTABLE_MASK {
             *self
+        } else {
+            Piece(self.0 & !Piece::PROMOTION_FLAG)
         }
     }
-    pub fn piece_type(&self) -> Option<PieceType> {
-        if *self == Piece::EMP {
-            None
-        } else {
-            Some(PieceType(self.0 & !Piece::COLOR_MASK))
-        }
+    pub fn piece_type(&self) -> PieceType {
+        PieceType(self.0 & !Piece::COLOR_MASK)
     }
-    pub fn color(&self) -> Option<Color> {
-        if *self == Piece::EMP {
-            None
+    pub fn color(&self) -> Color {
+        if self.0 & Piece::COLOR_MASK == 0 {
+            Color::Black
         } else {
-            Some(if self.0 & Piece::COLOR_MASK == 0 {
-                Color::Black
-            } else {
-                Color::White
-            })
+            Color::White
         }
     }
 }
 
 impl fmt::Display for Piece {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match *self {
-                Piece::EMP => " * ",
-                Piece::BFU => "+FU",
-                Piece::BKY => "+KY",
-                Piece::BKE => "+KE",
-                Piece::BGI => "+GI",
-                Piece::BKI => "+KI",
-                Piece::BKA => "+KA",
-                Piece::BHI => "+HI",
-                Piece::BOU => "+OU",
-                Piece::BTO => "+TO",
-                Piece::BNY => "+NY",
-                Piece::BNK => "+NK",
-                Piece::BNG => "+NG",
-                Piece::BUM => "+UM",
-                Piece::BRY => "+RY",
-                Piece::WFU => "-FU",
-                Piece::WKY => "-KY",
-                Piece::WKE => "-KE",
-                Piece::WGI => "-GI",
-                Piece::WKI => "-KI",
-                Piece::WKA => "-KA",
-                Piece::WHI => "-HI",
-                Piece::WOU => "-OU",
-                Piece::WTO => "-TO",
-                Piece::WNY => "-NY",
-                Piece::WNK => "-NK",
-                Piece::WNG => "-NG",
-                Piece::WUM => "-UM",
-                Piece::WRY => "-RY",
-                _ => unreachable!(),
-            }
-        )
+        write!(f, "{}{}", self.color(), self.piece_type())
     }
 }
 
 impl fmt::Debug for Piece {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let (Some(c), Some(pt)) = (self.color(), self.piece_type()) {
-            f.debug_struct("Piece")
-                .field("color", &c)
-                .field("piece_type", &pt)
-                .finish()
-        } else {
-            f.debug_tuple("Piece::EMPTY").finish()
-        }
+        f.debug_struct("Piece")
+            .field("color", &self.color())
+            .field("piece_type", &format!("{}", self.piece_type()))
+            .finish()
     }
 }
 
@@ -242,25 +172,17 @@ impl fmt::Debug for Piece {
 mod tests {
     use super::*;
 
-    #[test]
-    fn piece_type_is_promotable() {
-        for pt in PieceType::ALL {
-            let expected = matches!(
-                pt,
-                PieceType::FU
-                    | PieceType::KY
-                    | PieceType::KE
-                    | PieceType::GI
-                    | PieceType::KA
-                    | PieceType::HI
-            );
-            assert_eq!(expected, pt.is_promotable(), "{:?}", pt);
-        }
-    }
+    #[rustfmt::skip]
+    const ALL_PIECES: [Piece; 28] = [
+        Piece::BFU, Piece::BKY, Piece::BKE, Piece::BGI, Piece::BKA, Piece::BHI, Piece::BKI, Piece::BOU,
+        Piece::BTO, Piece::BNY, Piece::BNK, Piece::BNG, Piece::BUM, Piece::BRY,
+        Piece::WFU, Piece::WKY, Piece::WKE, Piece::WGI, Piece::WKA, Piece::WHI, Piece::WKI, Piece::WOU,
+        Piece::WTO, Piece::WNY, Piece::WNK, Piece::WNG, Piece::WUM, Piece::WRY,
+    ];
 
     #[test]
     fn piece_promoted() {
-        for p in Piece::ALL {
+        for p in ALL_PIECES {
             let expected = match p {
                 Piece::BFU => Piece::BTO,
                 Piece::BKY => Piece::BNY,
@@ -276,13 +198,13 @@ mod tests {
                 Piece::WHI => Piece::WRY,
                 _ => p,
             };
-            assert_eq!(expected, p.promoted(), "{:?}", p);
+            assert_eq!(expected, p.promoted(), "{}", p);
         }
     }
 
     #[test]
     fn piece_demoted() {
-        for p in Piece::ALL {
+        for p in ALL_PIECES {
             let expected = match p {
                 Piece::BTO => Piece::BFU,
                 Piece::BNY => Piece::BKY,
@@ -298,7 +220,7 @@ mod tests {
                 Piece::WRY => Piece::WHI,
                 _ => p,
             };
-            assert_eq!(expected, p.demoted(), "{:?}", p);
+            assert_eq!(expected, p.demoted(), "{}", p);
         }
     }
 }

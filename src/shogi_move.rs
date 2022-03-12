@@ -1,11 +1,24 @@
-use crate::{Color, Piece, Square};
+use crate::{Piece, Square};
 use std::fmt;
+
+pub enum MoveType {
+    Normal {
+        from: Square,
+        to: Square,
+        is_promotion: bool,
+        piece: Piece,
+    },
+    Drop {
+        to: Square,
+        piece: Piece,
+    },
+}
 
 // ........ ........ ........ .####### : to
 // ........ ........ ........ #....... : promotion flag
 // ........ ........ .####### ........ : from (0 if drop move)
 // ........ ........ #....... ........ : drop flag
-// ........ ...##### ........ ........ : moved piece or dropped piece type
+// ........ ...##### ........ ........ : moved or dropped piece
 #[derive(Clone, Copy)]
 pub struct Move(u32);
 
@@ -42,6 +55,21 @@ impl Move {
             ))
         }
     }
+    pub fn move_type(&self) -> MoveType {
+        if let Some(from) = self.from() {
+            MoveType::Normal {
+                from,
+                to: self.to(),
+                is_promotion: self.is_promotion(),
+                piece: self.piece(),
+            }
+        } else {
+            MoveType::Drop {
+                to: self.to(),
+                piece: self.piece(),
+            }
+        }
+    }
     pub fn to(&self) -> Square {
         Square((self.0 & Move::TO_MASK) as i8)
     }
@@ -58,31 +86,27 @@ impl Move {
 
 impl fmt::Display for Move {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self.piece().color().expect("failed to get piece color") {
-                Color::Black => '+',
-                Color::White => '-',
-            },
-        )?;
-        if let Some(from) = self.from() {
-            write!(f, "{}{}", from.file(), from.rank())?;
-        } else {
-            write!(f, "00")?;
-        }
-        write!(f, "{}{}", self.to().file(), self.to().rank())?;
-        let pt = self.piece().piece_type().expect("failed to get piece type");
-        write!(
-            f,
-            "{}",
-            if self.is_promotion() {
-                pt.promoted().expect("failed to promote piece type")
-            } else {
-                pt
+        let c = self.piece().color();
+        match self.move_type() {
+            MoveType::Normal {
+                from,
+                to,
+                is_promotion,
+                piece,
+            } => {
+                let pt = if is_promotion {
+                    piece.promoted()
+                } else {
+                    piece
+                }
+                .piece_type();
+                write!(f, "{c}{from}{to}{pt}")
             }
-        )?;
-        Ok(())
+            MoveType::Drop { to, piece } => {
+                let pt = piece.piece_type();
+                write!(f, "{c}00{to}{pt}")
+            }
+        }
     }
 }
 

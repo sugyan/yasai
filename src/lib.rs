@@ -1,4 +1,5 @@
 mod bitboard;
+mod board_piece;
 mod color;
 mod hand;
 mod movegen;

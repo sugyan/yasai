@@ -1,4 +1,4 @@
-use std::ops;
+use std::{fmt, ops};
 
 /// Represent a color.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,5 +24,18 @@ impl ops::Not for Color {
             Color::Black => Color::White,
             Color::White => Color::Black,
         }
+    }
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match *self {
+                Color::Black => "+",
+                Color::White => "-",
+            }
+        )
     }
 }
