@@ -2,7 +2,7 @@ use crate::{Color, PieceType};
 use std::{fmt, ops};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct File(pub i8);
+pub struct File(pub(crate) i8);
 
 impl File {
     pub const FILE1: File = File(0);
@@ -67,7 +67,7 @@ impl fmt::Debug for File {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Rank(pub i8);
+pub struct Rank(pub(crate) i8);
 
 impl Rank {
     pub const RANK1: Rank = Rank(0);
@@ -177,7 +177,7 @@ impl fmt::Debug for Rank {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Square(pub i8);
+pub struct Square(pub(crate) i8);
 
 impl Square {
     pub const SQ11: Square = Square(0);
