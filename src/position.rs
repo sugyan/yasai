@@ -16,9 +16,14 @@ struct AttackInfo {
 }
 
 impl AttackInfo {
-    fn new(checkers: Bitboard, c_bb: &[Bitboard], pt_bb: &[Bitboard], c: Color) -> Self {
+    fn new(
+        checkers: Bitboard,
+        c_bb: &[Bitboard],
+        pt_bb: &[Bitboard],
+        occ_bb: &Bitboard,
+        c: Color,
+    ) -> Self {
         let mut pinned = [Bitboard::ZERO, Bitboard::ZERO];
-        let occ = pt_bb[PieceType::OCCUPIED.index()];
         for c in Color::ALL {
             if let Some(sq) = (c_bb[c.index()] & pt_bb[PieceType::OU.index()]).pop() {
                 #[rustfmt::skip]
@@ -28,7 +33,7 @@ impl AttackInfo {
                     | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq, c) & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
                 ) & c_bb[(!c).index()];
                 for sniper in snipers {
-                    let blockers = BETWEEN_TABLE[sq.index()][sniper.index()] & occ;
+                    let blockers = BETWEEN_TABLE[sq.index()][sniper.index()] & *occ_bb;
                     if blockers.count_ones() == 1 {
                         pinned[c.index()] |= blockers;
                     }
@@ -36,16 +41,15 @@ impl AttackInfo {
             }
         }
         if let Some(sq) = (c_bb[(!c).index()] & pt_bb[PieceType::OU.index()]).pop() {
-            let ka = ATTACK_TABLE.ka.attack(sq, &occ);
-            let hi = ATTACK_TABLE.hi.attack(sq, &occ);
+            let ka = ATTACK_TABLE.ka.attack(sq, occ_bb);
+            let hi = ATTACK_TABLE.hi.attack(sq, occ_bb);
             let ki = ATTACK_TABLE.ki.attack(sq, !c);
             let ou = ATTACK_TABLE.ou.attack(sq, !c);
             Self {
                 checkers,
                 checkables: [
-                    Bitboard::ZERO,
                     ATTACK_TABLE.fu.attack(sq, !c),
-                    ATTACK_TABLE.ky.attack(sq, !c, &occ),
+                    ATTACK_TABLE.ky.attack(sq, !c, occ_bb),
                     ATTACK_TABLE.ke.attack(sq, !c),
                     ATTACK_TABLE.gi.attack(sq, !c),
                     ka,
@@ -70,17 +74,16 @@ impl AttackInfo {
         }
     }
     #[rustfmt::skip]
-    fn calculate_checkers(c_bb: &[Bitboard], pt_bb: &[Bitboard], c: Color) -> Bitboard {
+    fn calculate_checkers(c_bb: &[Bitboard], pt_bb: &[Bitboard], occ_bb: &Bitboard, c: Color) -> Bitboard {
         let opp = !c;
         if let Some(sq) = (c_bb[opp.index()] & pt_bb[PieceType::OU.index()]).pop() {
-            let occ = &pt_bb[PieceType::OCCUPIED.index()];
-            (     (ATTACK_TABLE.fu.attack(sq, opp)      & pt_bb[PieceType::FU.index()])
-                | (ATTACK_TABLE.ky.attack(sq, opp, occ) & pt_bb[PieceType::KY.index()])
-                | (ATTACK_TABLE.ke.attack(sq, opp)      & pt_bb[PieceType::KE.index()])
-                | (ATTACK_TABLE.gi.attack(sq, opp)      & (pt_bb[PieceType::GI.index()] | pt_bb[PieceType::RY.index()]))
-                | (ATTACK_TABLE.ka.attack(sq, occ)      & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
-                | (ATTACK_TABLE.hi.attack(sq, occ)      & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
-                | (ATTACK_TABLE.ki.attack(sq, opp)      & (pt_bb[PieceType::KI.index()] | pt_bb[PieceType::TO.index()] | pt_bb[PieceType::NY.index()] | pt_bb[PieceType::NK.index()] | pt_bb[PieceType::NG.index()] | pt_bb[PieceType::UM.index()]))
+            (     (ATTACK_TABLE.fu.attack(sq, opp)         & pt_bb[PieceType::FU.index()])
+                | (ATTACK_TABLE.ky.attack(sq, opp, occ_bb) & pt_bb[PieceType::KY.index()])
+                | (ATTACK_TABLE.ke.attack(sq, opp)         & pt_bb[PieceType::KE.index()])
+                | (ATTACK_TABLE.gi.attack(sq, opp)         & (pt_bb[PieceType::GI.index()] | pt_bb[PieceType::RY.index()]))
+                | (ATTACK_TABLE.ka.attack(sq, occ_bb)      & (pt_bb[PieceType::KA.index()] | pt_bb[PieceType::UM.index()]))
+                | (ATTACK_TABLE.hi.attack(sq, occ_bb)      & (pt_bb[PieceType::HI.index()] | pt_bb[PieceType::RY.index()]))
+                | (ATTACK_TABLE.ki.attack(sq, opp)         & (pt_bb[PieceType::KI.index()] | pt_bb[PieceType::TO.index()] | pt_bb[PieceType::NY.index()] | pt_bb[PieceType::NK.index()] | pt_bb[PieceType::NG.index()] | pt_bb[PieceType::UM.index()]))
             ) & c_bb[c.index()]
         } else {
             Bitboard::ZERO
@@ -109,8 +112,9 @@ pub struct Position {
     board: [Piece; Square::NUM],
     hands: [Hand; Color::NUM],
     color: Color,
-    c_bb: [Bitboard; Color::NUM],
-    pt_bb: [Bitboard; PieceType::NUM],
+    color_bbs: [Bitboard; Color::NUM],
+    piece_type_bbs: [Bitboard; PieceType::NUM],
+    occupied_bb: Bitboard,
     states: Vec<State>,
 }
 
@@ -121,16 +125,17 @@ impl Position {
         side_to_move: Color,
     ) -> Position {
         // board
-        let mut c_bb = [Bitboard::ZERO; Color::NUM];
-        let mut pt_bb = [Bitboard::ZERO; PieceType::NUM];
+        let mut color_bbs = [Bitboard::ZERO; Color::NUM];
+        let mut piece_type_bbs = [Bitboard::ZERO; PieceType::NUM];
+        let mut occupied_bb = Bitboard::ZERO;
         for sq in Square::ALL {
             let piece = board[sq.index()];
             if let Some(c) = piece.color() {
-                c_bb[c.index()] |= sq;
+                color_bbs[c.index()] |= sq;
             }
             if let Some(pt) = piece.piece_type() {
-                pt_bb[PieceType::OCCUPIED.index()] |= sq;
-                pt_bb[pt.index()] |= sq;
+                occupied_bb |= sq;
+                piece_type_bbs[pt.index()] |= sq;
             }
         }
         // hands
@@ -143,16 +148,24 @@ impl Position {
             }
         }
         // initial state
-        let checkers = AttackInfo::calculate_checkers(&c_bb, &pt_bb, side_to_move);
+        let checkers =
+            AttackInfo::calculate_checkers(&color_bbs, &piece_type_bbs, &occupied_bb, side_to_move);
         Self {
             board,
             hands,
             color: side_to_move,
-            pt_bb,
-            c_bb,
+            color_bbs,
+            piece_type_bbs,
+            occupied_bb,
             states: vec![State::new(
                 Piece::EMP,
-                AttackInfo::new(checkers, &c_bb, &pt_bb, side_to_move),
+                AttackInfo::new(
+                    checkers,
+                    &color_bbs,
+                    &piece_type_bbs,
+                    &occupied_bb,
+                    side_to_move,
+                ),
             )],
         }
     }
@@ -163,17 +176,17 @@ impl Position {
         self.pieces_c(c) & self.pieces_p(pt)
     }
     pub fn pieces_c(&self, c: Color) -> Bitboard {
-        self.c_bb[c.index()]
+        self.color_bbs[c.index()]
     }
     pub fn pieces_p(&self, pt: PieceType) -> Bitboard {
-        self.pt_bb[pt.index()]
+        self.piece_type_bbs[pt.index()]
     }
     pub fn pieces_ps(&self, pts: &[PieceType]) -> Bitboard {
         pts.iter()
             .fold(Bitboard::ZERO, |acc, &pt| acc | self.pieces_p(pt))
     }
     pub fn occupied(&self) -> Bitboard {
-        self.pt_bb[PieceType::OCCUPIED.index()]
+        self.occupied_bb
     }
     pub fn in_check(&self) -> bool {
         self.checkers().is_empty().not()
@@ -227,13 +240,24 @@ impl Position {
             };
             self.put_piece(to, p_to);
             let checkers = if is_check {
-                AttackInfo::calculate_checkers(&self.c_bb, &self.pt_bb, c)
+                AttackInfo::calculate_checkers(
+                    &self.color_bbs,
+                    &self.piece_type_bbs,
+                    &self.occupied_bb,
+                    c,
+                )
             } else {
                 Bitboard::ZERO
             };
             self.states.push(State::new(
                 p_cap,
-                AttackInfo::new(checkers, &self.c_bb, &self.pt_bb, !c),
+                AttackInfo::new(
+                    checkers,
+                    &self.color_bbs,
+                    &self.piece_type_bbs,
+                    &self.occupied_bb,
+                    !c,
+                ),
             ));
         }
         // 駒打ち
@@ -249,7 +273,13 @@ impl Position {
             };
             self.states.push(State::new(
                 Piece::EMP,
-                AttackInfo::new(checkers, &self.c_bb, &self.pt_bb, !c),
+                AttackInfo::new(
+                    checkers,
+                    &self.color_bbs,
+                    &self.piece_type_bbs,
+                    &self.occupied_bb,
+                    !c,
+                ),
             ));
         };
         self.color = !self.color;
@@ -303,9 +333,9 @@ impl Position {
         self.board[sq.index()] = Piece::EMP;
     }
     fn xor_bbs(&mut self, c: Color, pt: PieceType, sq: Square) {
-        self.c_bb[c.index()] ^= sq;
-        self.pt_bb[PieceType::OCCUPIED.index()] ^= sq;
-        self.pt_bb[pt.index()] ^= sq;
+        self.color_bbs[c.index()] ^= sq;
+        self.piece_type_bbs[pt.index()] ^= sq;
+        self.occupied_bb ^= sq;
     }
     #[rustfmt::skip]
     pub fn attackers_to(&self, c: Color, to: Square) -> Bitboard {

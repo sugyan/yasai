@@ -107,7 +107,6 @@ impl Rank {
     const VALID_FOR_PIECES: [[[bool; 9]; PieceType::NUM]; Color::NUM] = [
         // Black
         [
-            [false, false, false, false, false, false, false, false, false], // OCCUPIED
             [false,  true,  true,  true,  true,  true,  true,  true,  true], // FU
             [false,  true,  true,  true,  true,  true,  true,  true,  true], // KY
             [false, false,  true,  true,  true,  true,  true,  true,  true], // KE
@@ -125,7 +124,6 @@ impl Rank {
         ],
         // White
         [
-            [false, false, false, false, false, false, false, false, false], // OCCUPIED
             [ true,  true,  true,  true,  true,  true,  true,  true, false], // FU
             [ true,  true,  true,  true,  true,  true,  true,  true, false], // KY
             [ true,  true,  true,  true,  true,  true,  true, false, false], // KE

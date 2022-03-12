@@ -6,7 +6,6 @@ pub struct Hand([u8; PieceType::NUM_HAND]);
 
 impl Hand {
     const PIECE_TYPE_INDEX: [usize; PieceType::NUM] = [
-        PieceType::NUM, // OCCUPIED => unreachable!
         0,              // FU
         1,              // KY
         2,              // KE

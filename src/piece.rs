@@ -5,26 +5,24 @@ use std::fmt;
 pub struct PieceType(u8);
 
 impl PieceType {
-    pub const OCCUPIED: PieceType = PieceType(0);
-    pub const FU: PieceType = PieceType(1);
-    pub const KY: PieceType = PieceType(2);
-    pub const KE: PieceType = PieceType(3);
-    pub const GI: PieceType = PieceType(4);
-    pub const KA: PieceType = PieceType(5);
-    pub const HI: PieceType = PieceType(6);
-    pub const KI: PieceType = PieceType(7);
-    pub const OU: PieceType = PieceType(8);
-    pub const TO: PieceType = PieceType(9);
-    pub const NY: PieceType = PieceType(10);
-    pub const NK: PieceType = PieceType(11);
-    pub const NG: PieceType = PieceType(12);
-    pub const UM: PieceType = PieceType(13);
-    pub const RY: PieceType = PieceType(14);
+    pub const FU: PieceType = PieceType(0);
+    pub const KY: PieceType = PieceType(1);
+    pub const KE: PieceType = PieceType(2);
+    pub const GI: PieceType = PieceType(3);
+    pub const KA: PieceType = PieceType(4);
+    pub const HI: PieceType = PieceType(5);
+    pub const KI: PieceType = PieceType(6);
+    pub const OU: PieceType = PieceType(7);
+    pub const TO: PieceType = PieceType(8);
+    pub const NY: PieceType = PieceType(9);
+    pub const NK: PieceType = PieceType(10);
+    pub const NG: PieceType = PieceType(11);
+    pub const UM: PieceType = PieceType(12);
+    pub const RY: PieceType = PieceType(13);
     // other constants
-    pub const NUM: usize = 15;
+    pub const NUM: usize = 14;
     pub const NUM_HAND: usize = 7;
     pub const ALL: [PieceType; PieceType::NUM] = [
-        PieceType::OCCUPIED,
         PieceType::FU,
         PieceType::KY,
         PieceType::KE,
@@ -54,10 +52,10 @@ impl PieceType {
         self.0 as usize
     }
     pub fn is_promotable(&self) -> bool {
-        (1..=6).contains(&self.index())
+        self.index() < 6
     }
     pub fn is_demotable(&self) -> bool {
-        (9..=14).contains(&self.index())
+        self.index() >= 8
     }
     pub fn promoted(&self) -> Option<PieceType> {
         if self.is_promotable() {
@@ -74,7 +72,6 @@ impl fmt::Display for PieceType {
             f,
             "{}",
             match *self {
-                PieceType::OCCUPIED => "  ",
                 PieceType::FU => "FU",
                 PieceType::KY => "KY",
                 PieceType::KE => "KE",
@@ -100,38 +97,38 @@ impl fmt::Display for PieceType {
 pub struct Piece(pub u8);
 
 impl Piece {
-    // empty
-    pub const EMP: Piece = Piece(0);
     // black pieces
-    pub const BFU: Piece = Piece(1);
-    pub const BKY: Piece = Piece(2);
-    pub const BKE: Piece = Piece(3);
-    pub const BGI: Piece = Piece(4);
-    pub const BKA: Piece = Piece(5);
-    pub const BHI: Piece = Piece(6);
-    pub const BKI: Piece = Piece(7);
-    pub const BOU: Piece = Piece(8);
-    pub const BTO: Piece = Piece(9);
-    pub const BNY: Piece = Piece(10);
-    pub const BNK: Piece = Piece(11);
-    pub const BNG: Piece = Piece(12);
-    pub const BUM: Piece = Piece(13);
-    pub const BRY: Piece = Piece(14);
+    pub const BFU: Piece = Piece(0);
+    pub const BKY: Piece = Piece(1);
+    pub const BKE: Piece = Piece(2);
+    pub const BGI: Piece = Piece(3);
+    pub const BKA: Piece = Piece(4);
+    pub const BHI: Piece = Piece(5);
+    pub const BKI: Piece = Piece(6);
+    pub const BOU: Piece = Piece(7);
+    pub const BTO: Piece = Piece(8);
+    pub const BNY: Piece = Piece(9);
+    pub const BNK: Piece = Piece(10);
+    pub const BNG: Piece = Piece(11);
+    pub const BUM: Piece = Piece(12);
+    pub const BRY: Piece = Piece(13);
     // white pieces
-    pub const WFU: Piece = Piece(17);
-    pub const WKY: Piece = Piece(18);
-    pub const WKE: Piece = Piece(19);
-    pub const WGI: Piece = Piece(20);
-    pub const WKA: Piece = Piece(21);
-    pub const WHI: Piece = Piece(22);
-    pub const WKI: Piece = Piece(23);
-    pub const WOU: Piece = Piece(24);
-    pub const WTO: Piece = Piece(25);
-    pub const WNY: Piece = Piece(26);
-    pub const WNK: Piece = Piece(27);
-    pub const WNG: Piece = Piece(28);
-    pub const WUM: Piece = Piece(29);
-    pub const WRY: Piece = Piece(30);
+    pub const WFU: Piece = Piece(16);
+    pub const WKY: Piece = Piece(17);
+    pub const WKE: Piece = Piece(18);
+    pub const WGI: Piece = Piece(19);
+    pub const WKA: Piece = Piece(20);
+    pub const WHI: Piece = Piece(21);
+    pub const WKI: Piece = Piece(22);
+    pub const WOU: Piece = Piece(23);
+    pub const WTO: Piece = Piece(24);
+    pub const WNY: Piece = Piece(25);
+    pub const WNK: Piece = Piece(26);
+    pub const WNG: Piece = Piece(27);
+    pub const WUM: Piece = Piece(28);
+    pub const WRY: Piece = Piece(29);
+    // empty
+    pub const EMP: Piece = Piece(255);
     // other constants
     pub const NUM: usize = 29;
     pub const PROMOTION_FLAG: u8 = 1 << 3;
@@ -145,17 +142,13 @@ impl Piece {
         Piece::WTO, Piece::WNY, Piece::WNK, Piece::WNG, Piece::WUM, Piece::WRY,
     ];
 
-    pub fn from_cp(color: Color, piece_type: PieceType) -> Option<Self> {
-        if piece_type == PieceType::OCCUPIED {
-            None
-        } else {
-            Some(Piece(
-                match color {
-                    Color::Black => 0,
-                    Color::White => Piece::COLOR_MASK,
-                } | piece_type.0 as u8,
-            ))
-        }
+    pub fn from_cp(color: Color, piece_type: PieceType) -> Self {
+        Piece(
+            match color {
+                Color::Black => 0,
+                Color::White => Piece::COLOR_MASK,
+            } | piece_type.0 as u8,
+        )
     }
     pub fn promoted(&self) -> Self {
         if self.piece_type().map_or(false, |pt| pt.is_promotable()) {

@@ -259,9 +259,7 @@ impl MoveList {
             }
             for to in *target & !exclude {
                 if to.rank().is_valid_for_piece(c, pt) {
-                    if let Some(p) = Piece::from_cp(c, pt) {
-                        self.push(Move::new_drop(to, p));
-                    }
+                    self.push(Move::new_drop(to, Piece::from_cp(c, pt)));
                 }
             }
         }
