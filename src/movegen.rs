@@ -2,7 +2,7 @@ use crate::bitboard::Bitboard;
 use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::{Color, Move, Piece, PieceType, Position, Square};
-use arrayvec::ArrayVec;
+use arrayvec::{ArrayVec, IntoIter};
 use std::ops::Not;
 
 pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
@@ -94,7 +94,7 @@ impl MoveList {
         }
     }
     fn push(&mut self, m: Move) {
-        self.0.push(m);
+        unsafe { self.0.push_unchecked(m) };
     }
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
@@ -314,39 +314,12 @@ impl Default for MoveList {
     }
 }
 
-impl std::ops::Index<usize> for MoveList {
-    type Output = Move;
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
-    }
-}
-
 impl IntoIterator for MoveList {
     type Item = Move;
-    type IntoIter = MoveListIter;
+    type IntoIter = IntoIter<Move, { MoveList::MAX_LEGAL_MOVES }>;
+
     fn into_iter(self) -> Self::IntoIter {
-        MoveListIter {
-            moves: self,
-            index: 0,
-        }
-    }
-}
-
-pub struct MoveListIter {
-    moves: MoveList,
-    index: usize,
-}
-
-impl Iterator for MoveListIter {
-    type Item = Move;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.moves.0.len() {
-            let m = self.moves[self.index];
-            self.index += 1;
-            Some(m)
-        } else {
-            None
-        }
+        self.0.into_iter()
     }
 }
 
