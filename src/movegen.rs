@@ -295,12 +295,12 @@ impl MoveList {
     #[rustfmt::skip]
     fn attackers_to_except_klp(pos: &Position, c: Color, to: Square) -> Bitboard {
         let opp = !c;
-        let occ = pos.occupied();
-        (     (ATTACK_TABLE.ke.attack(to, opp)  & pos.pieces_p(PieceType::KE))
-            | (ATTACK_TABLE.gi.attack(to, opp)  & pos.pieces_ps(&[PieceType::GI, PieceType::RY]))
-            | (ATTACK_TABLE.ka.attack(to, &occ) & pos.pieces_ps(&[PieceType::KA, PieceType::UM]))
-            | (ATTACK_TABLE.hi.attack(to, &occ) & pos.pieces_ps(&[PieceType::HI, PieceType::RY]))
-            | (ATTACK_TABLE.ki.attack(to, opp)  & pos.pieces_ps(&[PieceType::KI, PieceType::TO, PieceType::NY, PieceType::NK, PieceType::NG, PieceType::UM]))
+        let occ = &pos.occupied();
+        (     (ATTACK_TABLE.ke.attack(to, opp) & pos.pieces_p(PieceType::KE))
+            | (ATTACK_TABLE.gi.attack(to, opp) & (pos.pieces_p(PieceType::GI) | pos.pieces_p(PieceType::RY)))
+            | (ATTACK_TABLE.ka.attack(to, occ) & (pos.pieces_p(PieceType::KA) | pos.pieces_p(PieceType::UM)))
+            | (ATTACK_TABLE.hi.attack(to, occ) & (pos.pieces_p(PieceType::HI) | pos.pieces_p(PieceType::RY)))
+            | (ATTACK_TABLE.ki.attack(to, opp) & (pos.pieces_p(PieceType::KI) | pos.pieces_p(PieceType::TO) | pos.pieces_p(PieceType::NY) | pos.pieces_p(PieceType::NK) | pos.pieces_p(PieceType::NG) | pos.pieces_p(PieceType::UM)))
         ) & pos.pieces_c(c)
     }
 }
