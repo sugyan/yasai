@@ -174,7 +174,7 @@ impl Bitboard {
 }
 
 impl ops::Not for Bitboard {
-    type Output = Bitboard;
+    type Output = Self;
 
     fn not(self) -> Self::Output {
         Bitboard {
@@ -184,7 +184,7 @@ impl ops::Not for Bitboard {
 }
 
 impl ops::BitAnd<Bitboard> for Bitboard {
-    type Output = Bitboard;
+    type Output = Self;
 
     fn bitand(self, rhs: Bitboard) -> Self::Output {
         Bitboard {
@@ -194,7 +194,7 @@ impl ops::BitAnd<Bitboard> for Bitboard {
 }
 
 impl ops::BitAnd<Square> for Bitboard {
-    type Output = Bitboard;
+    type Output = Self;
 
     fn bitand(self, rhs: Square) -> Self::Output {
         self & Bitboard::from_square(rhs)
@@ -202,7 +202,7 @@ impl ops::BitAnd<Square> for Bitboard {
 }
 
 impl ops::BitOr<Bitboard> for Bitboard {
-    type Output = Bitboard;
+    type Output = Self;
 
     fn bitor(self, rhs: Bitboard) -> Self::Output {
         Bitboard {
@@ -212,7 +212,7 @@ impl ops::BitOr<Bitboard> for Bitboard {
 }
 
 impl ops::BitOr<Square> for Bitboard {
-    type Output = Bitboard;
+    type Output = Self;
 
     fn bitor(self, rhs: Square) -> Self::Output {
         self | Bitboard::from_square(rhs)
@@ -220,7 +220,7 @@ impl ops::BitOr<Square> for Bitboard {
 }
 
 impl ops::BitXor<Bitboard> for Bitboard {
-    type Output = Bitboard;
+    type Output = Self;
 
     fn bitxor(self, rhs: Bitboard) -> Self::Output {
         Bitboard {
@@ -230,7 +230,7 @@ impl ops::BitXor<Bitboard> for Bitboard {
 }
 
 impl ops::BitXor<Square> for Bitboard {
-    type Output = Bitboard;
+    type Output = Self;
 
     fn bitxor(self, rhs: Square) -> Self::Output {
         self ^ Bitboard::from_square(rhs)

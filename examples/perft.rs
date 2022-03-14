@@ -1,3 +1,4 @@
+use std::process;
 use std::time::Instant;
 use yasai::Position;
 
@@ -17,6 +18,7 @@ fn main() {
         );
     } else {
         println!("usage: perft <depth>");
+        process::exit(1);
     }
 }
 
@@ -37,7 +39,7 @@ fn perft(pos: &mut Position, depth: usize, is_root: bool) -> usize {
         };
         ret += count;
         if is_root {
-            println!("{}: {count}", m);
+            println!("{m}: {count}");
         }
     }
     ret

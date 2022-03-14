@@ -6,6 +6,7 @@ use crate::piece::PieceType;
 use crate::shogi_move::MoveType;
 use crate::square::{File, Rank};
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
+use crate::zobrist::{Key, ZOBRIST_TABLE};
 use crate::{Color, Move, Piece, Square};
 use std::fmt;
 use std::ops::Not;
@@ -92,13 +93,15 @@ impl AttackInfo {
 
 #[derive(Debug)]
 struct State {
+    keys: (Key, Key),
     captured: Option<Piece>,
     attack_info: AttackInfo,
 }
 
 impl State {
-    fn new(captured: Option<Piece>, attack_info: AttackInfo) -> Self {
+    fn new(keys: (Key, Key), captured: Option<Piece>, attack_info: AttackInfo) -> Self {
         Self {
+            keys,
             captured,
             attack_info,
         }
@@ -123,6 +126,7 @@ impl Position {
         hand_nums: [[u8; PieceType::NUM_HAND]; Color::NUM],
         side_to_move: Color,
     ) -> Position {
+        let mut keys = (Key::ZERO, Key::ZERO);
         // board
         let mut color_bbs = [Bitboard::ZERO; Color::NUM];
         let mut piece_type_bbs = [Bitboard::ZERO; PieceType::NUM];
@@ -132,14 +136,16 @@ impl Position {
                 color_bbs[p.color().index()] |= sq;
                 piece_type_bbs[p.piece_type().index()] |= sq;
                 occupied_bb |= sq;
+                keys.0 ^= ZOBRIST_TABLE.board(sq, p);
             }
         }
         // hands
         let mut hands = [Hand::new(); Color::NUM];
         for c in Color::ALL {
-            for (i, &num) in hand_nums[c.index()].iter().enumerate() {
-                for _ in 0..num {
-                    hands[c.index()].increment(PieceType::ALL_HAND[i]);
+            for (&num, &pt) in hand_nums[c.index()].iter().zip(PieceType::ALL_HAND.iter()) {
+                for i in 0..num {
+                    hands[c.index()].increment(pt);
+                    keys.1 ^= ZOBRIST_TABLE.hand(c, pt, i + 1)
                 }
             }
         }
@@ -157,7 +163,7 @@ impl Position {
         let checkers = AttackInfo::calculate_checkers(&pos);
         pos.color = side_to_move;
         pos.states
-            .push(State::new(None, AttackInfo::new(checkers, &pos)));
+            .push(State::new(keys, None, AttackInfo::new(checkers, &pos)));
         pos
     }
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
@@ -175,14 +181,20 @@ impl Position {
     pub fn occupied(&self) -> Bitboard {
         self.occupied_bb
     }
-    pub fn in_check(&self) -> bool {
-        self.checkers().is_empty().not()
+    pub fn key(&self) -> u64 {
+        (self.state().keys.0 ^ self.state().keys.1).value()
+    }
+    pub fn keys(&self) -> (u64, u64) {
+        (self.state().keys.0.value(), self.state().keys.1.value())
     }
     pub fn captured(&self) -> Option<Piece> {
         self.state().captured
     }
     pub fn checkers(&self) -> Bitboard {
         self.state().attack_info.checkers
+    }
+    pub fn in_check(&self) -> bool {
+        self.checkers().is_empty().not()
     }
     fn checkable(&self, pt: PieceType, sq: Square) -> bool {
         (self.state().attack_info.checkables[pt.index()] & sq)
@@ -210,6 +222,7 @@ impl Position {
         let is_check = self.is_check_move(m);
         let captured = self.piece_on(m.to());
         let c = self.side_to_move();
+        let mut keys = self.state().keys;
         let checkers = match m.move_type() {
             // 駒移動
             MoveType::Normal {
@@ -224,13 +237,18 @@ impl Position {
                     let pt = p.piece_type();
                     self.xor_bbs(!c, pt, to);
                     self.hands[c.index()].increment(pt);
+                    let num = self.hand(c).num(pt);
+                    keys.0 ^= ZOBRIST_TABLE.board(to, p);
+                    keys.1 ^= ZOBRIST_TABLE.hand(c, pt, num);
                 }
-                let p_to = if is_promotion {
+                let p = if is_promotion {
                     piece.promoted()
                 } else {
                     piece
                 };
-                self.put_piece(to, p_to);
+                self.put_piece(to, p);
+                keys.0 ^= ZOBRIST_TABLE.board(from, piece);
+                keys.0 ^= ZOBRIST_TABLE.board(to, p);
                 if is_check {
                     AttackInfo::calculate_checkers(self)
                 } else {
@@ -239,8 +257,12 @@ impl Position {
             }
             // 駒打ち
             MoveType::Drop { to, piece } => {
+                let pt = piece.piece_type();
+                let num = self.hand(c).num(pt);
                 self.put_piece(to, piece);
-                self.hands[c.index()].decrement(piece.piece_type());
+                keys.1 ^= ZOBRIST_TABLE.hand(c, pt, num);
+                self.hands[c.index()].decrement(pt);
+                keys.0 ^= ZOBRIST_TABLE.board(to, piece);
                 if is_check {
                     Bitboard::from_square(to)
                 } else {
@@ -249,8 +271,9 @@ impl Position {
             }
         };
         self.color = !c;
+        keys.0 ^= Key::COLOR;
         self.states
-            .push(State::new(captured, AttackInfo::new(checkers, self)));
+            .push(State::new(keys, captured, AttackInfo::new(checkers, self)));
     }
     pub fn undo_move(&mut self, m: Move) {
         let c = self.side_to_move();

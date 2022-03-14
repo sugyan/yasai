@@ -5,7 +5,7 @@ use crate::PieceType;
 pub struct Hand([u8; PieceType::NUM_HAND]);
 
 impl Hand {
-    const PIECE_TYPE_INDEX: [usize; PieceType::NUM] = [
+    pub const PIECE_TYPE_INDEX: [usize; PieceType::NUM] = [
         0,              // FU
         1,              // KY
         2,              // KE
