@@ -114,6 +114,7 @@ pub struct Position {
     board: [Option<Piece>; Square::NUM],
     hands: Hands,
     color: Color,
+    ply: u32,
     color_bbs: [Bitboard; Color::NUM],
     piece_type_bbs: [Bitboard; PieceType::NUM],
     occupied_bb: Bitboard,
@@ -125,6 +126,7 @@ impl Position {
         board: [Option<Piece>; Square::NUM],
         hand_nums: [[u8; PieceType::NUM_HAND]; Color::NUM],
         side_to_move: Color,
+        ply: u32,
     ) -> Position {
         let mut keys = (Key::ZERO, Key::ZERO);
         // board
@@ -154,6 +156,7 @@ impl Position {
             board,
             hands: Hands::new(hands),
             color: !side_to_move,
+            ply,
             color_bbs,
             piece_type_bbs,
             occupied_bb,
@@ -165,6 +168,15 @@ impl Position {
         pos.states
             .push(State::new(keys, None, AttackInfo::new(checkers, &pos)));
         pos
+    }
+    pub fn hand(&self, c: Color) -> Hand {
+        self.hands.hand(c)
+    }
+    pub fn side_to_move(&self) -> Color {
+        self.color
+    }
+    pub fn ply(&self) -> u32 {
+        self.ply
     }
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
         self.board[sq.index()]
@@ -206,12 +218,6 @@ impl Position {
     }
     pub fn king(&self, c: Color) -> Option<Square> {
         self.pieces_cp(c, PieceType::OU).pop()
-    }
-    pub fn hand(&self, c: Color) -> Hand {
-        self.hands.hand(c)
-    }
-    pub fn side_to_move(&self) -> Color {
-        self.color
     }
     pub fn legal_moves(&self) -> MoveList {
         let mut ml = MoveList::default();
@@ -272,6 +278,7 @@ impl Position {
         };
         self.color = !c;
         keys.0 ^= Key::COLOR;
+        self.ply += 1;
         self.states
             .push(State::new(keys, captured, AttackInfo::new(checkers, self)));
     }
@@ -303,6 +310,7 @@ impl Position {
             }
         }
         self.color = !self.color;
+        self.ply -= 1;
         self.states.pop();
     }
     fn state(&self) -> &State {
@@ -402,7 +410,7 @@ impl Default for Position {
             WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
             WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
         ];
-        Self::new(board, [[0; 7]; 2], Color::Black)
+        Self::new(board, [[0; 7]; 2], Color::Black, 1)
     }
 }
 
@@ -468,6 +476,7 @@ mod tests {
             }
         }
         assert_eq!(Color::Black, pos.side_to_move());
+        assert_eq!(1, pos.ply());
         assert!(!pos.in_check());
     }
 
@@ -498,6 +507,7 @@ mod tests {
         assert!(pos.hand(Color::Black).is_empty());
         assert!(!pos.hand(Color::White).is_empty());
         assert_eq!(Color::White, pos.side_to_move());
+        assert_eq!(6, pos.ply());
         assert!(pos.in_check());
         // revert to default position
         for &m in moves.iter().rev() {
@@ -508,6 +518,7 @@ mod tests {
             .iter()
             .all(|&sq| pos.piece_on(sq) == default.piece_on(sq)));
         assert_eq!(Color::Black, pos.side_to_move());
+        assert_eq!(1, pos.ply());
         assert!(!pos.in_check());
     }
 
@@ -551,7 +562,7 @@ mod tests {
             ], [
                 [ 1, 1, 1, 1, 1, 1, 1],
                 [17, 0, 3, 0, 3, 0, 0],
-            ], Color::Black);
+            ], Color::Black, 1);
             assert_eq!(593, perft(&mut pos, 1));
             assert_eq!(105677, perft(&mut pos, 2));
         }
@@ -585,7 +596,7 @@ mod tests {
         ], [
             [ 0, 1, 0, 0, 0, 1, 1],
             [16, 2, 4, 4, 3, 1, 1],
-        ], Color::Black);
+        ], Color::Black, 1);
         let test_cases = [
             (Move::new_drop(Square::SQ12, Piece::BKY), true),
             (Move::new_drop(Square::SQ14, Piece::BKY), false),

@@ -95,6 +95,7 @@ mod tests {
             [None; Square::NUM],
             [[0; PieceType::NUM_HAND]; Color::NUM],
             Color::Black,
+            1,
         );
         assert_eq!(0, pos.key());
     }

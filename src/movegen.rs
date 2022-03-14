@@ -351,7 +351,7 @@ mod tests {
         ], [
             [0, 0, 0, 0, 0, 1, 0],
             [0, 0, 0, 0, 0, 1, 0],
-        ], Color::Black);
+        ], Color::Black, 1);
         assert_eq!(
             43,
             pos.legal_moves()
@@ -378,7 +378,7 @@ mod tests {
         ], [
             [ 1, 1, 1, 1, 1, 1, 1],
             [17, 0, 3, 0, 3, 0, 0],
-        ], Color::Black);
+        ], Color::Black, 1);
         assert_eq!(593, pos.legal_moves().len());
     }
 
@@ -414,7 +414,7 @@ mod tests {
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [14, 4, 4, 4, 3, 2, 2],
-                ], Color::Black),
+                ], Color::Black, 1),
                 true,
             ),
             // 金で歩を取れる
@@ -444,7 +444,7 @@ mod tests {
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [15, 4, 4, 4, 2, 2, 2],
-                ], Color::Black),
+                ], Color::Black, 1),
                 false,
             ),
             // 飛がいるので金が動けない
@@ -474,7 +474,7 @@ mod tests {
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [15, 4, 4, 4, 2, 2, 1],
-                ], Color::Black),
+                ], Color::Black, 1),
                 true,
             ),
             // 桂で歩を取れる
@@ -504,7 +504,7 @@ mod tests {
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 2, 2],
-                ], Color::Black),
+                ], Color::Black, 1),
                 false,
             ),
             // 角がいるので桂が動けない
@@ -534,7 +534,7 @@ mod tests {
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 1, 2],
-                ], Color::Black),
+                ], Color::Black, 1),
                 true,
             ),
         ];
