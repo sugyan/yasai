@@ -1,6 +1,6 @@
 use crate::bitboard::Bitboard;
 use crate::board_piece::*;
-use crate::hand::Hand;
+use crate::hand::{Hand, Hands};
 use crate::movegen::MoveList;
 use crate::piece::PieceType;
 use crate::shogi_move::MoveType;
@@ -112,7 +112,7 @@ impl State {
 #[derive(Debug)]
 pub struct Position {
     board: [Option<Piece>; Square::NUM],
-    hands: [Hand; Color::NUM],
+    hands: Hands,
     color: Color,
     color_bbs: [Bitboard; Color::NUM],
     piece_type_bbs: [Bitboard; PieceType::NUM],
@@ -152,7 +152,7 @@ impl Position {
         // new position with the opposite side_to_move for calculating checkers
         let mut pos = Self {
             board,
-            hands,
+            hands: Hands::new(hands),
             color: !side_to_move,
             color_bbs,
             piece_type_bbs,
@@ -208,7 +208,7 @@ impl Position {
         self.pieces_cp(c, PieceType::OU).pop()
     }
     pub fn hand(&self, c: Color) -> Hand {
-        self.hands[c.index()]
+        self.hands.hand(c)
     }
     pub fn side_to_move(&self) -> Color {
         self.color
@@ -236,7 +236,7 @@ impl Position {
                 if let Some(p) = captured {
                     let pt = p.piece_type();
                     self.xor_bbs(!c, pt, to);
-                    self.hands[c.index()].increment(pt);
+                    self.hands.increment(c, pt);
                     let num = self.hand(c).num(pt);
                     keys.0 ^= ZOBRIST_TABLE.board(to, p);
                     keys.1 ^= ZOBRIST_TABLE.hand(c, pt, num);
@@ -261,7 +261,7 @@ impl Position {
                 let num = self.hand(c).num(pt);
                 self.put_piece(to, piece);
                 keys.1 ^= ZOBRIST_TABLE.hand(c, pt, num);
-                self.hands[c.index()].decrement(pt);
+                self.hands.decrement(c, pt);
                 keys.0 ^= ZOBRIST_TABLE.board(to, piece);
                 if is_check {
                     Bitboard::from_square(to)
@@ -292,14 +292,14 @@ impl Position {
                 self.remove_piece(to, p_to);
                 if let Some(p_cap) = self.captured() {
                     self.put_piece(to, p_cap);
-                    self.hands[(!c).index()].decrement(p_cap.piece_type());
+                    self.hands.decrement(!c, p_cap.piece_type());
                 }
                 self.put_piece(from, piece);
             }
             // 駒打ち
             MoveType::Drop { to, piece } => {
                 self.remove_piece(to, piece);
-                self.hands[(!c).index()].increment(piece.piece_type());
+                self.hands.increment(!c, piece.piece_type());
             }
         }
         self.color = !self.color;
@@ -419,24 +419,7 @@ impl fmt::Display for Position {
             }
             writeln!(f)?;
         }
-        for c in Color::ALL {
-            if !self.hands[c.index()].is_empty() {
-                write!(
-                    f,
-                    "P{}",
-                    match c {
-                        Color::Black => "+",
-                        Color::White => "-",
-                    }
-                )?;
-                for &pt in PieceType::ALL_HAND.iter().rev() {
-                    for _ in 0..self.hands[c.index()].num(pt) {
-                        write!(f, "00{pt}")?;
-                    }
-                }
-                writeln!(f)?;
-            }
-        }
+        write!(f, "{}", self.hands)?;
         writeln!(
             f,
             "{}",

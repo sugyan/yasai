@@ -1,4 +1,47 @@
-use crate::PieceType;
+use crate::{Color, PieceType};
+use std::fmt;
+
+#[derive(Debug)]
+pub struct Hands([Hand; Color::NUM]);
+
+impl Hands {
+    pub fn new(hands: [Hand; Color::NUM]) -> Self {
+        Self(hands)
+    }
+    pub fn hand(&self, c: Color) -> Hand {
+        self.0[c.index()]
+    }
+    pub fn increment(&mut self, c: Color, pt: PieceType) {
+        self.0[c.index()].increment(pt);
+    }
+    pub fn decrement(&mut self, c: Color, pt: PieceType) {
+        self.0[c.index()].decrement(pt);
+    }
+}
+
+impl fmt::Display for Hands {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for c in Color::ALL {
+            if !self.0[c.index()].is_empty() {
+                write!(
+                    f,
+                    "P{}",
+                    match c {
+                        Color::Black => "+",
+                        Color::White => "-",
+                    }
+                )?;
+                for &pt in PieceType::ALL_HAND.iter().rev() {
+                    for _ in 0..self.0[c.index()].num(pt) {
+                        write!(f, "00{pt}")?;
+                    }
+                }
+                writeln!(f)?;
+            }
+        }
+        Ok(())
+    }
+}
 
 // [0: FU, 1: KY, 2: KE, 3: GI, 4: KI, 5: KA, 6: HI]
 #[derive(Clone, Copy, Debug, Default)]
