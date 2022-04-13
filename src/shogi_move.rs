@@ -19,7 +19,7 @@ pub enum MoveType {
 // ........ ........ .####### ........ : from (0 if drop move)
 // ........ ........ #....... ........ : drop flag
 // ........ ...##### ........ ........ : moved or dropped piece
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Move(u32);
 
 impl Move {
