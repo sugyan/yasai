@@ -330,9 +330,8 @@ impl Position {
         self.occupied_bb ^= sq;
     }
     #[rustfmt::skip]
-    pub fn attackers_to(&self, c: Color, to: Square) -> Bitboard {
+    pub fn attackers_to(&self, c: Color, to: Square, occ: &Bitboard) -> Bitboard {
         let opp = !c;
-        let occ = &self.occupied();
         (     (ATTACK_TABLE.fu.attack(to, opp)      & self.pieces_p(PieceType::FU))
             | (ATTACK_TABLE.ky.attack(to, opp, occ) & self.pieces_p(PieceType::KY))
             | (ATTACK_TABLE.ke.attack(to, opp)      & self.pieces_p(PieceType::KE))
@@ -347,7 +346,10 @@ impl Position {
             let c = self.side_to_move();
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
             if self.piece_on(from) == Some(Piece::from_cp(c, PieceType::OU))
-                && self.attackers_to(!c, m.to()).is_empty().not()
+                && self
+                    .attackers_to(!c, m.to(), &self.occupied())
+                    .is_empty()
+                    .not()
             {
                 return false;
             }

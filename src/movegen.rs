@@ -273,7 +273,7 @@ impl MoveList {
     fn is_uchifuzume(pos: &Position, sq: Square) -> bool {
         let c = pos.side_to_move();
         // 玉自身が歩を取れる
-        if pos.attackers_to(c, sq).is_empty() {
+        if pos.attackers_to(c, sq, &pos.occupied()).is_empty() {
             return false;
         }
         // 他の駒が歩を取れる
@@ -286,9 +286,11 @@ impl MoveList {
         }
         // 玉が逃げられる
         if let Some(king) = pos.king(!c) {
-            let escape = ATTACK_TABLE.ou.attack(king, !c) & !pos.pieces_c(!c);
+            let escape =
+                ATTACK_TABLE.ou.attack(king, !c) & !pos.pieces_c(!c) & !Bitboard::from_square(sq);
+            let occupied = pos.occupied() | Bitboard::from_square(sq);
             for to in escape ^ sq {
-                if pos.attackers_to(c, to).is_empty() {
+                if pos.attackers_to(c, to, &occupied).is_empty() {
                     return false;
                 }
             }
@@ -388,15 +390,15 @@ mod tests {
         #[rustfmt::skip]
         let test_cases = [
             // 打ち歩詰め
-            // P1 *  *  *  *  *  *  *  *  *
+            // P1 *  *  *  *  *  *  *  *  * 
             // P2 *  *  *  *  *  *  * -FU-FU
             // P3 *  *  *  *  *  *  *  * -OU
-            // P4 *  *  *  *  *  *  * +FU *
-            // P5 *  *  *  *  *  *  * +KI *
-            // P6 *  *  *  *  *  *  *  *  *
-            // P7 *  *  *  *  *  *  *  *  *
-            // P8 *  *  *  *  *  *  *  *  *
-            // P9 *  *  *  *  *  *  *  *  *
+            // P4 *  *  *  *  *  *  * +FU * 
+            // P5 *  *  *  *  *  *  * +KI * 
+            // P6 *  *  *  *  *  *  *  *  * 
+            // P7 *  *  *  *  *  *  *  *  * 
+            // P8 *  *  *  *  *  *  *  *  * 
+            // P9 *  *  *  *  *  *  *  *  * 
             // P+00FU
             // P-00AL
             // +
@@ -415,18 +417,18 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [14, 4, 4, 4, 3, 2, 2],
                 ], Color::Black, 1),
-                true,
+                Square::SQ14, true,
             ),
             // 金で歩を取れる
-            // P1 *  *  *  *  *  *  *  *  *
+            // P1 *  *  *  *  *  *  *  *  * 
             // P2 *  *  *  *  *  *  * -FU-FU
             // P3 *  *  *  *  *  *  * -KI-OU
-            // P4 *  *  *  *  *  *  *  *  *
-            // P5 *  *  *  *  *  *  * +KI *
-            // P6 *  *  *  *  *  *  *  *  *
-            // P7 *  *  *  *  *  *  *  *  *
-            // P8 *  *  *  *  *  *  *  *  *
-            // P9 *  *  *  *  *  *  *  *  *
+            // P4 *  *  *  *  *  *  *  *  * 
+            // P5 *  *  *  *  *  *  * +KI * 
+            // P6 *  *  *  *  *  *  *  *  * 
+            // P7 *  *  *  *  *  *  *  *  * 
+            // P8 *  *  *  *  *  *  *  *  * 
+            // P9 *  *  *  *  *  *  *  *  * 
             // P+00FU
             // P-00AL
             // +
@@ -445,18 +447,18 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [15, 4, 4, 4, 2, 2, 2],
                 ], Color::Black, 1),
-                false,
+                Square::SQ14, false,
             ),
             // 飛がいるので金が動けない
-            // P1 *  *  *  *  *  *  *  *  *
+            // P1 *  *  *  *  *  *  *  *  * 
             // P2 *  *  *  *  *  *  * -FU-FU
             // P3 *  *  *  *  *  * +HI-KI-OU
-            // P4 *  *  *  *  *  *  *  *  *
-            // P5 *  *  *  *  *  *  * +KI *
-            // P6 *  *  *  *  *  *  *  *  *
-            // P7 *  *  *  *  *  *  *  *  *
-            // P8 *  *  *  *  *  *  *  *  *
-            // P9 *  *  *  *  *  *  *  *  *
+            // P4 *  *  *  *  *  *  *  *  * 
+            // P5 *  *  *  *  *  *  * +KI * 
+            // P6 *  *  *  *  *  *  *  *  * 
+            // P7 *  *  *  *  *  *  *  *  * 
+            // P8 *  *  *  *  *  *  *  *  * 
+            // P9 *  *  *  *  *  *  *  *  * 
             // P+00FU
             // P-00AL
             // +
@@ -475,18 +477,18 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [15, 4, 4, 4, 2, 2, 1],
                 ], Color::Black, 1),
-                true,
+                Square::SQ14, true,
             ),
             // 桂で歩を取れる
-            // P1 *  *  *  *  *  *  *  *  *
+            // P1 *  *  *  *  *  *  *  *  * 
             // P2 *  *  *  *  *  *  * -KE-FU
             // P3 *  *  *  *  *  *  *  * -OU
-            // P4 *  *  *  *  *  *  * +FU *
-            // P5 *  *  *  *  *  *  * +KI *
-            // P6 *  *  *  *  *  *  *  *  *
-            // P7 *  *  *  *  *  *  *  *  *
-            // P8 *  *  *  *  *  *  *  *  *
-            // P9 *  *  *  *  *  *  *  *  *
+            // P4 *  *  *  *  *  *  * +FU * 
+            // P5 *  *  *  *  *  *  * +KI * 
+            // P6 *  *  *  *  *  *  *  *  * 
+            // P7 *  *  *  *  *  *  *  *  * 
+            // P8 *  *  *  *  *  *  *  *  * 
+            // P9 *  *  *  *  *  *  *  *  * 
             // P+00FU
             // P-00AL
             // +
@@ -505,18 +507,18 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 2, 2],
                 ], Color::Black, 1),
-                false,
+                Square::SQ14, false,
             ),
             // 角がいるので桂が動けない
-            // P1 *  *  *  *  *  * +KA *  *
+            // P1 *  *  *  *  *  * +KA *  * 
             // P2 *  *  *  *  *  *  * -KE-FU
             // P3 *  *  *  *  *  *  *  * -OU
-            // P4 *  *  *  *  *  *  * +FU *
-            // P5 *  *  *  *  *  *  * +KI *
-            // P6 *  *  *  *  *  *  *  *  *
-            // P7 *  *  *  *  *  *  *  *  *
-            // P8 *  *  *  *  *  *  *  *  *
-            // P9 *  *  *  *  *  *  *  *  *
+            // P4 *  *  *  *  *  *  * +FU * 
+            // P5 *  *  *  *  *  *  * +KI * 
+            // P6 *  *  *  *  *  *  *  *  * 
+            // P7 *  *  *  *  *  *  *  *  * 
+            // P8 *  *  *  *  *  *  *  *  * 
+            // P9 *  *  *  *  *  *  *  *  * 
             // P+00FU
             // P-00AL
             // +
@@ -535,15 +537,42 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 1, 2],
                 ], Color::Black, 1),
-                true,
+                Square::SQ14, true,
+            ),
+            // https://github.com/nozaq/shogi-rs/pull/41
+            // 打った歩によって△1一玉の逃げ場ができる
+            // P1 *  *  *  *  *  *  * -OU * 
+            // P2 *  *  *  *  * +KI *  * -KY
+            // P3 *  *  *  *  *  * +KA *  * 
+            // P4 *  *  *  *  *  *  *  *  * 
+            // P5 *  *  *  *  *  *  *  *  * 
+            // P6 *  *  *  *  *  *  *  *  * 
+            // P7 *  *  *  *  *  *  *  *  * 
+            // P8 *  *  *  *  *  *  *  *  * 
+            // P9 *  *  *  *  *  *  *  *  * 
+            // P+00FU
+            // P-00AL
+            // +
+            (
+                Position::new([
+                    EMP, WKY, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, BKI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ], [
+                    [ 1, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 1, 2],
+                ], Color::Black, 1),
+                Square::SQ22, false,
             ),
         ];
-        for (pos, expected) in test_cases {
-            assert_eq!(
-                expected,
-                MoveList::is_uchifuzume(&pos, Square::SQ14),
-                "\n{pos}"
-            );
+        for (pos, sq, expected) in test_cases {
+            assert_eq!(expected, MoveList::is_uchifuzume(&pos, sq), "\n{pos}");
         }
     }
 }
