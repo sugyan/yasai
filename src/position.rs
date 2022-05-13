@@ -11,7 +11,7 @@ use crate::{Color, Move, Piece, Square};
 use std::fmt;
 use std::ops::Not;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct AttackInfo {
     checkers: Bitboard,                     // 王手をかけている駒の位置
     checkables: [Bitboard; PieceType::NUM], // 各駒種が王手になり得る位置
@@ -91,7 +91,7 @@ impl AttackInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct State {
     keys: (Key, Key),
     captured: Option<Piece>,
@@ -109,7 +109,7 @@ impl State {
 }
 
 /// Represents a state of the game.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Position {
     board: [Option<Piece>; Square::NUM],
     hands: Hands,

@@ -8,6 +8,7 @@ mod position;
 mod shogi_move;
 mod square;
 mod tables;
+pub mod utils;
 mod zobrist;
 
 pub use color::Color;

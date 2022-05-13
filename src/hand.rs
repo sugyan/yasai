@@ -1,7 +1,7 @@
 use crate::{Color, PieceType};
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Hands([Hand; Color::NUM]);
 
 impl Hands {
