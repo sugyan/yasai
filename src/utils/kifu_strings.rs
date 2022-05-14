@@ -1,5 +1,4 @@
 use crate::{Color, File, Move, PieceType, Position, Rank, Square};
-use std::ops::Not;
 
 pub trait KifuStrings {
     fn kifu_strings(&self, moves: &[Move]) -> Vec<String>;
@@ -33,9 +32,8 @@ impl KifuStrings for Position {
             // 盤上の駒が動いた場合は通常の表記と同じ
             // 持駒を打った場合は「打」と記入
             else if (self.pieces_cp(piece.color(), piece.piece_type())
-                & self.attackers_to(piece.color(), m.to(), &self.occupied()))
+                & !self.attackers_to(piece.color(), m.to(), &self.occupied()))
             .is_empty()
-            .not()
             {
                 parts.push(String::from("打"));
             }
