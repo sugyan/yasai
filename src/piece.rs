@@ -116,7 +116,8 @@ impl Piece {
     pub const WRY: Piece = Piece(29);
     // other constants
     const PROMOTION_FLAG: u8 = 1 << 3;
-    const PROMOTABLE_MASK: u8 = 0x06;
+    const PROMOTABLE_MASK: u8 = 0x07;
+    const PROMOTABLE_THRESHOLD: u8 = 5;
     const COLOR_MASK: u8 = 1 << 4;
 
     pub fn from_cp(color: Color, piece_type: PieceType) -> Self {
@@ -127,18 +128,22 @@ impl Piece {
             } | piece_type.0 as u8,
         )
     }
+    pub fn is_promotable(&self) -> bool {
+        self.0 & Piece::PROMOTABLE_MASK <= Piece::PROMOTABLE_THRESHOLD
+            && self.0 & Piece::PROMOTION_FLAG == 0
+    }
     pub fn promoted(&self) -> Piece {
-        if self.0 & Piece::PROMOTABLE_MASK == Piece::PROMOTABLE_MASK {
-            *self
-        } else {
+        if self.0 & Piece::PROMOTABLE_MASK <= Piece::PROMOTABLE_THRESHOLD {
             Piece(self.0 | Piece::PROMOTION_FLAG)
+        } else {
+            *self
         }
     }
     pub fn demoted(&self) -> Piece {
-        if self.0 & Piece::PROMOTABLE_MASK == Piece::PROMOTABLE_MASK {
-            *self
-        } else {
+        if self.0 & Piece::PROMOTABLE_MASK <= Piece::PROMOTABLE_THRESHOLD {
             Piece(self.0 & !Piece::PROMOTION_FLAG)
+        } else {
+            *self
         }
     }
     pub fn piece_type(&self) -> PieceType {
@@ -181,6 +186,19 @@ mod tests {
     ];
 
     #[test]
+    fn piece_is_promotable() {
+        for p in ALL_PIECES {
+            #[rustfmt::skip]
+            let expected = matches!(
+                p,
+                Piece::BFU | Piece::BKY | Piece::BKE | Piece::BGI | Piece::BKA | Piece::BHI |
+                Piece::WFU | Piece::WKY | Piece::WKE | Piece::WGI | Piece::WKA | Piece::WHI
+            );
+            assert_eq!(expected, p.is_promotable(), "{p}");
+        }
+    }
+
+    #[test]
     fn piece_promoted() {
         for p in ALL_PIECES {
             let expected = match p {
@@ -198,7 +216,7 @@ mod tests {
                 Piece::WHI => Piece::WRY,
                 _ => p,
             };
-            assert_eq!(expected, p.promoted(), "{}", p);
+            assert_eq!(expected, p.promoted(), "{p}");
         }
     }
 
@@ -220,7 +238,7 @@ mod tests {
                 Piece::WRY => Piece::WHI,
                 _ => p,
             };
-            assert_eq!(expected, p.demoted(), "{}", p);
+            assert_eq!(expected, p.demoted(), "{p}");
         }
     }
 }

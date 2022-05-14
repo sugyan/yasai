@@ -1,4 +1,5 @@
 use crate::{Color, File, Move, PieceType, Position, Rank, Square};
+use std::ops::Not;
 
 pub trait KifuStrings {
     fn kifu_strings(&self, moves: &[Move]) -> Vec<String>;
@@ -10,8 +11,9 @@ impl KifuStrings for Position {
         let mut pos = self.clone();
         let mut result = Vec::with_capacity(moves.len());
         for (i, &m) in moves.iter().enumerate() {
+            let piece = m.piece();
             let mut parts = Vec::with_capacity(7);
-            parts.push(color2str(m.piece().color()));
+            parts.push(color2str(piece.color()));
             parts.push(square2str(
                 m.to(),
                 if i > 0 { Some(moves[i - 1].to()) } else { None },
@@ -19,8 +21,23 @@ impl KifuStrings for Position {
             parts.push(pt2str(m.piece().piece_type()));
             if m.is_promotion() {
                 parts.push(String::from("成"));
-            } else if m.to().rank().is_opponent_field(m.piece().color()) {
-                parts.push(String::from("不成"));
+            } else if let Some(from) = m.from() {
+                if m.piece().is_promotable()
+                    && (from.rank().is_opponent_field(piece.color())
+                        || m.to().rank().is_opponent_field(piece.color()))
+                {
+                    parts.push(String::from("不成"));
+                }
+            }
+            // 到達地点に盤上の駒が移動することも、持駒を打つこともできる場合
+            // 盤上の駒が動いた場合は通常の表記と同じ
+            // 持駒を打った場合は「打」と記入
+            else if (self.pieces_cp(piece.color(), piece.piece_type())
+                & self.attackers_to(piece.color(), m.to(), &self.occupied()))
+            .is_empty()
+            .not()
+            {
+                parts.push(String::from("打"));
             }
             result.push(parts.join(""));
 
@@ -38,6 +55,7 @@ fn color2str(color: Color) -> String {
 }
 
 fn square2str(sq: Square, prev: Option<Square>) -> String {
+    // 相手の1手前の指し手と同地点に移動した場合（＝その駒を取った場合）、「同」と記入。
     if Some(sq) == prev {
         String::from("同")
     } else {
@@ -98,21 +116,159 @@ fn pt2str(pt: PieceType) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::board_piece::*;
     use crate::{Piece, Square};
 
     #[test]
-    fn from_default() {
+    fn 初手() {
         let pos = Position::default();
-        let moves = vec![
-            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
-            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU),
-            Move::new_normal(Square::SQ88, Square::SQ22, false, Piece::BKA),
-            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WGI),
-            Move::new_drop(Square::SQ88, Piece::BKA),
-        ];
         assert_eq!(
-            vec!["▲7六歩", "△3四歩", "▲2二角不成", "△同銀", "▲8八角"],
-            pos.kifu_strings(&moves)
+            vec!["▲7六歩"],
+            pos.kifu_strings(&[Move::new_normal(
+                Square::SQ77,
+                Square::SQ76,
+                false,
+                Piece::BFU
+            )])
         );
+    }
+
+    #[test]
+    fn 同() {
+        #[rustfmt::skip]
+        let board = [
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            WKE, WKA, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
+            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WOU, EMP, EMP, WFU, EMP, BFU, EMP, EMP, BOU,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
+            WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+        ];
+        let hand_nums = [[0; 7]; 2];
+        {
+            let pos = Position::new(board, hand_nums, Color::Black, 1);
+            let test_cases = [(
+                vec![
+                    Move::new_normal(Square::SQ56, Square::SQ55, false, Piece::BFU),
+                    Move::new_normal(Square::SQ54, Square::SQ55, false, Piece::WFU),
+                ],
+                vec!["▲5五歩", "△同歩"],
+            )];
+            for (moves, expected) in test_cases {
+                assert_eq!(expected, pos.kifu_strings(&moves));
+            }
+        }
+        {
+            let pos = Position::new(board, hand_nums, Color::White, 1);
+            let test_cases = [(
+                vec![
+                    Move::new_normal(Square::SQ56, Square::SQ55, false, Piece::WFU),
+                    Move::new_normal(Square::SQ54, Square::SQ55, false, Piece::BFU),
+                ],
+                vec!["△5五歩", "▲同歩"],
+            )];
+            for (moves, expected) in test_cases {
+                assert_eq!(expected, pos.kifu_strings(&moves));
+            }
+        }
+    }
+
+    #[test]
+    fn 打() {
+        #[rustfmt::skip]
+        let board = [
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            WOU, EMP, BKI, EMP, EMP, EMP, WKI, EMP, BOU,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+        ];
+        let hand_nums = [[9, 2, 2, 2, 1, 1, 1]; 2];
+        {
+            let pos = Position::new(board, hand_nums, Color::Black, 1);
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ53, Square::SQ52, false, Piece::BKI),
+                    "▲5二金",
+                ),
+                (Move::new_drop(Square::SQ52, Piece::BKI), "▲5二金打"),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
+            }
+        }
+        {
+            let pos = Position::new(board, hand_nums, Color::White, 1);
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ57, Square::SQ58, false, Piece::WKI),
+                    "△5八金",
+                ),
+                (Move::new_drop(Square::SQ58, Piece::WKI), "△5八金打"),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
+            }
+        }
+    }
+
+    #[test]
+    fn 成_不成() {
+        #[rustfmt::skip]
+        let board = [
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            WOU, EMP, BGI, BGI, EMP, WGI, WGI, EMP, BOU,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+        ];
+        let hand_nums = [[9, 2, 2, 0, 2, 1, 1]; 2];
+        {
+            let pos = Position::new(board, hand_nums, Color::Black, 1);
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ53, Square::SQ42, false, Piece::BGI),
+                    "▲4二銀不成",
+                ),
+                (
+                    Move::new_normal(Square::SQ53, Square::SQ42, true, Piece::BGI),
+                    "▲4二銀成",
+                ),
+                (
+                    Move::new_normal(Square::SQ53, Square::SQ44, false, Piece::BGI),
+                    "▲4四銀不成",
+                ),
+                (
+                    Move::new_normal(Square::SQ53, Square::SQ44, true, Piece::BGI),
+                    "▲4四銀成",
+                ),
+                (
+                    Move::new_normal(Square::SQ54, Square::SQ43, false, Piece::BGI),
+                    "▲4三銀不成",
+                ),
+                (
+                    Move::new_normal(Square::SQ54, Square::SQ43, true, Piece::BGI),
+                    "▲4三銀成",
+                ),
+                (
+                    Move::new_normal(Square::SQ54, Square::SQ45, false, Piece::BGI),
+                    "▲4五銀",
+                ),
+            ];
+            for &(m, expected) in test_cases.iter() {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
     }
 }
