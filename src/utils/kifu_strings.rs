@@ -174,8 +174,8 @@ fn parts_promotion(m: &Move) -> String {
 fn parts_drop(m: &Move, pos: &Position) -> String {
     let piece = m.piece();
     if m.is_drop()
-        && (pos.pieces_cp(piece.color(), piece.piece_type())
-            & !pos.attackers_to(piece.color(), m.to(), &pos.occupied()))
+        && !(pos.pieces_cp(piece.color(), piece.piece_type())
+            & pos.attackers_to(piece.color(), m.to(), &pos.occupied()))
         .is_empty()
     {
         return String::from("打");
