@@ -1,7 +1,7 @@
 use crate::{Color, PieceType};
 use std::{fmt, ops};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct File(pub(crate) i8);
 
 impl File {
@@ -66,7 +66,7 @@ impl fmt::Debug for File {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Rank(pub(crate) i8);
 
 impl Rank {

@@ -23,6 +23,30 @@ impl KifuStrings for Position {
     }
 }
 
+#[derive(Default)]
+struct Orderings {
+    less: bool,
+    equal: bool,
+    greater: bool,
+}
+
+impl Orderings {
+    fn set(&mut self, o: Ordering) {
+        match o {
+            Ordering::Less => self.less = true,
+            Ordering::Equal => self.equal = true,
+            Ordering::Greater => self.greater = true,
+        }
+    }
+    fn get(&self, o: Ordering) -> bool {
+        match o {
+            Ordering::Less => self.less,
+            Ordering::Equal => self.equal,
+            Ordering::Greater => self.greater,
+        }
+    }
+}
+
 fn move2str(pos: &Position, m: &Move, prev: Option<&Move>) -> String {
     let parts = vec![
         parts_color(m),
@@ -79,36 +103,48 @@ fn parts_direction_relative(m: &Move, pos: &Position) -> String {
         let bb = pos.pieces_cp(piece.color(), piece.piece_type())
             & pos.attackers_to(piece.color(), m.to(), &pos.occupied())
             & !Bitboard::from_square(from);
-        let (mut same_files, mut same_ranks) = (false, false);
-        for sq in bb {
-            if sq.file() == from.file() {
-                same_files = true;
+        if let Some(other) = bb.into_iter().next() {
+            let (file_ordering, rank_ordering) = (
+                from.file().cmp(&m.to().file()),
+                from.rank().cmp(&m.to().rank()),
+            );
+            let (mut file_orderings, mut rank_orderings) =
+                (Orderings::default(), Orderings::default());
+            for sq in bb {
+                file_orderings.set(sq.file().cmp(&m.to().file()));
+                rank_orderings.set(sq.rank().cmp(&m.to().rank()));
             }
-            if sq.rank() == from.rank() {
-                same_ranks = true;
-            }
-        }
-        if !bb.is_empty() {
-            let (mut file_diff, mut rank_diff) =
-                (m.to().file() - from.file(), m.to().rank() - from.rank());
-            if piece.color() == Color::White {
-                file_diff *= -1;
-                rank_diff *= -1;
+            let translated_ordering = |o: Ordering| match o {
+                Ordering::Less if piece.color() == Color::White => Ordering::Greater,
+                Ordering::Greater if piece.color() == Color::White => Ordering::Less,
+                _ => o,
             };
             // 到達地点に2枚の同じ駒が動ける場合、動作でどの駒が動いたかわからない時は、「左」「右」を記入します。
-            if same_ranks {
-                ret += match file_diff.cmp(&0) {
-                    Ordering::Less => "左",
-                    Ordering::Equal => "直",
-                    Ordering::Greater => "右",
+            // 例外で、金銀が横に2枚以上並んでいる場合のみ1段上に上がる時「直」を記入します。
+            if rank_orderings.get(rank_ordering) {
+                ret += if matches!(piece.piece_type(), PieceType::RY | PieceType::UM) {
+                    // 竜、馬が2枚の場合は、「直」は使わずに「左」「右」で記入します。
+                    match translated_ordering(from.file().cmp(&other.file())) {
+                        Ordering::Less => "右",
+                        Ordering::Greater => "左",
+                        _ => unreachable!(),
+                    }
+                } else {
+                    match translated_ordering(file_ordering) {
+                        Ordering::Less => "右",
+                        Ordering::Equal => "直",
+                        Ordering::Greater => "左",
+                    }
                 };
             }
             // 到達地点に複数の同じ駒が動ける場合、「上」または「寄」または「引」を記入します。
-            if !same_ranks || (same_files && from.file() != m.to().file()) {
-                ret += match rank_diff.cmp(&0) {
-                    Ordering::Less => "上",
+            if !rank_orderings.get(rank_ordering)
+                || (file_orderings.get(file_ordering) && file_ordering != Ordering::Equal)
+            {
+                ret += match translated_ordering(rank_ordering) {
+                    Ordering::Less => "引",
                     Ordering::Equal => "寄",
-                    Ordering::Greater => "引",
+                    Ordering::Greater => "上",
                 };
             }
         }
@@ -776,6 +812,654 @@ mod tests {
                 (
                     Move::new_normal(Square::SQ73, Square::SQ82, false, Piece::WGI),
                     "△8二銀左引",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+    }
+
+    #[test]
+    fn 竜_上寄引_左右() {
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, BRY, EMP, EMP, EMP, EMP, EMP,
+                    BRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ91, Square::SQ82, false, Piece::BRY),
+                    "▲8二竜引",
+                ),
+                (
+                    Move::new_normal(Square::SQ84, Square::SQ82, false, Piece::BRY),
+                    "▲8二竜上",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, BRY, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, BRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ23, Square::SQ43, false, Piece::BRY),
+                    "▲4三竜寄",
+                ),
+                (
+                    Move::new_normal(Square::SQ52, Square::SQ43, false, Piece::BRY),
+                    "▲4三竜引",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, BRY, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, BRY, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ55, Square::SQ35, false, Piece::BRY),
+                    "▲3五竜左",
+                ),
+                (
+                    Move::new_normal(Square::SQ15, Square::SQ35, false, Piece::BRY),
+                    "▲3五竜右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BRY,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BRY,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ99, Square::SQ88, false, Piece::BRY),
+                    "▲8八竜左",
+                ),
+                (
+                    Move::new_normal(Square::SQ89, Square::SQ88, false, Piece::BRY),
+                    "▲8八竜右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BRY,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, BRY, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ28, Square::SQ17, false, Piece::BRY),
+                    "▲1七竜左",
+                ),
+                (
+                    Move::new_normal(Square::SQ19, Square::SQ17, false, Piece::BRY),
+                    "▲1七竜右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, WRY,
+                    EMP, EMP, EMP, EMP, EMP, WRY, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ19, Square::SQ28, false, Piece::WRY),
+                    "△2八竜引",
+                ),
+                (
+                    Move::new_normal(Square::SQ26, Square::SQ28, false, Piece::WRY),
+                    "△2八竜上",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, WRY, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, WRY, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ87, Square::SQ67, false, Piece::WRY),
+                    "△6七竜寄",
+                ),
+                (
+                    Move::new_normal(Square::SQ58, Square::SQ67, false, Piece::WRY),
+                    "△6七竜引",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, WRY, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, WRY, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ55, Square::SQ75, false, Piece::WRY),
+                    "△7五竜左",
+                ),
+                (
+                    Move::new_normal(Square::SQ95, Square::SQ75, false, Piece::WRY),
+                    "△7五竜右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    WRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    WRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ11, Square::SQ22, false, Piece::WRY),
+                    "△2二竜左",
+                ),
+                (
+                    Move::new_normal(Square::SQ21, Square::SQ22, false, Piece::WRY),
+                    "△2二竜右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, WRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    WRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ82, Square::SQ93, false, Piece::WRY),
+                    "△9三竜左",
+                ),
+                (
+                    Move::new_normal(Square::SQ91, Square::SQ93, false, Piece::WRY),
+                    "△9三竜右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+    }
+
+    #[test]
+    fn 馬_上寄引_左右() {
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    BUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    BUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ91, Square::SQ82, false, Piece::BUM),
+                    "▲8二馬左",
+                ),
+                (
+                    Move::new_normal(Square::SQ81, Square::SQ82, false, Piece::BUM),
+                    "▲8二馬右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, BUM, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, BUM, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ95, Square::SQ85, false, Piece::BUM),
+                    "▲8五馬寄",
+                ),
+                (
+                    Move::new_normal(Square::SQ63, Square::SQ85, false, Piece::BUM),
+                    "▲8五馬引",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    BUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, BUM, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ11, Square::SQ12, false, Piece::BUM),
+                    "▲1二馬引",
+                ),
+                (
+                    Move::new_normal(Square::SQ34, Square::SQ12, false, Piece::BUM),
+                    "▲1二馬上",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BUM,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BUM,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ99, Square::SQ77, false, Piece::BUM),
+                    "▲7七馬左",
+                ),
+                (
+                    Move::new_normal(Square::SQ59, Square::SQ77, false, Piece::BUM),
+                    "▲7七馬右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, BUM, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, BUM, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ47, Square::SQ29, false, Piece::BUM),
+                    "▲2九馬左",
+                ),
+                (
+                    Move::new_normal(Square::SQ18, Square::SQ29, false, Piece::BUM),
+                    "▲2九馬右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, WUM,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, WUM,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ19, Square::SQ28, false, Piece::WUM),
+                    "△2八馬左",
+                ),
+                (
+                    Move::new_normal(Square::SQ29, Square::SQ28, false, Piece::WUM),
+                    "△2八馬右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, WUM, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, WUM, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ15, Square::SQ25, false, Piece::WUM),
+                    "△2五馬寄",
+                ),
+                (
+                    Move::new_normal(Square::SQ47, Square::SQ25, false, Piece::WUM),
+                    "△2五馬引",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, WUM, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, WUM,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ99, Square::SQ98, false, Piece::WUM),
+                    "△9八馬引",
+                ),
+                (
+                    Move::new_normal(Square::SQ76, Square::SQ98, false, Piece::WUM),
+                    "△9八馬上",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    WUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    WUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ11, Square::SQ33, false, Piece::WUM),
+                    "△3三馬左",
+                ),
+                (
+                    Move::new_normal(Square::SQ51, Square::SQ33, false, Piece::WUM),
+                    "△3三馬右",
+                ),
+            ];
+            for (m, expected) in test_cases {
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+        {
+            #[rustfmt::skip]
+            let pos = Position::new(
+                [
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, WUM, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, WUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                ],
+                [[0; 7]; 2],
+                Color::Black,
+                1,
+            );
+            let test_cases = [
+                (
+                    Move::new_normal(Square::SQ63, Square::SQ81, false, Piece::WUM),
+                    "△8一馬左",
+                ),
+                (
+                    Move::new_normal(Square::SQ92, Square::SQ81, false, Piece::WUM),
+                    "△8一馬右",
                 ),
             ];
             for (m, expected) in test_cases {
