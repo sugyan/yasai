@@ -9,9 +9,8 @@ use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
 use crate::{Color, Move, Piece, Square};
 use std::fmt;
-use std::ops::Not;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct AttackInfo {
     checkers: Bitboard,                     // 王手をかけている駒の位置
     checkables: [Bitboard; PieceType::NUM], // 各駒種が王手になり得る位置
@@ -91,7 +90,7 @@ impl AttackInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct State {
     keys: (Key, Key),
     captured: Option<Piece>,
@@ -109,7 +108,7 @@ impl State {
 }
 
 /// Represents a state of the game.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Position {
     board: [Option<Piece>; Square::NUM],
     hands: Hands,
@@ -206,12 +205,10 @@ impl Position {
         self.state().attack_info.checkers
     }
     pub fn in_check(&self) -> bool {
-        self.checkers().is_empty().not()
+        !self.checkers().is_empty()
     }
     fn checkable(&self, pt: PieceType, sq: Square) -> bool {
-        (self.state().attack_info.checkables[pt.index()] & sq)
-            .is_empty()
-            .not()
+        !(self.state().attack_info.checkables[pt.index()] & sq).is_empty()
     }
     pub fn pinned(&self) -> [Bitboard; Color::NUM] {
         self.state().attack_info.pinned
@@ -346,15 +343,12 @@ impl Position {
             let c = self.side_to_move();
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
             if self.piece_on(from) == Some(Piece::from_cp(c, PieceType::OU))
-                && self
-                    .attackers_to(!c, m.to(), &self.occupied())
-                    .is_empty()
-                    .not()
+                && !self.attackers_to(!c, m.to(), &self.occupied()).is_empty()
             {
                 return false;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if (self.pinned()[c.index()] & from).is_empty().not() {
+            if !(self.pinned()[c.index()] & from).is_empty() {
                 if let Some(sq) = self.king(c) {
                     if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
                         && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
@@ -385,7 +379,7 @@ impl Position {
                 }
                 // 開き王手
                 let c = self.side_to_move();
-                if (self.pinned()[(!c).index()] & from).is_empty().not() {
+                if !(self.pinned()[(!c).index()] & from).is_empty() {
                     if let Some(sq) = self.king(!c) {
                         return (BETWEEN_TABLE[sq.index()][from.index()] & to).is_empty()
                             && (BETWEEN_TABLE[sq.index()][to.index()] & from).is_empty();

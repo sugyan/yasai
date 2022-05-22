@@ -3,7 +3,6 @@ use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::{Color, Move, Piece, PieceType, Position, Square};
 use arrayvec::{ArrayVec, IntoIter};
-use std::ops::Not;
 
 pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
@@ -253,7 +252,7 @@ impl MoveList {
                 // 打ち歩詰めチェック
                 if let Some(sq) = pos.king(!c) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, !c).pop() {
-                        if (*target & to).is_empty().not() && Self::is_uchifuzume(pos, to) {
+                        if !(*target & to).is_empty() && Self::is_uchifuzume(pos, to) {
                             exclude |= to;
                         }
                     }
@@ -278,10 +277,7 @@ impl MoveList {
         }
         // 他の駒が歩を取れる
         let capture_candidates = Self::attackers_to_except_klp(pos, !c, sq);
-        if (capture_candidates & !pos.pinned()[(!c).index()])
-            .is_empty()
-            .not()
-        {
+        if !(capture_candidates & !pos.pinned()[(!c).index()]).is_empty() {
             return false;
         }
         // 玉が逃げられる
