@@ -217,7 +217,10 @@ fn rank2str(rank: Rank) -> String {
 mod tests {
     use super::*;
     use crate::board_piece::*;
+    use crate::tables::ATTACK_TABLE;
     use crate::{Piece, Square};
+    use itertools::Itertools;
+    use std::collections::HashSet;
 
     #[test]
     fn 初手() {
@@ -1464,6 +1467,64 @@ mod tests {
             ];
             for (m, expected) in test_cases {
                 assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+            }
+        }
+    }
+
+    #[test]
+    fn all_unique() {
+        let piece_type_nums = [
+            (PieceType::KE, 4),
+            (PieceType::GI, 4),
+            (PieceType::KI, 4),
+            (PieceType::KA, 2),
+            (PieceType::HI, 2),
+            (PieceType::TO, 6),
+            (PieceType::UM, 2),
+            (PieceType::RY, 2),
+        ];
+        for c in Color::ALL {
+            for (pt, num) in piece_type_nums {
+                let piece = Piece::from_cp(c, pt);
+                for to in Square::ALL {
+                    let froms = ATTACK_TABLE.pseudo_attack(pt, to, !c).collect::<Vec<_>>();
+                    for k in 2..=num {
+                        for v in (0..froms.len()).combinations(k) {
+                            let mut board = [None; 81];
+                            let mut moves = Vec::new();
+                            for i in v {
+                                let from = froms[i];
+                                board[from.index()] = Some(piece);
+                                moves.push(Move::new_normal(from, to, false, piece));
+                            }
+                            let pos =
+                                Position::new(board, [[0; PieceType::NUM_HAND]; Color::NUM], c, 1);
+                            let legal_moves = pos.legal_moves().into_iter().collect::<HashSet<_>>();
+                            if moves.iter().any(|m| !legal_moves.contains(m)) {
+                                continue;
+                            }
+                            let mut results = HashSet::new();
+                            for &m in &moves {
+                                let result = pos.kifu_strings(&[m])[0].clone();
+                                assert!(
+                                    result
+                                        .strip_suffix("不成")
+                                        .unwrap_or(&result)
+                                        .chars()
+                                        .count()
+                                        > 4,
+                                    "{result}: move {m}"
+                                );
+                                results.insert(result);
+                            }
+                            assert_eq!(
+                                results.len(),
+                                moves.len(),
+                                "not unique {results:?}: {moves:?}"
+                            );
+                        }
+                    }
+                }
             }
         }
     }
