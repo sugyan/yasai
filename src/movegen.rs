@@ -1,8 +1,10 @@
 use crate::bitboard::Bitboard;
+use crate::color::Index;
 use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
-use crate::{Color, Move, Piece, PieceType, Position, Square};
+use crate::{Move, Piece, PieceType, Position, Square};
 use arrayvec::{ArrayVec, IntoIter};
+use shogi_core::Color;
 
 pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
@@ -59,7 +61,7 @@ impl MoveList {
                     if pt == PieceType::RY && ch.file() != ou.file() && ch.rank() != ou.rank() {
                         checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &pos.occupied());
                     } else {
-                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, !c);
+                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, c.flip());
                     }
                 }
                 checkers_count += 1;
@@ -250,8 +252,8 @@ impl MoveList {
                     exclude |= Bitboard::from_file(sq.file());
                 }
                 // 打ち歩詰めチェック
-                if let Some(sq) = pos.king(!c) {
-                    if let Some(to) = ATTACK_TABLE.fu.attack(sq, !c).pop() {
+                if let Some(sq) = pos.king(c.flip()) {
+                    if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
                         if !(*target & to).is_empty() && Self::is_uchifuzume(pos, to) {
                             exclude |= to;
                         }
@@ -274,7 +276,9 @@ impl MoveList {
             let c = pos.side_to_move();
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
             if pos.piece_on(from) == Some(Piece::from_cp(c, PieceType::OU))
-                && !pos.attackers_to(!c, m.to(), &pos.occupied()).is_empty()
+                && !pos
+                    .attackers_to(c.flip(), m.to(), &pos.occupied())
+                    .is_empty()
             {
                 return false;
             }
@@ -298,14 +302,15 @@ impl MoveList {
             return false;
         }
         // 他の駒が歩を取れる
-        let capture_candidates = Self::attackers_to_except_klp(pos, !c, sq);
-        if !(capture_candidates & !pos.pinned()[(!c).index()]).is_empty() {
+        let capture_candidates = Self::attackers_to_except_klp(pos, c.flip(), sq);
+        if !(capture_candidates & !pos.pinned()[c.flip().index()]).is_empty() {
             return false;
         }
         // 玉が逃げられる
-        if let Some(king) = pos.king(!c) {
-            let escape =
-                ATTACK_TABLE.ou.attack(king, !c) & !pos.pieces_c(!c) & !Bitboard::from_square(sq);
+        if let Some(king) = pos.king(c.flip()) {
+            let escape = ATTACK_TABLE.ou.attack(king, c.flip())
+                & !pos.pieces_c(c.flip())
+                & !Bitboard::from_square(sq);
             let occupied = pos.occupied() | Bitboard::from_square(sq);
             for to in escape ^ sq {
                 if pos.attackers_to(c, to, &occupied).is_empty() {
@@ -317,7 +322,7 @@ impl MoveList {
     }
     #[rustfmt::skip]
     fn attackers_to_except_klp(pos: &Position, c: Color, to: Square) -> Bitboard {
-        let opp = !c;
+        let opp = c.flip();
         let occ = &pos.occupied();
         (     (ATTACK_TABLE.ke.attack(to, opp) & pos.pieces_p(PieceType::KE))
             | (ATTACK_TABLE.gi.attack(to, opp) & (pos.pieces_p(PieceType::GI) | pos.pieces_p(PieceType::RY)))
@@ -347,7 +352,6 @@ impl IntoIterator for MoveList {
 mod tests {
     use super::*;
     use crate::board_piece::*;
-    use crate::Color;
 
     #[test]
     fn from_default() {

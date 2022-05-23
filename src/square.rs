@@ -1,4 +1,6 @@
-use crate::{Color, PieceType};
+use crate::color::Index;
+use crate::PieceType;
+use shogi_core::Color;
 use std::{fmt, ops};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -104,7 +106,7 @@ impl Rank {
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
     ];
     #[rustfmt::skip]
-    const VALID_FOR_PIECES: [[[bool; 9]; PieceType::NUM]; Color::NUM] = [
+    const VALID_FOR_PIECES: [[[bool; 9]; PieceType::NUM]; 2] = [
         // Black
         [
             [false,  true,  true,  true,  true,  true,  true,  true,  true], // FU

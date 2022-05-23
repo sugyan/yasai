@@ -1,5 +1,6 @@
 use crate::bitboard::Bitboard;
-use crate::{Color, File, Move, PieceType, Position, Rank};
+use crate::{File, Move, PieceType, Position, Rank};
+use shogi_core::Color;
 use std::cmp::Ordering;
 
 pub trait KifuStrings {
@@ -250,7 +251,7 @@ mod tests {
             WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
             WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
         ];
-        let hand_nums = [[0; PieceType::NUM_HAND]; Color::NUM];
+        let hand_nums = [[0; PieceType::NUM_HAND]; 2];
         {
             let pos = Position::new(board, hand_nums, Color::Black, 1);
             let test_cases = [(
@@ -427,7 +428,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BGI,
                     EMP, EMP, BKI, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -491,7 +492,7 @@ mod tests {
                     EMP, EMP, WGI, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::White,
                 1,
             );
@@ -559,7 +560,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKI,
                     EMP, BKI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -623,7 +624,7 @@ mod tests {
                     WGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, WKI, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::White,
                 1,
             );
@@ -691,7 +692,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, BTO, EMP, BTO,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, BTO, BTO,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -763,7 +764,7 @@ mod tests {
                     WGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, WGI, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::White,
                 1,
             );
@@ -839,7 +840,7 @@ mod tests {
                     EMP, EMP, EMP, BRY, EMP, EMP, EMP, EMP, EMP,
                     BRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -871,7 +872,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -903,7 +904,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -935,7 +936,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BRY,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BRY,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -967,7 +968,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -999,7 +1000,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1031,7 +1032,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, WRY, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1063,7 +1064,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, WRY, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1095,7 +1096,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1127,7 +1128,7 @@ mod tests {
                     EMP, WRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     WRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1163,7 +1164,7 @@ mod tests {
                     BUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     BUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1195,7 +1196,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, BUM, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1227,7 +1228,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1259,7 +1260,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BUM,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1291,7 +1292,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1323,7 +1324,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1355,7 +1356,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1387,7 +1388,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, WUM,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1419,7 +1420,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1451,7 +1452,7 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, WUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; PieceType::NUM_HAND]; 2],
                 Color::Black,
                 1,
             );
@@ -1483,11 +1484,13 @@ mod tests {
             (PieceType::UM, 2),
             (PieceType::RY, 2),
         ];
-        for c in Color::ALL {
+        for c in Color::all() {
             for (pt, num) in piece_type_nums {
                 let piece = Piece::from_cp(c, pt);
                 for to in Square::ALL {
-                    let froms = ATTACK_TABLE.pseudo_attack(pt, to, !c).collect::<Vec<_>>();
+                    let froms = ATTACK_TABLE
+                        .pseudo_attack(pt, to, c.flip())
+                        .collect::<Vec<_>>();
                     for k in 2..=num {
                         for v in (0..froms.len()).combinations(k) {
                             let mut board = [None; 81];
@@ -1497,8 +1500,7 @@ mod tests {
                                 board[from.index()] = Some(piece);
                                 moves.push(Move::new_normal(from, to, false, piece));
                             }
-                            let pos =
-                                Position::new(board, [[0; PieceType::NUM_HAND]; Color::NUM], c, 1);
+                            let pos = Position::new(board, [[0; PieceType::NUM_HAND]; 2], c, 1);
                             let legal_moves = pos.legal_moves().into_iter().collect::<HashSet<_>>();
                             if moves.iter().any(|m| !legal_moves.contains(m)) {
                                 continue;

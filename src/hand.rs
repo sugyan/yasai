@@ -1,11 +1,13 @@
-use crate::{Color, PieceType};
+use crate::color::Index;
+use crate::PieceType;
+use shogi_core::Color;
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct Hands([Hand; Color::NUM]);
+pub struct Hands([Hand; 2]);
 
 impl Hands {
-    pub fn new(hands: [Hand; Color::NUM]) -> Self {
+    pub fn new(hands: [Hand; 2]) -> Self {
         Self(hands)
     }
     pub fn hand(&self, c: Color) -> Hand {
@@ -21,7 +23,7 @@ impl Hands {
 
 impl fmt::Display for Hands {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for c in Color::ALL {
+        for c in Color::all() {
             if !self.0[c.index()].is_empty() {
                 write!(
                     f,

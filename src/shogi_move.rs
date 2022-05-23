@@ -1,4 +1,5 @@
 use crate::{Piece, Square};
+use shogi_core::Color;
 use std::fmt;
 
 pub enum MoveType {
@@ -86,7 +87,10 @@ impl Move {
 
 impl fmt::Display for Move {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let c = self.piece().color();
+        let c = match self.piece().color() {
+            Color::Black => "+",
+            Color::White => "-",
+        };
         match self.move_type() {
             MoveType::Normal {
                 from,

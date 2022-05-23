@@ -1,41 +1,14 @@
-use std::{fmt, ops};
+use shogi_core::Color;
 
-/// Represent a color.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Color {
-    Black = 0,
-    White = 1,
+pub(crate) trait Index {
+    fn index(&self) -> usize;
 }
 
-impl Color {
-    pub const NUM: usize = 2;
-    pub const ALL: [Color; Color::NUM] = [Color::Black, Color::White];
-
-    pub fn index(&self) -> usize {
-        *self as usize
-    }
-}
-
-impl ops::Not for Color {
-    type Output = Self;
-
-    fn not(self) -> Self::Output {
+impl Index for Color {
+    fn index(&self) -> usize {
         match self {
-            Color::Black => Color::White,
-            Color::White => Color::Black,
+            Color::Black => 0,
+            Color::White => 1,
         }
-    }
-}
-
-impl fmt::Display for Color {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match *self {
-                Color::Black => "+",
-                Color::White => "-",
-            }
-        )
     }
 }

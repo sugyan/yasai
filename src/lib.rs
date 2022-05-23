@@ -11,7 +11,6 @@ mod tables;
 pub mod utils;
 mod zobrist;
 
-pub use color::Color;
 pub use hand::Hand;
 pub use piece::{Piece, PieceType};
 pub use position::Position;

@@ -1,5 +1,6 @@
 use crate::bitboard::Bitboard;
 use crate::board_piece::*;
+use crate::color::Index;
 use crate::hand::{Hand, Hands};
 use crate::movegen::MoveList;
 use crate::piece::PieceType;
@@ -7,29 +8,30 @@ use crate::shogi_move::MoveType;
 use crate::square::{File, Rank};
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
-use crate::{Color, Move, Piece, Square};
+use crate::{Move, Piece, Square};
+use shogi_core::Color;
 use std::fmt;
 
 #[derive(Debug, Clone)]
 struct AttackInfo {
     checkers: Bitboard,                     // 王手をかけている駒の位置
     checkables: [Bitboard; PieceType::NUM], // 各駒種が王手になり得る位置
-    pinned: [Bitboard; Color::NUM],         // 飛び駒から玉を守っている駒の位置
+    pinned: [Bitboard; 2],                  // 飛び駒から玉を守っている駒の位置
 }
 
 impl AttackInfo {
     fn new(checkers: Bitboard, pos: &Position) -> Self {
         let occ = &pos.occupied();
-        let opp = !pos.side_to_move();
+        let opp = pos.side_to_move().flip();
         let mut pinned = [Bitboard::ZERO, Bitboard::ZERO];
-        for c in Color::ALL {
+        for c in Color::all() {
             if let Some(sq) = pos.king(c) {
                 #[rustfmt::skip]
                 let snipers = (
                       (ATTACK_TABLE.pseudo_attack(PieceType::KY, sq, c) & pos.pieces_p(PieceType::KY))
                     | (ATTACK_TABLE.pseudo_attack(PieceType::KA, sq, c) & (pos.pieces_p(PieceType::KA) | pos.pieces_p(PieceType::UM)))
                     | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq, c) & (pos.pieces_p(PieceType::HI) | pos.pieces_p(PieceType::RY)))
-                ) & pos.pieces_c(!c);
+                ) & pos.pieces_c(c.flip());
                 for sniper in snipers {
                     let blockers = BETWEEN_TABLE[sq.index()][sniper.index()] & *occ;
                     if blockers.count_ones() == 1 {
@@ -73,7 +75,7 @@ impl AttackInfo {
     }
     #[rustfmt::skip]
     fn calculate_checkers(pos: &Position) -> Bitboard {
-        let opp = !pos.side_to_move();
+        let opp = pos.side_to_move().flip();
         let occ = &pos.occupied();
         if let Some(sq) = pos.king(opp) {
             (     (ATTACK_TABLE.fu.attack(sq, opp)      & pos.pieces_p(PieceType::FU))
@@ -114,7 +116,7 @@ pub struct Position {
     hands: Hands,
     color: Color,
     ply: u32,
-    color_bbs: [Bitboard; Color::NUM],
+    color_bbs: [Bitboard; 2],
     piece_type_bbs: [Bitboard; PieceType::NUM],
     occupied_bb: Bitboard,
     states: Vec<State>,
@@ -123,13 +125,13 @@ pub struct Position {
 impl Position {
     pub fn new(
         board: [Option<Piece>; Square::NUM],
-        hand_nums: [[u8; PieceType::NUM_HAND]; Color::NUM],
+        hand_nums: [[u8; PieceType::NUM_HAND]; 2],
         side_to_move: Color,
         ply: u32,
     ) -> Position {
         let mut keys = (Key::ZERO, Key::ZERO);
         // board
-        let mut color_bbs = [Bitboard::ZERO; Color::NUM];
+        let mut color_bbs = [Bitboard::ZERO; 2];
         let mut piece_type_bbs = [Bitboard::ZERO; PieceType::NUM];
         let mut occupied_bb = Bitboard::ZERO;
         for sq in Square::ALL {
@@ -141,8 +143,8 @@ impl Position {
             }
         }
         // hands
-        let mut hands = [Hand::new(); Color::NUM];
-        for c in Color::ALL {
+        let mut hands = [Hand::new(); 2];
+        for c in Color::all() {
             for (&num, &pt) in hand_nums[c.index()].iter().zip(PieceType::ALL_HAND.iter()) {
                 for i in 0..num {
                     hands[c.index()].increment(pt);
@@ -154,7 +156,7 @@ impl Position {
         let mut pos = Self {
             board,
             hands: Hands::new(hands),
-            color: !side_to_move,
+            color: side_to_move.flip(),
             ply,
             color_bbs,
             piece_type_bbs,
@@ -210,7 +212,7 @@ impl Position {
     fn checkable(&self, pt: PieceType, sq: Square) -> bool {
         !(self.state().attack_info.checkables[pt.index()] & sq).is_empty()
     }
-    pub fn pinned(&self) -> [Bitboard; Color::NUM] {
+    pub fn pinned(&self) -> [Bitboard; 2] {
         self.state().attack_info.pinned
     }
     pub fn king(&self, c: Color) -> Option<Square> {
@@ -238,7 +240,7 @@ impl Position {
                 // 移動先に駒がある場合
                 if let Some(p) = captured {
                     let pt = p.piece_type();
-                    self.xor_bbs(!c, pt, to);
+                    self.xor_bbs(c.flip(), pt, to);
                     self.hands.increment(c, pt);
                     let num = self.hand(c).num(pt);
                     keys.0 ^= ZOBRIST_TABLE.board(to, p);
@@ -273,7 +275,7 @@ impl Position {
                 }
             }
         };
-        self.color = !c;
+        self.color = c.flip();
         keys.0 ^= Key::COLOR;
         self.ply += 1;
         self.states
@@ -296,17 +298,17 @@ impl Position {
                 self.remove_piece(to, p_to);
                 if let Some(p_cap) = self.captured() {
                     self.put_piece(to, p_cap);
-                    self.hands.decrement(!c, p_cap.piece_type());
+                    self.hands.decrement(c.flip(), p_cap.piece_type());
                 }
                 self.put_piece(from, piece);
             }
             // 駒打ち
             MoveType::Drop { to, piece } => {
                 self.remove_piece(to, piece);
-                self.hands.increment(!c, piece.piece_type());
+                self.hands.increment(c.flip(), piece.piece_type());
             }
         }
-        self.color = !self.color;
+        self.color = self.color.flip();
         self.ply -= 1;
         self.states.pop();
     }
@@ -328,7 +330,7 @@ impl Position {
     }
     #[rustfmt::skip]
     pub fn attackers_to(&self, c: Color, to: Square, occ: &Bitboard) -> Bitboard {
-        let opp = !c;
+        let opp = c.flip();
         (     (ATTACK_TABLE.fu.attack(to, opp)      & self.pieces_p(PieceType::FU))
             | (ATTACK_TABLE.ky.attack(to, opp, occ) & self.pieces_p(PieceType::KY))
             | (ATTACK_TABLE.ke.attack(to, opp)      & self.pieces_p(PieceType::KE))
@@ -357,8 +359,8 @@ impl Position {
                 }
                 // 開き王手
                 let c = self.side_to_move();
-                if !(self.pinned()[(!c).index()] & from).is_empty() {
-                    if let Some(sq) = self.king(!c) {
+                if !(self.pinned()[c.flip().index()] & from).is_empty() {
+                    if let Some(sq) = self.king(c.flip()) {
                         return (BETWEEN_TABLE[sq.index()][from.index()] & to).is_empty()
                             && (BETWEEN_TABLE[sq.index()][to.index()] & from).is_empty();
                     }
@@ -444,7 +446,7 @@ mod tests {
             };
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
         }
-        for c in Color::ALL {
+        for c in Color::all() {
             for pt in PieceType::ALL_HAND {
                 assert_eq!(0, pos.hand(c).num(pt));
             }

@@ -1,4 +1,4 @@
-use crate::Color;
+use shogi_core::Color;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,7 +160,15 @@ impl Piece {
 
 impl fmt::Display for Piece {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.color(), self.piece_type())
+        write!(
+            f,
+            "{}{}",
+            match self.color() {
+                Color::Black => "+",
+                Color::White => "-",
+            },
+            self.piece_type()
+        )
     }
 }
 

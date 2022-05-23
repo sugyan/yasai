@@ -1,8 +1,10 @@
 use crate::bitboard::Bitboard;
+use crate::color::Index;
 use crate::square::{File, Rank};
-use crate::{Color, PieceType, Square};
+use crate::{PieceType, Square};
 use bitintr::Pext;
 use once_cell::sync::Lazy;
+use shogi_core::Color;
 use std::cmp::Ordering;
 
 #[derive(Clone, Copy)]
@@ -27,7 +29,7 @@ impl Delta {
     const SSW: Delta = Delta { file:  1, rank:  2 };
 }
 
-pub struct PieceAttackTable([[Bitboard; Color::NUM]; Square::NUM]);
+pub struct PieceAttackTable([[Bitboard; 2]; Square::NUM]);
 
 impl PieceAttackTable {
     #[rustfmt::skip]    const BFU_DELTAS: &'static [Delta] = &[Delta::N];
@@ -41,10 +43,10 @@ impl PieceAttackTable {
     #[rustfmt::skip]    const BOU_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::NE, Delta::SE, Delta::SW, Delta::NW];
     #[rustfmt::skip]    const WOU_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::NE, Delta::SE, Delta::SW, Delta::NW];
 
-    fn new(deltas: &[&[Delta]; Color::NUM]) -> Self {
-        let mut table = [[Bitboard::ZERO; Color::NUM]; Square::NUM];
+    fn new(deltas: &[&[Delta]; 2]) -> Self {
+        let mut table = [[Bitboard::ZERO; 2]; Square::NUM];
         for sq in Square::ALL {
-            for color in Color::ALL {
+            for color in Color::all() {
                 for &delta in deltas[color.index()] {
                     if let Some(to) = sq.checked_shift(delta.file, delta.rank) {
                         table[sq.index()][color.index()] |= to;
@@ -76,7 +78,7 @@ fn sliding_attacks(sq: Square, occ: Bitboard, deltas: &[Delta]) -> Bitboard {
 
 pub struct LanceAttackTable {
     table: Vec<Bitboard>,
-    offsets: [[usize; Color::NUM]; Square::NUM],
+    offsets: [[usize; 2]; Square::NUM],
 }
 
 impl LanceAttackTable {
@@ -109,13 +111,12 @@ impl LanceAttackTable {
         bb
     }
     fn new() -> Self {
-        let mut table =
-            vec![Bitboard::ZERO; Square::NUM * Color::NUM * LanceAttackTable::MASK_TABLE_NUM];
-        let mut offsets = [[0; Color::NUM]; Square::NUM];
+        let mut table = vec![Bitboard::ZERO; Square::NUM * 2 * LanceAttackTable::MASK_TABLE_NUM];
+        let mut offsets = [[0; 2]; Square::NUM];
         let mut offset = 0;
         for sq in Square::ALL {
             let mask = Self::attack_mask(sq);
-            for c in Color::ALL {
+            for c in Color::all() {
                 let deltas = match c {
                     Color::Black => vec![Delta::N],
                     Color::White => vec![Delta::S],

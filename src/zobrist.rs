@@ -1,8 +1,10 @@
-use crate::{Color, Hand, Piece, PieceType, Square};
+use crate::color::Index;
+use crate::{Hand, Piece, PieceType, Square};
 use once_cell::sync::Lazy;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use shogi_core::Color;
 use std::ops;
 
 #[derive(Clone, Copy, Debug)]
@@ -48,8 +50,8 @@ impl ops::BitXorAssign for Key {
 }
 
 pub struct ZobristTable {
-    board: [[[Key; PieceType::NUM]; Color::NUM]; Square::NUM],
-    hands: [[[Key; ZobristTable::MAX_HAND_NUM + 1]; PieceType::NUM_HAND]; Color::NUM],
+    board: [[[Key; PieceType::NUM]; 2]; Square::NUM],
+    hands: [[[Key; ZobristTable::MAX_HAND_NUM + 1]; PieceType::NUM_HAND]; 2],
 }
 
 impl ZobristTable {
@@ -63,17 +65,17 @@ impl ZobristTable {
 }
 
 pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
-    let mut board = [[[Key::ZERO; PieceType::NUM]; Color::NUM]; Square::NUM];
-    let mut hands = [[[Key::ZERO; 19]; PieceType::NUM_HAND]; Color::NUM];
+    let mut board = [[[Key::ZERO; PieceType::NUM]; 2]; Square::NUM];
+    let mut hands = [[[Key::ZERO; 19]; PieceType::NUM_HAND]; 2];
     let mut rng = StdRng::seed_from_u64(2022);
     for sq in Square::ALL {
-        for c in Color::ALL {
+        for c in Color::all() {
             for pt in PieceType::ALL {
                 board[sq.index()][c.index()][pt.index()] = Key(rng.gen()) & !Key::COLOR;
             }
         }
     }
-    for c in Color::ALL {
+    for c in Color::all() {
         for pt in PieceType::ALL_HAND {
             for num in 0..=ZobristTable::MAX_HAND_NUM {
                 hands[c.index()][pt.index()][num] = Key(rng.gen()) & !Key::COLOR;
@@ -93,7 +95,7 @@ mod tests {
     fn empty() {
         let pos = Position::new(
             [None; Square::NUM],
-            [[0; PieceType::NUM_HAND]; Color::NUM],
+            [[0; PieceType::NUM_HAND]; 2],
             Color::Black,
             1,
         );
