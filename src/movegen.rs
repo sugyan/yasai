@@ -18,7 +18,7 @@ impl MoveList {
 
         let (mut i, mut size) = (0, self.0.len());
         while i != size {
-            if pos.is_legal_move(self.0[i]) {
+            if Self::is_legal(pos, self.0[i]) {
                 i += 1;
             } else {
                 size -= 1;
@@ -268,6 +268,28 @@ impl MoveList {
                 }
             }
         }
+    }
+    fn is_legal(pos: &Position, m: Move) -> bool {
+        if let Some(from) = m.from() {
+            let c = pos.side_to_move();
+            // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
+            if pos.piece_on(from) == Some(Piece::from_cp(c, PieceType::OU))
+                && !pos.attackers_to(!c, m.to(), &pos.occupied()).is_empty()
+            {
+                return false;
+            }
+            // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
+            if !(pos.pinned()[c.index()] & from).is_empty() {
+                if let Some(sq) = pos.king(c) {
+                    if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
+                        && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
     }
     fn is_uchifuzume(pos: &Position, sq: Square) -> bool {
         let c = pos.side_to_move();
