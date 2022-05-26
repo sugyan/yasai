@@ -1,10 +1,10 @@
-use crate::color::Index;
-use crate::{Hand, Piece, PieceType, Square};
+use crate::array_index::ArrayIndex;
+use crate::Square;
 use once_cell::sync::Lazy;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
-use shogi_core::Color;
+use shogi_core::{Color, Hand, Piece, PieceKind};
 use std::ops;
 
 #[derive(Clone, Copy, Debug)]
@@ -50,35 +50,39 @@ impl ops::BitXorAssign for Key {
 }
 
 pub struct ZobristTable {
-    board: [[[Key; PieceType::NUM]; 2]; Square::NUM],
-    hands: [[[Key; ZobristTable::MAX_HAND_NUM + 1]; PieceType::NUM_HAND]; 2],
+    board: [[[Key; 14]; 2]; Square::NUM],
+    hands: [[[Key; ZobristTable::MAX_HAND_NUM + 1]; 8]; 2],
 }
 
 impl ZobristTable {
     const MAX_HAND_NUM: usize = 18;
     pub fn board(&self, sq: Square, p: Piece) -> Key {
-        self.board[sq.index()][p.color().index()][p.piece_type().index()]
+        self.board[sq.index()][p.color().array_index()][p.piece_kind().array_index()]
     }
-    pub fn hand(&self, c: Color, pt: PieceType, num: u8) -> Key {
-        self.hands[c.index()][Hand::PIECE_TYPE_INDEX[pt.index()]][num as usize]
+    pub fn hand(&self, c: Color, pk: PieceKind, num: u8) -> Key {
+        self.hands[c.array_index()][pk.array_index()][num as usize]
     }
 }
 
 pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
-    let mut board = [[[Key::ZERO; PieceType::NUM]; 2]; Square::NUM];
-    let mut hands = [[[Key::ZERO; 19]; PieceType::NUM_HAND]; 2];
+    let mut board = [[[Key::ZERO; 14]; 2]; Square::NUM];
+    let mut hands = [[[Key::ZERO; 19]; 8]; 2];
     let mut rng = StdRng::seed_from_u64(2022);
     for sq in Square::ALL {
         for c in Color::all() {
-            for pt in PieceType::ALL {
-                board[sq.index()][c.index()][pt.index()] = Key(rng.gen()) & !Key::COLOR;
+            for pk in PieceKind::all() {
+                board[sq.index()][c.array_index()][pk.array_index()] = Key(rng.gen()) & !Key::COLOR;
             }
         }
     }
+    let h = Hand::new();
     for c in Color::all() {
-        for pt in PieceType::ALL_HAND {
+        for pk in PieceKind::all() {
+            if h.count(pk).is_none() {
+                continue;
+            }
             for num in 0..=ZobristTable::MAX_HAND_NUM {
-                hands[c.index()][pt.index()][num] = Key(rng.gen()) & !Key::COLOR;
+                hands[c.array_index()][pk.array_index()][num] = Key(rng.gen()) & !Key::COLOR;
             }
         }
     }
@@ -88,24 +92,20 @@ pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pieces::PIECES;
     use crate::{Move, Position};
     use std::collections::HashSet;
 
     #[test]
     fn empty() {
-        let pos = Position::new(
-            [None; Square::NUM],
-            [[0; PieceType::NUM_HAND]; 2],
-            Color::Black,
-            1,
-        );
+        let pos = Position::new([None; Square::NUM], [[0; 8]; 2], Color::Black, 1);
         assert_eq!(0, pos.key());
     }
 
     #[test]
     fn default() {
         let pos = Position::default();
-        assert_eq!(0x68ac_9984_04fd_3cb0, pos.key());
+        assert_ne!(0, pos.key());
     }
 
     #[test]
@@ -141,9 +141,9 @@ mod tests {
             let mut pos = Position::default();
             // +7776FU,-3334FU,+2726FU
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU),
-                Move::new_normal(Square::SQ27, Square::SQ26, false, Piece::BFU),
+                Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
+                Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
+                Move::new_normal(Square::SQ27, Square::SQ26, false, PIECES.BFU),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.key()
@@ -152,9 +152,9 @@ mod tests {
             let mut pos = Position::default();
             // +2726FU,-3334FU,+7776FU
             let moves = [
-                Move::new_normal(Square::SQ27, Square::SQ26, false, Piece::BFU),
-                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU),
+                Move::new_normal(Square::SQ27, Square::SQ26, false, PIECES.BFU),
+                Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
+                Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.key()
@@ -179,12 +179,12 @@ mod tests {
             // +7776FU,-3334FU,+8822KA,-3122GI,+0088KA,-2231GI
             // => P-00KA
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU),
-                Move::new_normal(Square::SQ88, Square::SQ22, false, Piece::BKA),
-                Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WGI),
-                Move::new_drop(Square::SQ88, Piece::BKA),
-                Move::new_normal(Square::SQ22, Square::SQ31, false, Piece::WGI),
+                Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
+                Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
+                Move::new_normal(Square::SQ88, Square::SQ22, false, PIECES.BKA),
+                Move::new_normal(Square::SQ31, Square::SQ22, false, PIECES.WGI),
+                Move::new_drop(Square::SQ88, PIECES.BKA),
+                Move::new_normal(Square::SQ22, Square::SQ31, false, PIECES.WGI),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()
@@ -194,12 +194,12 @@ mod tests {
             // +7776FU,-3334FU,+8822KA,-3142GI,+2288KA,-4231GI
             // => P+00KA
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU),
-                Move::new_normal(Square::SQ88, Square::SQ22, false, Piece::BKA),
-                Move::new_normal(Square::SQ31, Square::SQ42, false, Piece::WGI),
-                Move::new_normal(Square::SQ22, Square::SQ88, false, Piece::BKA),
-                Move::new_normal(Square::SQ42, Square::SQ31, false, Piece::WGI),
+                Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
+                Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
+                Move::new_normal(Square::SQ88, Square::SQ22, false, PIECES.BKA),
+                Move::new_normal(Square::SQ31, Square::SQ42, false, PIECES.WGI),
+                Move::new_normal(Square::SQ22, Square::SQ88, false, PIECES.BKA),
+                Move::new_normal(Square::SQ42, Square::SQ31, false, PIECES.WGI),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()

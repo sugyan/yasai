@@ -1,10 +1,10 @@
+use crate::array_index::ArrayIndex;
 use crate::bitboard::Bitboard;
-use crate::color::Index;
 use crate::square::{File, Rank};
-use crate::{PieceType, Square};
+use crate::Square;
 use bitintr::Pext;
 use once_cell::sync::Lazy;
-use shogi_core::Color;
+use shogi_core::{Color, PieceKind};
 use std::cmp::Ordering;
 
 #[derive(Clone, Copy)]
@@ -47,9 +47,9 @@ impl PieceAttackTable {
         let mut table = [[Bitboard::ZERO; 2]; Square::NUM];
         for sq in Square::ALL {
             for color in Color::all() {
-                for &delta in deltas[color.index()] {
+                for &delta in deltas[color.array_index()] {
                     if let Some(to) = sq.checked_shift(delta.file, delta.rank) {
-                        table[sq.index()][color.index()] |= to;
+                        table[sq.index()][color.array_index()] |= to;
                     }
                 }
             }
@@ -57,7 +57,7 @@ impl PieceAttackTable {
         Self(table)
     }
     pub fn attack(&self, sq: Square, c: Color) -> Bitboard {
-        self.0[sq.index()][c.index()]
+        self.0[sq.index()][c.array_index()]
     }
 }
 
@@ -121,7 +121,7 @@ impl LanceAttackTable {
                     Color::Black => vec![Delta::N],
                     Color::White => vec![Delta::S],
                 };
-                offsets[sq.index()][c.index()] = offset;
+                offsets[sq.index()][c.array_index()] = offset;
                 for index in 0..LanceAttackTable::MASK_TABLE_NUM {
                     let occ = Self::index_to_occupied(index, mask);
                     table[offset + index] = sliding_attacks(sq, occ, &deltas);
@@ -132,13 +132,13 @@ impl LanceAttackTable {
         Self { table, offsets }
     }
     fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
-        self.table[self.offsets[sq.index()][c.index()]]
+        self.table[self.offsets[sq.index()][c.array_index()]]
     }
     pub fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let index = ((occ.value(if sq.index() >= 63 { 1 } else { 0 })
             >> LanceAttackTable::OFFSET_BITS[sq.index()]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
-        self.table[self.offsets[sq.index()][c.index()] + index]
+        self.table[self.offsets[sq.index()][c.array_index()] + index]
     }
 }
 
@@ -220,29 +220,30 @@ pub struct AttackTable {
 }
 
 impl AttackTable {
-    pub fn attack(&self, pt: PieceType, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
-        match pt {
-            PieceType::FU => self.fu.attack(sq, c),
-            PieceType::KY => self.ky.attack(sq, c, occ),
-            PieceType::KE => self.ke.attack(sq, c),
-            PieceType::GI => self.gi.attack(sq, c),
-            PieceType::KA => self.ka.attack(sq, occ),
-            PieceType::HI => self.hi.attack(sq, occ),
-            PieceType::KI | PieceType::TO | PieceType::NY | PieceType::NK | PieceType::NG => {
-                self.ki.attack(sq, c)
-            }
-            PieceType::OU => self.ou.attack(sq, c),
-            PieceType::UM => self.ka.attack(sq, occ) | self.ou.attack(sq, c),
-            PieceType::RY => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
-            _ => unreachable!(),
+    pub fn attack(&self, pk: PieceKind, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
+        match pk {
+            PieceKind::Pawn => self.fu.attack(sq, c),
+            PieceKind::Lance => self.ky.attack(sq, c, occ),
+            PieceKind::Knight => self.ke.attack(sq, c),
+            PieceKind::Silver => self.gi.attack(sq, c),
+            PieceKind::Bishop => self.ka.attack(sq, occ),
+            PieceKind::Rook => self.hi.attack(sq, occ),
+            PieceKind::Gold
+            | PieceKind::ProPawn
+            | PieceKind::ProLance
+            | PieceKind::ProKnight
+            | PieceKind::ProSilver => self.ki.attack(sq, c),
+            PieceKind::King => self.ou.attack(sq, c),
+            PieceKind::ProBishop => self.ka.attack(sq, occ) | self.ou.attack(sq, c),
+            PieceKind::ProRook => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
         }
     }
-    pub fn pseudo_attack(&self, pt: PieceType, sq: Square, c: Color) -> Bitboard {
-        match pt {
-            PieceType::KY => self.ky.pseudo_attack(sq, c),
-            PieceType::KA | PieceType::UM => self.ka.pseudo_attack(sq),
-            PieceType::HI | PieceType::RY => self.hi.pseudo_attack(sq),
-            pt => self.attack(pt, sq, c, &Bitboard::ZERO),
+    pub fn pseudo_attack(&self, pk: PieceKind, sq: Square, c: Color) -> Bitboard {
+        match pk {
+            PieceKind::Lance => self.ky.pseudo_attack(sq, c),
+            PieceKind::Bishop | PieceKind::ProBishop => self.ka.pseudo_attack(sq),
+            PieceKind::Rook | PieceKind::ProRook => self.hi.pseudo_attack(sq),
+            pk => self.attack(pk, sq, c, &Bitboard::ZERO),
         }
     }
 }

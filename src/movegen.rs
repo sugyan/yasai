@@ -1,10 +1,11 @@
+use crate::array_index::ArrayIndex;
 use crate::bitboard::Bitboard;
-use crate::color::Index;
+use crate::pieces::PIECES;
 use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
-use crate::{Move, Piece, PieceType, Position, Square};
+use crate::{Move, Position, Square};
 use arrayvec::{ArrayVec, IntoIter};
-use shogi_core::Color;
+use shogi_core::{Color, Piece, PieceKind};
 
 pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
@@ -56,12 +57,13 @@ impl MoveList {
             let mut checkers_count = 0;
             for ch in pos.checkers() {
                 if let Some(p) = pos.piece_on(ch) {
-                    let pt = p.piece_type();
+                    let pk = p.piece_kind();
                     // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
-                    if pt == PieceType::RY && ch.file() != ou.file() && ch.rank() != ou.rank() {
+                    if pk == PieceKind::ProRook && ch.file() != ou.file() && ch.rank() != ou.rank()
+                    {
                         checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &pos.occupied());
                     } else {
-                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, c.flip());
+                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
                     }
                 }
                 checkers_count += 1;
@@ -71,7 +73,7 @@ impl MoveList {
                     ou,
                     to,
                     false,
-                    Piece::from_cp(c, PieceType::OU),
+                    Piece::new(PieceKind::King, c),
                 ));
             }
             // 両王手の場合は玉が逃げるしかない
@@ -100,15 +102,15 @@ impl MoveList {
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         let (to_bb, delta, p) = match c {
-            Color::Black => (pos.pieces_cp(c, PieceType::FU).shr(), 1, Piece::BFU),
-            Color::White => (pos.pieces_cp(c, PieceType::FU).shl(), -1, Piece::WFU),
+            Color::Black => (pos.pieces_cp(c, PieceKind::Pawn).shr(), 1, PIECES.BFU),
+            Color::White => (pos.pieces_cp(c, PieceKind::Pawn).shl(), -1, PIECES.WFU),
         };
         for to in to_bb & *target {
             let rank = to.rank();
             let from = Square(to.0 + delta);
             if rank.is_opponent_field(c) {
                 self.push(Move::new_normal(from, to, true, p));
-                if rank.is_valid_for_piece(c, PieceType::FU) {
+                if rank.is_valid_for_piece(c, PieceKind::Pawn) {
                     self.push(Move::new_normal(from, to, false, p));
                 }
             } else {
@@ -118,13 +120,13 @@ impl MoveList {
     }
     fn generate_for_ky(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::KY);
-        for from in pos.pieces_cp(c, PieceType::KY) {
+        let p = Piece::new(PieceKind::Lance, c);
+        for from in pos.pieces_cp(c, PieceKind::Lance) {
             for to in ATTACK_TABLE.ky.attack(from, c, &pos.occupied()) & *target {
                 let rank = to.rank();
                 if rank.is_opponent_field(c) {
                     self.push(Move::new_normal(from, to, true, p));
-                    if rank.is_valid_for_piece(c, PieceType::KY) {
+                    if rank.is_valid_for_piece(c, PieceKind::Lance) {
                         self.push(Move::new_normal(from, to, false, p));
                     }
                 } else {
@@ -135,13 +137,13 @@ impl MoveList {
     }
     fn generate_for_ke(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::KE);
-        for from in pos.pieces_cp(c, PieceType::KE) {
+        let p = Piece::new(PieceKind::Knight, c);
+        for from in pos.pieces_cp(c, PieceKind::Knight) {
             for to in ATTACK_TABLE.ke.attack(from, c) & *target {
                 let rank = to.rank();
                 if rank.is_opponent_field(c) {
                     self.push(Move::new_normal(from, to, true, p));
-                    if rank.is_valid_for_piece(c, PieceType::KE) {
+                    if rank.is_valid_for_piece(c, PieceKind::Knight) {
                         self.push(Move::new_normal(from, to, false, p));
                     }
                 } else {
@@ -152,8 +154,8 @@ impl MoveList {
     }
     fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::GI);
-        for from in pos.pieces_cp(c, PieceType::GI) {
+        let p = Piece::new(PieceKind::Silver, c);
+        for from in pos.pieces_cp(c, PieceKind::Silver) {
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.gi.attack(from, c) & *target {
                 self.push(Move::new_normal(from, to, false, p));
@@ -165,8 +167,8 @@ impl MoveList {
     }
     fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::KA);
-        for from in pos.pieces_cp(c, PieceType::KA) {
+        let p = Piece::new(PieceKind::Bishop, c);
+        for from in pos.pieces_cp(c, PieceKind::Bishop) {
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.ka.attack(from, &pos.occupied()) & *target {
                 self.push(Move::new_normal(from, to, false, p));
@@ -178,8 +180,8 @@ impl MoveList {
     }
     fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::HI);
-        for from in pos.pieces_cp(c, PieceType::HI) {
+        let p = Piece::new(PieceKind::Rook, c);
+        for from in pos.pieces_cp(c, PieceKind::Rook) {
             let from_is_opponent_field = from.rank().is_opponent_field(c);
             for to in ATTACK_TABLE.hi.attack(from, &pos.occupied()) & *target {
                 self.push(Move::new_normal(from, to, false, p));
@@ -191,11 +193,11 @@ impl MoveList {
     }
     fn generate_for_ki(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        for from in (pos.pieces_p(PieceType::KI)
-            | pos.pieces_p(PieceType::TO)
-            | pos.pieces_p(PieceType::NY)
-            | pos.pieces_p(PieceType::NK)
-            | pos.pieces_p(PieceType::NG))
+        for from in (pos.pieces_p(PieceKind::Gold)
+            | pos.pieces_p(PieceKind::ProPawn)
+            | pos.pieces_p(PieceKind::ProLance)
+            | pos.pieces_p(PieceKind::ProKnight)
+            | pos.pieces_p(PieceKind::ProSilver))
             & pos.pieces_c(c)
         {
             if let Some(p) = pos.piece_on(from) {
@@ -207,8 +209,8 @@ impl MoveList {
     }
     fn generate_for_ou(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::OU);
-        for from in pos.pieces_cp(c, PieceType::OU) {
+        let p = Piece::new(PieceKind::King, c);
+        for from in pos.pieces_cp(c, PieceKind::King) {
             for to in ATTACK_TABLE.ou.attack(from, c) & *target {
                 self.push(Move::new_normal(from, to, false, p));
             }
@@ -216,8 +218,8 @@ impl MoveList {
     }
     fn generate_for_um(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::UM);
-        for from in pos.pieces_cp(c, PieceType::UM) {
+        let p = Piece::new(PieceKind::ProBishop, c);
+        for from in pos.pieces_cp(c, PieceKind::ProBishop) {
             for to in (ATTACK_TABLE.ka.attack(from, &pos.occupied())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
@@ -228,8 +230,8 @@ impl MoveList {
     }
     fn generate_for_ry(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::RY);
-        for from in pos.pieces_cp(c, PieceType::RY) {
+        let p = Piece::new(PieceKind::ProRook, c);
+        for from in pos.pieces_cp(c, PieceKind::ProRook) {
             for to in (ATTACK_TABLE.hi.attack(from, &pos.occupied())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
@@ -241,14 +243,14 @@ impl MoveList {
     fn generate_drop(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         let hand = pos.hand(pos.side_to_move());
-        for pt in PieceType::ALL_HAND {
-            if hand.num(pt) == 0 {
+        for pk in PieceKind::all() {
+            if hand.count(pk).unwrap_or_default() == 0 {
                 continue;
             }
             let mut exclude = Bitboard::ZERO;
-            if pt == PieceType::FU {
+            if pk == PieceKind::Pawn {
                 // 二歩
-                for sq in pos.pieces_cp(c, pt) {
+                for sq in pos.pieces_cp(c, pk) {
                     exclude |= Bitboard::from_file(sq.file());
                 }
                 // 打ち歩詰めチェック
@@ -265,8 +267,8 @@ impl MoveList {
                 };
             }
             for to in *target & !exclude {
-                if to.rank().is_valid_for_piece(c, pt) {
-                    self.push(Move::new_drop(to, Piece::from_cp(c, pt)));
+                if to.rank().is_valid_for_piece(c, pk) {
+                    self.push(Move::new_drop(to, Piece::new(pk, c)));
                 }
             }
         }
@@ -275,7 +277,7 @@ impl MoveList {
         if let Some(from) = m.from() {
             let c = pos.side_to_move();
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
-            if pos.piece_on(from) == Some(Piece::from_cp(c, PieceType::OU))
+            if pos.piece_on(from) == Some(Piece::new(PieceKind::King, c))
                 && !pos
                     .attackers_to(c.flip(), m.to(), &pos.occupied())
                     .is_empty()
@@ -283,7 +285,7 @@ impl MoveList {
                 return false;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if !(pos.pinned()[c.index()] & from).is_empty() {
+            if !(pos.pinned()[c.array_index()] & from).is_empty() {
                 if let Some(sq) = pos.king(c) {
                     if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
                         && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
@@ -303,7 +305,7 @@ impl MoveList {
         }
         // 他の駒が歩を取れる
         let capture_candidates = Self::attackers_to_except_klp(pos, c.flip(), sq);
-        if !(capture_candidates & !pos.pinned()[c.flip().index()]).is_empty() {
+        if !(capture_candidates & !pos.pinned()[c.flip().array_index()]).is_empty() {
             return false;
         }
         // 玉が逃げられる
@@ -324,11 +326,11 @@ impl MoveList {
     fn attackers_to_except_klp(pos: &Position, c: Color, to: Square) -> Bitboard {
         let opp = c.flip();
         let occ = &pos.occupied();
-        (     (ATTACK_TABLE.ke.attack(to, opp) & pos.pieces_p(PieceType::KE))
-            | (ATTACK_TABLE.gi.attack(to, opp) & (pos.pieces_p(PieceType::GI) | pos.pieces_p(PieceType::RY)))
-            | (ATTACK_TABLE.ka.attack(to, occ) & (pos.pieces_p(PieceType::KA) | pos.pieces_p(PieceType::UM)))
-            | (ATTACK_TABLE.hi.attack(to, occ) & (pos.pieces_p(PieceType::HI) | pos.pieces_p(PieceType::RY)))
-            | (ATTACK_TABLE.ki.attack(to, opp) & (pos.pieces_p(PieceType::KI) | pos.pieces_p(PieceType::TO) | pos.pieces_p(PieceType::NY) | pos.pieces_p(PieceType::NK) | pos.pieces_p(PieceType::NG) | pos.pieces_p(PieceType::UM)))
+        (     (ATTACK_TABLE.ke.attack(to, opp) & pos.pieces_p(PieceKind::Knight))
+            | (ATTACK_TABLE.gi.attack(to, opp) & (pos.pieces_p(PieceKind::Silver) | pos.pieces_p(PieceKind::ProRook)))
+            | (ATTACK_TABLE.ka.attack(to, occ) & (pos.pieces_p(PieceKind::Bishop) | pos.pieces_p(PieceKind::ProBishop)))
+            | (ATTACK_TABLE.hi.attack(to, occ) & (pos.pieces_p(PieceKind::Rook) | pos.pieces_p(PieceKind::ProRook)))
+            | (ATTACK_TABLE.ki.attack(to, opp) & (pos.pieces_p(PieceKind::Gold) | pos.pieces_p(PieceKind::ProPawn) | pos.pieces_p(PieceKind::ProLance) | pos.pieces_p(PieceKind::ProKnight) | pos.pieces_p(PieceKind::ProSilver) | pos.pieces_p(PieceKind::ProBishop)))
         ) & pos.pieces_c(c)
     }
 }
@@ -363,18 +365,18 @@ mod tests {
     fn drop_moves() {
         #[rustfmt::skip]
         let pos = Position::new([
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
-            WKE, WGI, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
-            EMP, EMP, EMP, WFU, EMP, EMP, BFU, EMP, BGI,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WGI, EMP, WFU, EMP, EMP, BFU, EMP, EMP, BGI,
-            WKE, WHI, WFU, EMP, EMP, EMP, BFU, EMP, BKE,
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            *WKY, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKY,
+            *WKE, *WGI, *WFU, *EMP, *EMP, *EMP, *BFU, *BHI, *BKE,
+            *EMP, *EMP, *EMP, *WFU, *EMP, *EMP, *BFU, *EMP, *BGI,
+            *WKI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKI,
+            *WOU, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BOU,
+            *WKI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKI,
+            *WGI, *EMP, *WFU, *EMP, *EMP, *BFU, *EMP, *EMP, *BGI,
+            *WKE, *WHI, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKE,
+            *WKY, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKY,
         ], [
-            [0, 0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 0, 1, 0, 0],
         ], Color::Black, 1);
         assert_eq!(
             43,
@@ -390,18 +392,18 @@ mod tests {
         // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
         #[rustfmt::skip]
         let pos = Position::new([
-            EMP, WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-            EMP, BGI, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-            EMP, BOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-            BHI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            *EMP, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *BGI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *BGI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
+            *EMP, *BGI, *BKA, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
+            *EMP, *BOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
+            *BHI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
         ], [
-            [ 1, 1, 1, 1, 1, 1, 1],
-            [17, 0, 3, 0, 3, 0, 0],
+            [ 1, 1, 1, 1, 1, 1, 1, 0],
+            [17, 0, 3, 0, 3, 0, 0, 0],
         ], Color::Black, 1);
         assert_eq!(593, pos.legal_moves().len());
     }
@@ -426,18 +428,18 @@ mod tests {
             // +
             (
                 Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WFU, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *WFU, *EMP, *BFU, *BKI, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [14, 4, 4, 4, 3, 2, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [14, 4, 4, 4, 3, 2, 2, 0],
                 ], Color::Black, 1),
                 Square::SQ14, true,
             ),
@@ -456,18 +458,18 @@ mod tests {
             // +
             (
                 Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WFU, WKI, EMP, BKI, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *WFU, *WKI, *EMP, *BKI, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 4, 4, 2, 2, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 4, 4, 2, 2, 2, 0],
                 ], Color::Black, 1),
                 Square::SQ14, false,
             ),
@@ -486,18 +488,18 @@ mod tests {
             // +
             (
                 Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WFU, WKI, BFU, BKI, EMP, EMP, EMP, EMP,
-                    EMP, EMP, BHI, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *WFU, *WKI, *BFU, *BKI, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *BHI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 4, 4, 2, 2, 1],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 4, 4, 2, 2, 1, 0],
                 ], Color::Black, 1),
                 Square::SQ14, true,
             ),
@@ -516,18 +518,18 @@ mod tests {
             // +
             (
                 Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WKE, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *WKE, *EMP, *BFU, *BKI, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 2, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 2, 2, 0],
                 ], Color::Black, 1),
                 Square::SQ14, false,
             ),
@@ -546,18 +548,18 @@ mod tests {
             // +
             (
                 Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WKE, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
-                    BKA, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *WKE, *EMP, *BFU, *BKI, *EMP, *EMP, *EMP, *EMP,
+                    *BKA, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 1, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 1, 2, 0],
                 ], Color::Black, 1),
                 Square::SQ14, true,
             ),
@@ -577,24 +579,24 @@ mod tests {
             // +
             (
                 Position::new([
-                    EMP, WKY, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, BKI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    *EMP, *WKY, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *BKA, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *BKI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 1, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 1, 2, 0],
                 ], Color::Black, 1),
                 Square::SQ22, false,
             ),
         ];
         for (pos, sq, expected) in test_cases {
-            assert_eq!(expected, MoveList::is_uchifuzume(&pos, sq), "\n{pos}");
+            assert_eq!(expected, MoveList::is_uchifuzume(&pos, sq));
         }
     }
 }

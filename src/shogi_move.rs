@@ -1,5 +1,5 @@
-use crate::{Piece, Square};
-use shogi_core::Color;
+use crate::Square;
+use shogi_core::{Color, Piece, PieceKind};
 use std::fmt;
 
 pub enum MoveType {
@@ -41,11 +41,11 @@ impl Move {
                 } else {
                     0
                 }
-                | (piece.0 as u32) << Move::PIECE_SHIFT,
+                | (piece.as_u8() as u32) << Move::PIECE_SHIFT,
         )
     }
     pub fn new_drop(to: Square, piece: Piece) -> Self {
-        Move(to.index() as u32 | Move::DROP_FLAG | (piece.0 as u32) << Move::PIECE_SHIFT)
+        Move(to.index() as u32 | Move::DROP_FLAG | (piece.as_u8() as u32) << Move::PIECE_SHIFT)
     }
     pub fn from(&self) -> Option<Square> {
         if self.is_drop() {
@@ -81,36 +81,17 @@ impl Move {
         (self.0 & Move::DROP_FLAG) != 0
     }
     pub fn piece(&self) -> Piece {
-        Piece(((self.0 & Move::PIECE_MASK) >> Move::PIECE_SHIFT) as u8)
-    }
-}
-
-impl fmt::Display for Move {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let c = match self.piece().color() {
-            Color::Black => "+",
-            Color::White => "-",
-        };
-        match self.move_type() {
-            MoveType::Normal {
-                from,
-                to,
-                is_promotion,
-                piece,
-            } => {
-                let pt = if is_promotion {
-                    piece.promoted()
-                } else {
-                    piece
-                }
-                .piece_type();
-                write!(f, "{c}{from}{to}{pt}")
-            }
-            MoveType::Drop { to, piece } => {
-                let pt = piece.piece_type();
-                write!(f, "{c}00{to}{pt}")
-            }
-        }
+        // Piece(((self.0 & Move::PIECE_MASK) >> Move::PIECE_SHIFT) as u8)
+        let data = ((self.0 & Move::PIECE_MASK) >> Move::PIECE_SHIFT) as u8;
+        let disc = data & 15;
+        Piece::new(
+            unsafe { PieceKind::from_u8_unchecked(disc) },
+            if data >= 16 {
+                Color::White
+            } else {
+                Color::Black
+            },
+        )
     }
 }
 

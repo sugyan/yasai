@@ -1,22 +1,19 @@
+use crate::array_index::ArrayIndex;
 use crate::bitboard::Bitboard;
 use crate::board_piece::*;
-use crate::color::Index;
-use crate::hand::{Hand, Hands};
 use crate::movegen::MoveList;
-use crate::piece::PieceType;
+use crate::pieces::{PieceKinds, Pieces};
 use crate::shogi_move::MoveType;
-use crate::square::{File, Rank};
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
-use crate::{Move, Piece, Square};
-use shogi_core::Color;
-use std::fmt;
+use crate::{Move, Square};
+use shogi_core::{Color, Hand, Piece, PieceKind};
 
 #[derive(Debug, Clone)]
 struct AttackInfo {
-    checkers: Bitboard,                     // 王手をかけている駒の位置
-    checkables: [Bitboard; PieceType::NUM], // 各駒種が王手になり得る位置
-    pinned: [Bitboard; 2],                  // 飛び駒から玉を守っている駒の位置
+    checkers: Bitboard,         // 王手をかけている駒の位置
+    checkables: [Bitboard; 14], // 各駒種が王手になり得る位置
+    pinned: [Bitboard; 2],      // 飛び駒から玉を守っている駒の位置
 }
 
 impl AttackInfo {
@@ -28,14 +25,14 @@ impl AttackInfo {
             if let Some(sq) = pos.king(c) {
                 #[rustfmt::skip]
                 let snipers = (
-                      (ATTACK_TABLE.pseudo_attack(PieceType::KY, sq, c) & pos.pieces_p(PieceType::KY))
-                    | (ATTACK_TABLE.pseudo_attack(PieceType::KA, sq, c) & (pos.pieces_p(PieceType::KA) | pos.pieces_p(PieceType::UM)))
-                    | (ATTACK_TABLE.pseudo_attack(PieceType::HI, sq, c) & (pos.pieces_p(PieceType::HI) | pos.pieces_p(PieceType::RY)))
+                      (ATTACK_TABLE.pseudo_attack(PieceKind::Lance, sq, c) & pos.pieces_p(PieceKind::Lance))
+                    | (ATTACK_TABLE.pseudo_attack(PieceKind::Bishop, sq, c) & (pos.pieces_p(PieceKind::Bishop) | pos.pieces_p(PieceKind::ProBishop)))
+                    | (ATTACK_TABLE.pseudo_attack(PieceKind::Rook, sq, c) & (pos.pieces_p(PieceKind::Rook) | pos.pieces_p(PieceKind::ProRook)))
                 ) & pos.pieces_c(c.flip());
                 for sniper in snipers {
                     let blockers = BETWEEN_TABLE[sq.index()][sniper.index()] & *occ;
                     if blockers.count_ones() == 1 {
-                        pinned[c.index()] |= blockers;
+                        pinned[c.array_index()] |= blockers;
                     }
                 }
             }
@@ -52,9 +49,9 @@ impl AttackInfo {
                     ATTACK_TABLE.ky.attack(sq, opp, occ),
                     ATTACK_TABLE.ke.attack(sq, opp),
                     ATTACK_TABLE.gi.attack(sq, opp),
+                    ki,
                     ka,
                     hi,
-                    ki,
                     Bitboard::ZERO,
                     ki,
                     ki,
@@ -68,7 +65,7 @@ impl AttackInfo {
         } else {
             Self {
                 checkers,
-                checkables: [Bitboard::ZERO; PieceType::NUM],
+                checkables: [Bitboard::ZERO; 14],
                 pinned,
             }
         }
@@ -78,13 +75,13 @@ impl AttackInfo {
         let opp = pos.side_to_move().flip();
         let occ = &pos.occupied();
         if let Some(sq) = pos.king(opp) {
-            (     (ATTACK_TABLE.fu.attack(sq, opp)      & pos.pieces_p(PieceType::FU))
-                | (ATTACK_TABLE.ky.attack(sq, opp, occ) & pos.pieces_p(PieceType::KY))
-                | (ATTACK_TABLE.ke.attack(sq, opp)      & pos.pieces_p(PieceType::KE))
-                | (ATTACK_TABLE.gi.attack(sq, opp)      & (pos.pieces_p(PieceType::GI) | pos.pieces_p(PieceType::RY)))
-                | (ATTACK_TABLE.ka.attack(sq, occ)      & (pos.pieces_p(PieceType::KA) | pos.pieces_p(PieceType::UM)))
-                | (ATTACK_TABLE.hi.attack(sq, occ)      & (pos.pieces_p(PieceType::HI) | pos.pieces_p(PieceType::RY)))
-                | (ATTACK_TABLE.ki.attack(sq, opp)      & (pos.pieces_p(PieceType::KI) | pos.pieces_p(PieceType::TO) | pos.pieces_p(PieceType::NY) | pos.pieces_p(PieceType::NK) | pos.pieces_p(PieceType::NG) | pos.pieces_p(PieceType::UM)))
+            (     (ATTACK_TABLE.fu.attack(sq, opp)      & pos.pieces_p(PieceKind::Pawn))
+                | (ATTACK_TABLE.ky.attack(sq, opp, occ) & pos.pieces_p(PieceKind::Lance))
+                | (ATTACK_TABLE.ke.attack(sq, opp)      & pos.pieces_p(PieceKind::Knight))
+                | (ATTACK_TABLE.gi.attack(sq, opp)      & (pos.pieces_p(PieceKind::Silver) | pos.pieces_p(PieceKind::ProRook)))
+                | (ATTACK_TABLE.ka.attack(sq, occ)      & (pos.pieces_p(PieceKind::Bishop) | pos.pieces_p(PieceKind::ProBishop)))
+                | (ATTACK_TABLE.hi.attack(sq, occ)      & (pos.pieces_p(PieceKind::Rook) | pos.pieces_p(PieceKind::ProRook)))
+                | (ATTACK_TABLE.ki.attack(sq, opp)      & (pos.pieces_p(PieceKind::Gold) | pos.pieces_p(PieceKind::ProPawn) | pos.pieces_p(PieceKind::ProLance) | pos.pieces_p(PieceKind::ProKnight) | pos.pieces_p(PieceKind::ProSilver) | pos.pieces_p(PieceKind::ProBishop)))
             ) & pos.pieces_c(pos.side_to_move())
         } else {
             Bitboard::ZERO
@@ -113,11 +110,11 @@ impl State {
 #[derive(Debug, Clone)]
 pub struct Position {
     board: [Option<Piece>; Square::NUM],
-    hands: Hands,
+    hands: [Hand; 2],
     color: Color,
     ply: u32,
     color_bbs: [Bitboard; 2],
-    piece_type_bbs: [Bitboard; PieceType::NUM],
+    piece_type_bbs: [Bitboard; 14],
     occupied_bb: Bitboard,
     states: Vec<State>,
 }
@@ -125,19 +122,19 @@ pub struct Position {
 impl Position {
     pub fn new(
         board: [Option<Piece>; Square::NUM],
-        hand_nums: [[u8; PieceType::NUM_HAND]; 2],
+        hand_nums: [[u8; 8]; 2],
         side_to_move: Color,
         ply: u32,
     ) -> Position {
         let mut keys = (Key::ZERO, Key::ZERO);
         // board
         let mut color_bbs = [Bitboard::ZERO; 2];
-        let mut piece_type_bbs = [Bitboard::ZERO; PieceType::NUM];
+        let mut piece_type_bbs = [Bitboard::ZERO; 14];
         let mut occupied_bb = Bitboard::ZERO;
         for sq in Square::ALL {
             if let Some(p) = board[sq.index()] {
-                color_bbs[p.color().index()] |= sq;
-                piece_type_bbs[p.piece_type().index()] |= sq;
+                color_bbs[p.color().array_index()] |= sq;
+                piece_type_bbs[p.piece_kind().array_index()] |= sq;
                 occupied_bb |= sq;
                 keys.0 ^= ZOBRIST_TABLE.board(sq, p);
             }
@@ -145,17 +142,21 @@ impl Position {
         // hands
         let mut hands = [Hand::new(); 2];
         for c in Color::all() {
-            for (&num, &pt) in hand_nums[c.index()].iter().zip(PieceType::ALL_HAND.iter()) {
-                for i in 0..num {
-                    hands[c.index()].increment(pt);
-                    keys.1 ^= ZOBRIST_TABLE.hand(c, pt, i + 1)
+            for (i, &num) in hand_nums[c.array_index()].iter().enumerate() {
+                if let Some(pk) = PieceKind::from_u8(i as u8 + 1) {
+                    for j in 0..num {
+                        if let Some(h) = hands[c.array_index()].added(pk) {
+                            hands[c.array_index()] = h;
+                        }
+                        keys.1 ^= ZOBRIST_TABLE.hand(c, pk, j + 1);
+                    }
                 }
             }
         }
         // new position with the opposite side_to_move for calculating checkers
         let mut pos = Self {
             board,
-            hands: Hands::new(hands),
+            hands,
             color: side_to_move.flip(),
             ply,
             color_bbs,
@@ -171,7 +172,7 @@ impl Position {
         pos
     }
     pub fn hand(&self, c: Color) -> Hand {
-        self.hands.hand(c)
+        self.hands[c.array_index()]
     }
     pub fn side_to_move(&self) -> Color {
         self.color
@@ -182,14 +183,14 @@ impl Position {
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
         self.board[sq.index()]
     }
-    pub fn pieces_cp(&self, c: Color, pt: PieceType) -> Bitboard {
-        self.pieces_c(c) & self.pieces_p(pt)
+    pub fn pieces_cp(&self, c: Color, pk: PieceKind) -> Bitboard {
+        self.pieces_c(c) & self.pieces_p(pk)
     }
     pub fn pieces_c(&self, c: Color) -> Bitboard {
-        self.color_bbs[c.index()]
+        self.color_bbs[c.array_index()]
     }
-    pub fn pieces_p(&self, pt: PieceType) -> Bitboard {
-        self.piece_type_bbs[pt.index()]
+    pub fn pieces_p(&self, pk: PieceKind) -> Bitboard {
+        self.piece_type_bbs[pk.array_index()]
     }
     pub fn occupied(&self) -> Bitboard {
         self.occupied_bb
@@ -209,14 +210,14 @@ impl Position {
     pub fn in_check(&self) -> bool {
         !self.checkers().is_empty()
     }
-    fn checkable(&self, pt: PieceType, sq: Square) -> bool {
-        !(self.state().attack_info.checkables[pt.index()] & sq).is_empty()
+    fn checkable(&self, pk: PieceKind, sq: Square) -> bool {
+        !(self.state().attack_info.checkables[pk.array_index()] & sq).is_empty()
     }
     pub fn pinned(&self) -> [Bitboard; 2] {
         self.state().attack_info.pinned
     }
     pub fn king(&self, c: Color) -> Option<Square> {
-        self.pieces_cp(c, PieceType::OU).pop()
+        self.pieces_cp(c, PieceKind::King).pop()
     }
     pub fn legal_moves(&self) -> MoveList {
         let mut ml = MoveList::default();
@@ -239,15 +240,20 @@ impl Position {
                 self.remove_piece(from, piece);
                 // 移動先に駒がある場合
                 if let Some(p) = captured {
-                    let pt = p.piece_type();
-                    self.xor_bbs(c.flip(), pt, to);
-                    self.hands.increment(c, pt);
-                    let num = self.hand(c).num(pt);
+                    let pk = p.piece_kind();
+                    self.xor_bbs(c.flip(), pk, to);
+                    let pk_unpromoted = PieceKinds::unpromoted(p.piece_kind());
+                    if let Some(h) = self.hands[c.array_index()].added(pk_unpromoted) {
+                        self.hands[c.array_index()] = h;
+                    }
+                    let num = self.hands[c.array_index()]
+                        .count(pk_unpromoted)
+                        .expect("invalid piece kind");
                     keys.0 ^= ZOBRIST_TABLE.board(to, p);
-                    keys.1 ^= ZOBRIST_TABLE.hand(c, pt, num);
+                    keys.1 ^= ZOBRIST_TABLE.hand(c, pk_unpromoted, num);
                 }
                 let p = if is_promotion {
-                    piece.promoted()
+                    Pieces::promoted(piece)
                 } else {
                     piece
                 };
@@ -262,11 +268,15 @@ impl Position {
             }
             // 駒打ち
             MoveType::Drop { to, piece } => {
-                let pt = piece.piece_type();
-                let num = self.hand(c).num(pt);
+                let pk = piece.piece_kind();
+                let num = self.hands[c.array_index()]
+                    .count(pk)
+                    .expect("invalid piece kind");
                 self.put_piece(to, piece);
-                keys.1 ^= ZOBRIST_TABLE.hand(c, pt, num);
-                self.hands.decrement(c, pt);
+                keys.1 ^= ZOBRIST_TABLE.hand(c, pk, num);
+                if let Some(h) = self.hands[c.array_index()].removed(pk) {
+                    self.hands[c.array_index()] = h;
+                }
                 keys.0 ^= ZOBRIST_TABLE.board(to, piece);
                 if is_check {
                     Bitboard::from_square(to)
@@ -291,21 +301,26 @@ impl Position {
                 piece,
             } => {
                 let p_to = if is_promotion {
-                    piece.promoted()
+                    Pieces::promoted(piece)
                 } else {
                     piece
                 };
                 self.remove_piece(to, p_to);
                 if let Some(p_cap) = self.captured() {
                     self.put_piece(to, p_cap);
-                    self.hands.decrement(c.flip(), p_cap.piece_type());
+                    let pk_unpromoted = PieceKinds::unpromoted(p_cap.piece_kind());
+                    if let Some(h) = self.hands[c.flip().array_index()].removed(pk_unpromoted) {
+                        self.hands[c.flip().array_index()] = h;
+                    }
                 }
                 self.put_piece(from, piece);
             }
             // 駒打ち
             MoveType::Drop { to, piece } => {
                 self.remove_piece(to, piece);
-                self.hands.increment(c.flip(), piece.piece_type());
+                if let Some(h) = self.hands[c.flip().array_index()].added(piece.piece_kind()) {
+                    self.hands[c.flip().array_index()] = h;
+                }
             }
         }
         self.color = self.color.flip();
@@ -316,28 +331,28 @@ impl Position {
         self.states.last().expect("empty states")
     }
     fn put_piece(&mut self, sq: Square, p: Piece) {
-        self.xor_bbs(p.color(), p.piece_type(), sq);
+        self.xor_bbs(p.color(), p.piece_kind(), sq);
         self.board[sq.index()] = Some(p);
     }
     fn remove_piece(&mut self, sq: Square, p: Piece) {
-        self.xor_bbs(p.color(), p.piece_type(), sq);
+        self.xor_bbs(p.color(), p.piece_kind(), sq);
         self.board[sq.index()] = None;
     }
-    fn xor_bbs(&mut self, c: Color, pt: PieceType, sq: Square) {
-        self.color_bbs[c.index()] ^= sq;
-        self.piece_type_bbs[pt.index()] ^= sq;
+    fn xor_bbs(&mut self, c: Color, pk: PieceKind, sq: Square) {
+        self.color_bbs[c.array_index()] ^= sq;
+        self.piece_type_bbs[pk.array_index()] ^= sq;
         self.occupied_bb ^= sq;
     }
     #[rustfmt::skip]
     pub fn attackers_to(&self, c: Color, to: Square, occ: &Bitboard) -> Bitboard {
         let opp = c.flip();
-        (     (ATTACK_TABLE.fu.attack(to, opp)      & self.pieces_p(PieceType::FU))
-            | (ATTACK_TABLE.ky.attack(to, opp, occ) & self.pieces_p(PieceType::KY))
-            | (ATTACK_TABLE.ke.attack(to, opp)      & self.pieces_p(PieceType::KE))
-            | (ATTACK_TABLE.gi.attack(to, opp)      & (self.pieces_p(PieceType::GI) | self.pieces_p(PieceType::RY) | self.pieces_p(PieceType::OU)))
-            | (ATTACK_TABLE.ka.attack(to, occ)      & (self.pieces_p(PieceType::KA) | self.pieces_p(PieceType::UM)))
-            | (ATTACK_TABLE.hi.attack(to, occ)      & (self.pieces_p(PieceType::HI) | self.pieces_p(PieceType::RY)))
-            | (ATTACK_TABLE.ki.attack(to, opp)      & (self.pieces_p(PieceType::KI) | self.pieces_p(PieceType::TO) | self.pieces_p(PieceType::NY) | self.pieces_p(PieceType::NK) | self.pieces_p(PieceType::NG) | self.pieces_p(PieceType::UM) | self.pieces_p( PieceType::OU)))
+        (     (ATTACK_TABLE.fu.attack(to, opp)      & self.pieces_p(PieceKind::Pawn))
+            | (ATTACK_TABLE.ky.attack(to, opp, occ) & self.pieces_p(PieceKind::Lance))
+            | (ATTACK_TABLE.ke.attack(to, opp)      & self.pieces_p(PieceKind::Knight))
+            | (ATTACK_TABLE.gi.attack(to, opp)      & (self.pieces_p(PieceKind::Silver) | self.pieces_p(PieceKind::ProRook) | self.pieces_p(PieceKind::King)))
+            | (ATTACK_TABLE.ka.attack(to, occ)      & (self.pieces_p(PieceKind::Bishop) | self.pieces_p(PieceKind::ProBishop)))
+            | (ATTACK_TABLE.hi.attack(to, occ)      & (self.pieces_p(PieceKind::Rook) | self.pieces_p(PieceKind::ProRook)))
+            | (ATTACK_TABLE.ki.attack(to, opp)      & (self.pieces_p(PieceKind::Gold) | self.pieces_p(PieceKind::ProPawn) | self.pieces_p(PieceKind::ProLance) | self.pieces_p(PieceKind::ProKnight) | self.pieces_p(PieceKind::ProSilver) | self.pieces_p(PieceKind::ProBishop) | self.pieces_p( PieceKind::King)))
         ) & self.pieces_c(c)
     }
     pub fn is_check_move(&self, m: Move) -> bool {
@@ -350,16 +365,16 @@ impl Position {
             } => {
                 // 直接王手
                 let p = if is_promotion {
-                    piece.promoted()
+                    Pieces::promoted(piece)
                 } else {
                     piece
                 };
-                if self.checkable(p.piece_type(), to) {
+                if self.checkable(p.piece_kind(), to) {
                     return true;
                 }
                 // 開き王手
                 let c = self.side_to_move();
-                if !(self.pinned()[c.flip().index()] & from).is_empty() {
+                if !(self.pinned()[c.flip().array_index()] & from).is_empty() {
                     if let Some(sq) = self.king(c.flip()) {
                         return (BETWEEN_TABLE[sq.index()][from.index()] & to).is_empty()
                             && (BETWEEN_TABLE[sq.index()][to.index()] & from).is_empty();
@@ -367,7 +382,7 @@ impl Position {
                 }
                 false
             }
-            MoveType::Drop { to, piece } => self.checkable(piece.piece_type(), to),
+            MoveType::Drop { to, piece } => self.checkable(piece.piece_kind(), to),
         }
     }
 }
@@ -376,49 +391,24 @@ impl Default for Position {
     fn default() -> Self {
         #[rustfmt::skip]
         let board = [
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
-            WKE, WKA, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
-            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
-            WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            *WKY, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKY,
+            *WKE, *WKA, *WFU, *EMP, *EMP, *EMP, *BFU, *BHI, *BKE,
+            *WGI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BGI,
+            *WKI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKI,
+            *WOU, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BOU,
+            *WKI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKI,
+            *WGI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BGI,
+            *WKE, *WHI, *WFU, *EMP, *EMP, *EMP, *BFU, *BKA, *BKE,
+            *WKY, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKY,
         ];
-        Self::new(board, [[0; 7]; 2], Color::Black, 1)
-    }
-}
-
-impl fmt::Display for Position {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for &rank in Rank::ALL.iter() {
-            write!(f, "P{rank}")?;
-            for &file in File::ALL.iter().rev() {
-                if let Some(p) = self.piece_on(Square::new(file, rank)) {
-                    write!(f, "{p}")?;
-                } else {
-                    write!(f, " * ")?;
-                }
-            }
-            writeln!(f)?;
-        }
-        write!(f, "{}", self.hands)?;
-        writeln!(
-            f,
-            "{}",
-            match self.side_to_move() {
-                Color::Black => "+",
-                Color::White => "-",
-            }
-        )?;
-        Ok(())
+        Self::new(board, [[0; 8]; 2], Color::Black, 1)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pieces::PIECES;
 
     #[test]
     fn default() {
@@ -426,29 +416,31 @@ mod tests {
         for sq in Square::ALL {
             #[rustfmt::skip]
             let expected = match sq {
-                Square::SQ17 | Square::SQ27 | Square::SQ37 | Square::SQ47 | Square::SQ57 | Square::SQ67 | Square::SQ77 | Square::SQ87 | Square::SQ97 => Some(Piece::BFU),
-                Square::SQ19 | Square::SQ99 => Some(Piece::BKY),
-                Square::SQ29 | Square::SQ89 => Some(Piece::BKE),
-                Square::SQ39 | Square::SQ79 => Some(Piece::BGI),
-                Square::SQ49 | Square::SQ69 => Some(Piece::BKI),
-                Square::SQ59 => Some(Piece::BOU),
-                Square::SQ88 => Some(Piece::BKA),
-                Square::SQ28 => Some(Piece::BHI),
-                Square::SQ13 | Square::SQ23 | Square::SQ33 | Square::SQ43 | Square::SQ53 | Square::SQ63 | Square::SQ73 | Square::SQ83 | Square::SQ93 => Some(Piece::WFU),
-                Square::SQ11 | Square::SQ91 => Some(Piece::WKY),
-                Square::SQ21 | Square::SQ81 => Some(Piece::WKE),
-                Square::SQ31 | Square::SQ71 => Some(Piece::WGI),
-                Square::SQ41 | Square::SQ61 => Some(Piece::WKI),
-                Square::SQ51 => Some(Piece::WOU),
-                Square::SQ22 => Some(Piece::WKA),
-                Square::SQ82 => Some(Piece::WHI),
+                Square::SQ17 | Square::SQ27 | Square::SQ37 | Square::SQ47 | Square::SQ57 | Square::SQ67 | Square::SQ77 | Square::SQ87 | Square::SQ97 => Some(PIECES.BFU),
+                Square::SQ19 | Square::SQ99 => Some(PIECES.BKY),
+                Square::SQ29 | Square::SQ89 => Some(PIECES.BKE),
+                Square::SQ39 | Square::SQ79 => Some(PIECES.BGI),
+                Square::SQ49 | Square::SQ69 => Some(PIECES.BKI),
+                Square::SQ59 => Some(PIECES.BOU),
+                Square::SQ88 => Some(PIECES.BKA),
+                Square::SQ28 => Some(PIECES.BHI),
+                Square::SQ13 | Square::SQ23 | Square::SQ33 | Square::SQ43 | Square::SQ53 | Square::SQ63 | Square::SQ73 | Square::SQ83 | Square::SQ93 => Some(PIECES.WFU),
+                Square::SQ11 | Square::SQ91 => Some(PIECES.WKY),
+                Square::SQ21 | Square::SQ81 => Some(PIECES.WKE),
+                Square::SQ31 | Square::SQ71 => Some(PIECES.WGI),
+                Square::SQ41 | Square::SQ61 => Some(PIECES.WKI),
+                Square::SQ51 => Some(PIECES.WOU),
+                Square::SQ22 => Some(PIECES.WKA),
+                Square::SQ82 => Some(PIECES.WHI),
                 _ => None,
             };
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
         }
         for c in Color::all() {
-            for pt in PieceType::ALL_HAND {
-                assert_eq!(0, pos.hand(c).num(pt));
+            for pk in PieceKind::all() {
+                if let Some(num) = pos.hand(c).count(pk) {
+                    assert_eq!(0, num);
+                }
             }
         }
         assert_eq!(Color::Black, pos.side_to_move());
@@ -456,15 +448,16 @@ mod tests {
         assert!(!pos.in_check());
     }
 
+    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn do_undo_move() {
         let mut pos = Position::default();
         let moves = [
-            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::BFU),
-            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::WFU),
-            Move::new_normal(Square::SQ88, Square::SQ22, true, Piece::BKA),
-            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WGI),
-            Move::new_drop(Square::SQ33, Piece::BKA),
+            Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
+            Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
+            Move::new_normal(Square::SQ88, Square::SQ22, true, PIECES.BKA),
+            Move::new_normal(Square::SQ31, Square::SQ22, false, PIECES.WGI),
+            Move::new_drop(Square::SQ33, PIECES.BKA),
         ];
         // do moves
         for &m in moves.iter() {
@@ -472,19 +465,31 @@ mod tests {
         }
         // check moved pieces, position states
         for (sq, expected) in [
-            (Square::SQ22, Some(Piece::WGI)),
+            (Square::SQ22, Some(PIECES.WGI)),
             (Square::SQ31, None),
-            (Square::SQ33, Some(Piece::BKA)),
-            (Square::SQ76, Some(Piece::BFU)),
+            (Square::SQ33, Some(PIECES.BKA)),
+            (Square::SQ76, Some(PIECES.BFU)),
             (Square::SQ77, None),
         ] {
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
         }
-        assert!(pos.hand(Color::Black).is_empty());
-        assert!(!pos.hand(Color::White).is_empty());
+        assert_eq!(
+            0,
+            PieceKind::all()
+                .iter()
+                .filter_map(|&pk| pos.hand(Color::Black).count(pk))
+                .sum::<u8>()
+        );
+        assert_ne!(
+            0,
+            PieceKind::all()
+                .iter()
+                .filter_map(|&pk| pos.hand(Color::White).count(pk))
+                .sum::<u8>()
+        );
         assert_eq!(Color::White, pos.side_to_move());
         assert_eq!(6, pos.ply());
-        assert!(pos.in_check());
+        assert_eq!(true, pos.in_check());
         // revert to default position
         for &m in moves.iter().rev() {
             pos.undo_move(m);
@@ -495,7 +500,7 @@ mod tests {
             .all(|&sq| pos.piece_on(sq) == default.piece_on(sq)));
         assert_eq!(Color::Black, pos.side_to_move());
         assert_eq!(1, pos.ply());
-        assert!(!pos.in_check());
+        assert_eq!(false, pos.in_check());
     }
 
     #[test]
@@ -526,18 +531,18 @@ mod tests {
             // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
             #[rustfmt::skip]
             let mut pos = Position::new([
-                EMP, WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-                EMP, BGI, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-                EMP, BOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-                BHI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP
+                *EMP, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                *EMP, *BGI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                *EMP, *BGI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
+                *EMP, *BGI, *BKA, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
+                *EMP, *BOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
+                *BHI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP
             ], [
-                [ 1, 1, 1, 1, 1, 1, 1],
-                [17, 0, 3, 0, 3, 0, 0],
+                [ 1, 1, 1, 1, 1, 1, 1, 0],
+                [17, 0, 3, 0, 3, 0, 0, 0],
             ], Color::Black, 1);
             assert_eq!(593, perft(&mut pos, 1));
             assert_eq!(105677, perft(&mut pos, 2));
@@ -560,45 +565,45 @@ mod tests {
         // +
         #[rustfmt::skip]
         let pos = Position::new([
-            WOU, EMP, BKI, EMP, BKY, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            WFU, EMP, BFU, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            *WOU, *EMP, *BKI, *EMP, *BKY, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *WFU, *EMP, *BFU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
         ], [
-            [ 0, 1, 0, 0, 0, 1, 1],
-            [16, 2, 4, 4, 3, 1, 1],
+            [ 0, 1, 0, 0, 0, 1, 1, 0],
+            [16, 2, 4, 4, 3, 1, 1, 0],
         ], Color::Black, 1);
         let test_cases = [
-            (Move::new_drop(Square::SQ12, Piece::BKY), true),
-            (Move::new_drop(Square::SQ14, Piece::BKY), false),
-            (Move::new_drop(Square::SQ22, Piece::BKA), true),
-            (Move::new_drop(Square::SQ55, Piece::BKA), false),
-            (Move::new_drop(Square::SQ21, Piece::BHI), true),
-            (Move::new_drop(Square::SQ51, Piece::BHI), false),
+            (Move::new_drop(Square::SQ12, PIECES.BKY), true),
+            (Move::new_drop(Square::SQ14, PIECES.BKY), false),
+            (Move::new_drop(Square::SQ22, PIECES.BKA), true),
+            (Move::new_drop(Square::SQ55, PIECES.BKA), false),
+            (Move::new_drop(Square::SQ21, PIECES.BHI), true),
+            (Move::new_drop(Square::SQ51, PIECES.BHI), false),
             (
-                Move::new_normal(Square::SQ13, Square::SQ12, false, Piece::BKI),
+                Move::new_normal(Square::SQ13, Square::SQ12, false, PIECES.BKI),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ22, false, Piece::BKI),
+                Move::new_normal(Square::SQ13, Square::SQ22, false, PIECES.BKI),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ23, false, Piece::BKI),
+                Move::new_normal(Square::SQ13, Square::SQ23, false, PIECES.BKI),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ14, false, Piece::BKI),
+                Move::new_normal(Square::SQ13, Square::SQ14, false, PIECES.BKI),
                 false,
             ),
         ];
         for (m, expected) in test_cases {
-            assert_eq!(expected, pos.is_check_move(m), "{m}");
+            assert_eq!(expected, pos.is_check_move(m));
         }
     }
 }

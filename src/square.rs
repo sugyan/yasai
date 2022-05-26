@@ -1,6 +1,5 @@
-use crate::color::Index;
-use crate::PieceType;
-use shogi_core::Color;
+use crate::array_index::ArrayIndex;
+use shogi_core::{Color, PieceKind};
 use std::{fmt, ops};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -106,7 +105,7 @@ impl Rank {
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
     ];
     #[rustfmt::skip]
-    const VALID_FOR_PIECES: [[[bool; 9]; PieceType::NUM]; 2] = [
+    const VALID_FOR_PIECES: [[[bool; 9]; 14]; 2] = [
         // Black
         [
             [false,  true,  true,  true,  true,  true,  true,  true,  true], // FU
@@ -145,10 +144,10 @@ impl Rank {
     const OPPONENT_FIELD_MASK: [u32; 2] = [0x0007, 0x01c0];
 
     pub fn is_opponent_field(&self, c: Color) -> bool {
-        (1 << self.0) & Self::OPPONENT_FIELD_MASK[c.index()] != 0
+        (1 << self.0) & Self::OPPONENT_FIELD_MASK[c.array_index()] != 0
     }
-    pub fn is_valid_for_piece(&self, c: Color, pt: PieceType) -> bool {
-        Rank::VALID_FOR_PIECES[c.index()][pt.index()][self.0 as usize]
+    pub fn is_valid_for_piece(&self, c: Color, pk: PieceKind) -> bool {
+        Rank::VALID_FOR_PIECES[c.array_index()][pk.array_index()][self.0 as usize]
     }
 }
 
