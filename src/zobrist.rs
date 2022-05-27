@@ -51,11 +51,12 @@ impl ops::BitXorAssign for Key {
 
 pub struct ZobristTable {
     board: [[[Key; 14]; 2]; Square::NUM],
-    hands: [[[Key; ZobristTable::MAX_HAND_NUM + 1]; 8]; 2],
+    hands: [[[Key; ZobristTable::MAX_HAND_NUM]; 8]; 2],
 }
 
 impl ZobristTable {
     const MAX_HAND_NUM: usize = 18;
+
     pub fn board(&self, sq: Square, p: Piece) -> Key {
         self.board[sq.index()][p.color().array_index()][p.piece_kind().array_index()]
     }
@@ -66,7 +67,7 @@ impl ZobristTable {
 
 pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
     let mut board = [[[Key::ZERO; 14]; 2]; Square::NUM];
-    let mut hands = [[[Key::ZERO; 19]; 8]; 2];
+    let mut hands = [[[Key::ZERO; ZobristTable::MAX_HAND_NUM]; 8]; 2];
     let mut rng = StdRng::seed_from_u64(2022);
     for sq in Square::ALL {
         for c in Color::all() {
@@ -81,7 +82,7 @@ pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
             if h.count(pk).is_none() {
                 continue;
             }
-            for num in 0..=ZobristTable::MAX_HAND_NUM {
+            for num in 0..ZobristTable::MAX_HAND_NUM {
                 hands[c.array_index()][pk.array_index()][num] = Key(rng.gen()) & !Key::COLOR;
             }
         }
@@ -105,6 +106,17 @@ mod tests {
     #[test]
     fn default() {
         let pos = Position::default();
+        assert_ne!(0, pos.key());
+    }
+
+    #[test]
+    fn full_hands() {
+        let pos = Position::new(
+            [None; Square::NUM],
+            [[18, 4, 4, 4, 4, 2, 2, 2], [0; 8]],
+            Color::Black,
+            1,
+        );
         assert_ne!(0, pos.key());
     }
 
@@ -204,9 +216,7 @@ mod tests {
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()
         };
-        println!("{:x?}", keys0);
-        println!("{:x?}", keys1);
-        assert!(keys0 != keys1);
-        assert!(keys0.0 == keys1.0)
+        assert_ne!(keys0, keys1);
+        assert_eq!(keys0.0, keys1.0)
     }
 }

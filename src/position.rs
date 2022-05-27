@@ -148,7 +148,7 @@ impl Position {
                         if let Some(h) = hands[c.array_index()].added(pk) {
                             hands[c.array_index()] = h;
                         }
-                        keys.1 ^= ZOBRIST_TABLE.hand(c, pk, j + 1);
+                        keys.1 ^= ZOBRIST_TABLE.hand(c, pk, j);
                     }
                 }
             }
@@ -243,14 +243,13 @@ impl Position {
                     let pk = p.piece_kind();
                     self.xor_bbs(c.flip(), pk, to);
                     let pk_unpromoted = PieceKinds::unpromoted(p.piece_kind());
-                    if let Some(h) = self.hands[c.array_index()].added(pk_unpromoted) {
-                        self.hands[c.array_index()] = h;
-                    }
-                    let num = self.hands[c.array_index()]
-                        .count(pk_unpromoted)
+                    let h = self.hands[c.array_index()]
+                        .added(pk_unpromoted)
                         .expect("invalid piece kind");
+                    self.hands[c.array_index()] = h;
+                    let num = h.count(pk_unpromoted).expect("invalid piece kind");
                     keys.0 ^= ZOBRIST_TABLE.board(to, p);
-                    keys.1 ^= ZOBRIST_TABLE.hand(c, pk_unpromoted, num);
+                    keys.1 ^= ZOBRIST_TABLE.hand(c, pk_unpromoted, num - 1);
                 }
                 let p = if is_promotion {
                     Pieces::promoted(piece)
@@ -273,10 +272,10 @@ impl Position {
                     .count(pk)
                     .expect("invalid piece kind");
                 self.put_piece(to, piece);
-                keys.1 ^= ZOBRIST_TABLE.hand(c, pk, num);
-                if let Some(h) = self.hands[c.array_index()].removed(pk) {
-                    self.hands[c.array_index()] = h;
-                }
+                keys.1 ^= ZOBRIST_TABLE.hand(c, pk, num - 1);
+                self.hands[c.array_index()] = self.hands[c.array_index()]
+                    .removed(pk)
+                    .expect("invalid piece kind");
                 keys.0 ^= ZOBRIST_TABLE.board(to, piece);
                 if is_check {
                     Bitboard::from_square(to)
@@ -309,18 +308,18 @@ impl Position {
                 if let Some(p_cap) = self.captured() {
                     self.put_piece(to, p_cap);
                     let pk_unpromoted = PieceKinds::unpromoted(p_cap.piece_kind());
-                    if let Some(h) = self.hands[c.flip().array_index()].removed(pk_unpromoted) {
-                        self.hands[c.flip().array_index()] = h;
-                    }
+                    self.hands[c.flip().array_index()] = self.hands[c.flip().array_index()]
+                        .removed(pk_unpromoted)
+                        .expect("invalid piece kind");
                 }
                 self.put_piece(from, piece);
             }
             // 駒打ち
             MoveType::Drop { to, piece } => {
                 self.remove_piece(to, piece);
-                if let Some(h) = self.hands[c.flip().array_index()].added(piece.piece_kind()) {
-                    self.hands[c.flip().array_index()] = h;
-                }
+                self.hands[c.flip().array_index()] = self.hands[c.flip().array_index()]
+                    .added(piece.piece_kind())
+                    .expect("invalid piece kind");
             }
         }
         self.color = self.color.flip();
