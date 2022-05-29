@@ -1,6 +1,5 @@
 mod bitboard;
 mod board_piece;
-mod array_index;
 mod movegen;
 mod pieces;
 mod position;

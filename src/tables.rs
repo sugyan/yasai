@@ -1,4 +1,3 @@
-use crate::array_index::ArrayIndex;
 use crate::bitboard::Bitboard;
 use crate::square::{File, Rank};
 use crate::Square;

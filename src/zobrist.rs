@@ -1,4 +1,3 @@
-use crate::array_index::ArrayIndex;
 use crate::Square;
 use once_cell::sync::Lazy;
 use rand::rngs::StdRng;
@@ -50,8 +49,8 @@ impl ops::BitXorAssign for Key {
 }
 
 pub struct ZobristTable {
-    board: [[[Key; 14]; 2]; Square::NUM],
-    hands: [[[Key; ZobristTable::MAX_HAND_NUM]; 8]; 2],
+    board: [[[Key; PieceKind::NUM]; Color::NUM]; Square::NUM],
+    hands: [[[Key; ZobristTable::MAX_HAND_NUM]; 8]; Color::NUM],
 }
 
 impl ZobristTable {
@@ -66,8 +65,8 @@ impl ZobristTable {
 }
 
 pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
-    let mut board = [[[Key::ZERO; 14]; 2]; Square::NUM];
-    let mut hands = [[[Key::ZERO; ZobristTable::MAX_HAND_NUM]; 8]; 2];
+    let mut board = [[[Key::ZERO; PieceKind::NUM]; Color::NUM]; Square::NUM];
+    let mut hands = [[[Key::ZERO; ZobristTable::MAX_HAND_NUM]; 8]; Color::NUM];
     let mut rng = StdRng::seed_from_u64(2022);
     for sq in Square::ALL {
         for c in Color::all() {

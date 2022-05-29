@@ -1,4 +1,3 @@
-use crate::array_index::ArrayIndex;
 use crate::bitboard::Bitboard;
 use crate::board_piece::*;
 use crate::movegen::MoveList;
@@ -11,9 +10,9 @@ use shogi_core::{Color, Hand, Piece, PieceKind};
 
 #[derive(Debug, Clone)]
 struct AttackInfo {
-    checkers: Bitboard,         // 王手をかけている駒の位置
-    checkables: [Bitboard; 14], // 各駒種が王手になり得る位置
-    pinned: [Bitboard; 2],      // 飛び駒から玉を守っている駒の位置
+    checkers: Bitboard,                     // 王手をかけている駒の位置
+    checkables: [Bitboard; PieceKind::NUM], // 各駒種が王手になり得る位置
+    pinned: [Bitboard; 2],                  // 飛び駒から玉を守っている駒の位置
 }
 
 impl AttackInfo {
@@ -65,7 +64,7 @@ impl AttackInfo {
         } else {
             Self {
                 checkers,
-                checkables: [Bitboard::ZERO; 14],
+                checkables: [Bitboard::ZERO; PieceKind::NUM],
                 pinned,
             }
         }
@@ -114,7 +113,7 @@ pub struct Position {
     color: Color,
     ply: u32,
     color_bbs: [Bitboard; 2],
-    piece_type_bbs: [Bitboard; 14],
+    piece_type_bbs: [Bitboard; PieceKind::NUM],
     occupied_bb: Bitboard,
     states: Vec<State>,
 }
@@ -129,7 +128,7 @@ impl Position {
         let mut keys = (Key::ZERO, Key::ZERO);
         // board
         let mut color_bbs = [Bitboard::ZERO; 2];
-        let mut piece_type_bbs = [Bitboard::ZERO; 14];
+        let mut piece_type_bbs = [Bitboard::ZERO; PieceKind::NUM];
         let mut occupied_bb = Bitboard::ZERO;
         for sq in Square::ALL {
             if let Some(p) = board[sq.index()] {

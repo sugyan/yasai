@@ -1,4 +1,3 @@
-use crate::array_index::ArrayIndex;
 use shogi_core::{Color, PieceKind};
 use std::{fmt, ops};
 
@@ -105,7 +104,7 @@ impl Rank {
         Rank::RANK1, Rank::RANK2, Rank::RANK3, Rank::RANK4, Rank::RANK5, Rank::RANK6, Rank::RANK7, Rank::RANK8, Rank::RANK9,
     ];
     #[rustfmt::skip]
-    const VALID_FOR_PIECES: [[[bool; 9]; 14]; 2] = [
+    const VALID_FOR_PIECES: [[[bool; 9]; PieceKind::NUM]; Color::NUM] = [
         // Black
         [
             [false,  true,  true,  true,  true,  true,  true,  true,  true], // FU
