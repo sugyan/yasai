@@ -1,9 +1,8 @@
-use crate::bitboard::Bitboard;
-use crate::square::Rank;
+use crate::bb::{BitboardExt, FILES, RANKS};
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
-use crate::{Move, Position, Square};
+use crate::{Move, Position};
 use arrayvec::{ArrayVec, IntoIter};
-use shogi_core::{Color, Piece, PieceKind};
+use shogi_core::{Bitboard, Color, Piece, PieceKind, Square};
 
 pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
@@ -46,12 +45,12 @@ impl MoveList {
         self.generate_for_ou(pos, &target);
         self.generate_for_um(pos, &target);
         self.generate_for_ry(pos, &target);
-        self.generate_drop(pos, &(!pos.occupied() & Bitboard::ONES));
+        self.generate_drop(pos, &(!pos.occupied() & !Bitboard::empty()));
     }
     fn generate_evasions(&mut self, pos: &Position) {
         let c = pos.side_to_move();
         if let Some(ou) = pos.king(c) {
-            let mut checkers_attacks = Bitboard::ZERO;
+            let mut checkers_attacks = Bitboard::empty();
             let mut checkers_count = 0;
             for ch in pos.checkers() {
                 if let Some(p) = pos.piece_on(ch) {
@@ -79,7 +78,7 @@ impl MoveList {
                 return;
             }
             if let Some(ch) = pos.checkers().pop() {
-                let target_drop = BETWEEN_TABLE[ch.index()][ou.index()];
+                let target_drop = BETWEEN_TABLE[ch.array_index()][ou.array_index()];
                 let target_move = target_drop | pos.checkers();
                 self.generate_for_fu(pos, &target_move);
                 self.generate_for_ky(pos, &target_move);
@@ -101,14 +100,13 @@ impl MoveList {
         let c = pos.side_to_move();
         let (to_bb, delta, p) = match c {
             Color::Black => (pos.pieces_cp(c, PieceKind::Pawn).shr(), 1, Piece::B_P),
-            Color::White => (pos.pieces_cp(c, PieceKind::Pawn).shl(), -1, Piece::W_P),
+            Color::White => (pos.pieces_cp(c, PieceKind::Pawn).shl(), !0, Piece::W_P),
         };
         for to in to_bb & *target {
-            let rank = to.rank();
-            let from = Square(to.0 + delta);
-            if rank.is_opponent_field(c) {
+            let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
+            if to.relative_rank(c) <= 3 {
                 self.push(Move::new_normal(from, to, true, p));
-                if rank.is_valid_for_piece(c, PieceKind::Pawn) {
+                if to.relative_rank(c) > 1 {
                     self.push(Move::new_normal(from, to, false, p));
                 }
             } else {
@@ -121,10 +119,9 @@ impl MoveList {
         let p = Piece::new(PieceKind::Lance, c);
         for from in pos.pieces_cp(c, PieceKind::Lance) {
             for to in ATTACK_TABLE.ky.attack(from, c, &pos.occupied()) & *target {
-                let rank = to.rank();
-                if rank.is_opponent_field(c) {
+                if to.relative_rank(c) <= 3 {
                     self.push(Move::new_normal(from, to, true, p));
-                    if rank.is_valid_for_piece(c, PieceKind::Lance) {
+                    if to.relative_rank(c) > 1 {
                         self.push(Move::new_normal(from, to, false, p));
                     }
                 } else {
@@ -138,10 +135,9 @@ impl MoveList {
         let p = Piece::new(PieceKind::Knight, c);
         for from in pos.pieces_cp(c, PieceKind::Knight) {
             for to in ATTACK_TABLE.ke.attack(from, c) & *target {
-                let rank = to.rank();
-                if rank.is_opponent_field(c) {
+                if to.relative_rank(c) <= 3 {
                     self.push(Move::new_normal(from, to, true, p));
-                    if rank.is_valid_for_piece(c, PieceKind::Knight) {
+                    if to.relative_rank(c) > 2 {
                         self.push(Move::new_normal(from, to, false, p));
                     }
                 } else {
@@ -154,10 +150,10 @@ impl MoveList {
         let c = pos.side_to_move();
         let p = Piece::new(PieceKind::Silver, c);
         for from in pos.pieces_cp(c, PieceKind::Silver) {
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
+            let from_is_opponent_field = from.relative_rank(c) <= 3;
             for to in ATTACK_TABLE.gi.attack(from, c) & *target {
                 self.push(Move::new_normal(from, to, false, p));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                if from_is_opponent_field || to.relative_rank(c) <= 3 {
                     self.push(Move::new_normal(from, to, true, p));
                 }
             }
@@ -167,10 +163,10 @@ impl MoveList {
         let c = pos.side_to_move();
         let p = Piece::new(PieceKind::Bishop, c);
         for from in pos.pieces_cp(c, PieceKind::Bishop) {
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
+            let from_is_opponent_field = from.relative_rank(c) <= 3;
             for to in ATTACK_TABLE.ka.attack(from, &pos.occupied()) & *target {
                 self.push(Move::new_normal(from, to, false, p));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                if from_is_opponent_field || to.relative_rank(c) <= 3 {
                     self.push(Move::new_normal(from, to, true, p));
                 }
             }
@@ -180,10 +176,10 @@ impl MoveList {
         let c = pos.side_to_move();
         let p = Piece::new(PieceKind::Rook, c);
         for from in pos.pieces_cp(c, PieceKind::Rook) {
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
+            let from_is_opponent_field = from.relative_rank(c) <= 3;
             for to in ATTACK_TABLE.hi.attack(from, &pos.occupied()) & *target {
                 self.push(Move::new_normal(from, to, false, p));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
+                if from_is_opponent_field || to.relative_rank(c) <= 3 {
                     self.push(Move::new_normal(from, to, true, p));
                 }
             }
@@ -245,27 +241,33 @@ impl MoveList {
             if hand.count(pk).unwrap_or_default() == 0 {
                 continue;
             }
-            let mut exclude = Bitboard::ZERO;
+            let mut exclude = Bitboard::empty();
             if pk == PieceKind::Pawn {
                 // 二歩
                 for sq in pos.pieces_cp(c, pk) {
-                    exclude |= Bitboard::from_file(sq.file());
+                    exclude |= FILES[sq.file() as usize];
                 }
                 // 打ち歩詰めチェック
                 if let Some(sq) = pos.king(c.flip()) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
-                        if !(*target & to).is_empty() && Self::is_uchifuzume(pos, to) {
+                        if !(*target & Bitboard::single(to)).is_empty()
+                            && Self::is_uchifuzume(pos, to)
+                        {
                             exclude |= to;
                         }
                     }
                 }
                 exclude |= match c {
-                    Color::Black => Bitboard::from_rank(Rank::RANK1),
-                    Color::White => Bitboard::from_rank(Rank::RANK9),
+                    Color::Black => RANKS[1],
+                    Color::White => RANKS[9],
                 };
             }
             for to in *target & !exclude {
-                if to.rank().is_valid_for_piece(c, pk) {
+                if match pk {
+                    PieceKind::Pawn | PieceKind::Lance => to.relative_rank(c) > 1,
+                    PieceKind::Knight => to.relative_rank(c) > 2,
+                    _ => true,
+                } {
                     self.push(Move::new_drop(to, Piece::new(pk, c)));
                 }
             }
@@ -283,10 +285,14 @@ impl MoveList {
                 return false;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if !(pos.pinned()[c.array_index()] & from).is_empty() {
+            if !(pos.pinned()[c.array_index()] & Bitboard::single(from)).is_empty() {
                 if let Some(sq) = pos.king(c) {
-                    if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
-                        && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
+                    if (BETWEEN_TABLE[sq.array_index()][from.array_index()]
+                        & Bitboard::single(m.to()))
+                    .is_empty()
+                        && (BETWEEN_TABLE[sq.array_index()][m.to().array_index()]
+                            & Bitboard::single(from))
+                        .is_empty()
                     {
                         return false;
                     }
@@ -310,9 +316,9 @@ impl MoveList {
         if let Some(king) = pos.king(c.flip()) {
             let escape = ATTACK_TABLE.ou.attack(king, c.flip())
                 & !pos.pieces_c(c.flip())
-                & !Bitboard::from_square(sq);
-            let occupied = pos.occupied() | Bitboard::from_square(sq);
-            for to in escape ^ sq {
+                & !Bitboard::single(sq);
+            let occupied = pos.occupied() | Bitboard::single(sq);
+            for to in escape ^ Bitboard::single(sq) {
                 if pos.attackers_to(c, to, &occupied).is_empty() {
                     return false;
                 }
@@ -439,7 +445,7 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [14, 4, 4, 4, 3, 2, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ14, true,
+                Square::SQ_1D, true,
             ),
             // 金で歩を取れる
             // P1 *  *  *  *  *  *  *  *  * 
@@ -469,7 +475,7 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 4, 4, 2, 2, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ14, false,
+                Square::SQ_1D, false,
             ),
             // 飛がいるので金が動けない
             // P1 *  *  *  *  *  *  *  *  * 
@@ -499,7 +505,7 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 4, 4, 2, 2, 1, 0],
                 ], Color::Black, 1),
-                Square::SQ14, true,
+                Square::SQ_1D, true,
             ),
             // 桂で歩を取れる
             // P1 *  *  *  *  *  *  *  *  * 
@@ -529,7 +535,7 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 2, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ14, false,
+                Square::SQ_1D, false,
             ),
             // 角がいるので桂が動けない
             // P1 *  *  *  *  *  * +KA *  * 
@@ -559,7 +565,7 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 1, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ14, true,
+                Square::SQ_1D, true,
             ),
             // https://github.com/nozaq/shogi-rs/pull/41
             // 打った歩によって△1一玉の逃げ場ができる
@@ -590,7 +596,7 @@ mod tests {
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 1, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ22, false,
+                Square::SQ_2B, false,
             ),
         ];
         for (pos, sq, expected) in test_cases {

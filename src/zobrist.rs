@@ -1,9 +1,8 @@
-use crate::Square;
 use once_cell::sync::Lazy;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
-use shogi_core::{Color, Hand, Piece, PieceKind};
+use shogi_core::{Color, Hand, Piece, PieceKind, Square};
 use std::ops;
 
 #[derive(Clone, Copy, Debug)]
@@ -57,7 +56,7 @@ impl ZobristTable {
     const MAX_HAND_NUM: usize = 18;
 
     pub fn board(&self, sq: Square, p: Piece) -> Key {
-        self.board[sq.index()][p.color().array_index()][p.piece_kind().array_index()]
+        self.board[sq.array_index()][p.color().array_index()][p.piece_kind().array_index()]
     }
     pub fn hand(&self, c: Color, pk: PieceKind, num: u8) -> Key {
         self.hands[c.array_index()][pk.array_index()][num as usize]
@@ -68,10 +67,11 @@ pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
     let mut board = [[[Key::ZERO; PieceKind::NUM]; Color::NUM]; Square::NUM];
     let mut hands = [[[Key::ZERO; ZobristTable::MAX_HAND_NUM]; 8]; Color::NUM];
     let mut rng = StdRng::seed_from_u64(2022);
-    for sq in Square::ALL {
+    for sq in Square::all() {
         for c in Color::all() {
             for pk in PieceKind::all() {
-                board[sq.index()][c.array_index()][pk.array_index()] = Key(rng.gen()) & !Key::COLOR;
+                board[sq.array_index()][c.array_index()][pk.array_index()] =
+                    Key(rng.gen()) & !Key::COLOR;
             }
         }
     }
@@ -151,9 +151,9 @@ mod tests {
             let mut pos = Position::default();
             // +7776FU,-3334FU,+2726FU
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
-                Move::new_normal(Square::SQ27, Square::SQ26, false, Piece::B_P),
+                Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
+                Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
+                Move::new_normal(Square::SQ_2G, Square::SQ_2F, false, Piece::B_P),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.key()
@@ -162,9 +162,9 @@ mod tests {
             let mut pos = Position::default();
             // +2726FU,-3334FU,+7776FU
             let moves = [
-                Move::new_normal(Square::SQ27, Square::SQ26, false, Piece::B_P),
-                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
+                Move::new_normal(Square::SQ_2G, Square::SQ_2F, false, Piece::B_P),
+                Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
+                Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.key()
@@ -189,12 +189,12 @@ mod tests {
             // +7776FU,-3334FU,+8822KA,-3122GI,+0088KA,-2231GI
             // => P-00KA
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
-                Move::new_normal(Square::SQ88, Square::SQ22, false, Piece::B_B),
-                Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::W_S),
-                Move::new_drop(Square::SQ88, Piece::B_B),
-                Move::new_normal(Square::SQ22, Square::SQ31, false, Piece::W_S),
+                Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
+                Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
+                Move::new_normal(Square::SQ_8H, Square::SQ_2B, false, Piece::B_B),
+                Move::new_normal(Square::SQ_3A, Square::SQ_2B, false, Piece::W_S),
+                Move::new_drop(Square::SQ_8H, Piece::B_B),
+                Move::new_normal(Square::SQ_2B, Square::SQ_3A, false, Piece::W_S),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()
@@ -204,12 +204,12 @@ mod tests {
             // +7776FU,-3334FU,+8822KA,-3142GI,+2288KA,-4231GI
             // => P+00KA
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
-                Move::new_normal(Square::SQ88, Square::SQ22, false, Piece::B_B),
-                Move::new_normal(Square::SQ31, Square::SQ42, false, Piece::W_S),
-                Move::new_normal(Square::SQ22, Square::SQ88, false, Piece::B_B),
-                Move::new_normal(Square::SQ42, Square::SQ31, false, Piece::W_S),
+                Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
+                Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
+                Move::new_normal(Square::SQ_8H, Square::SQ_2B, false, Piece::B_B),
+                Move::new_normal(Square::SQ_3A, Square::SQ_4B, false, Piece::W_S),
+                Move::new_normal(Square::SQ_2B, Square::SQ_8H, false, Piece::B_B),
+                Move::new_normal(Square::SQ_4B, Square::SQ_3A, false, Piece::W_S),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()

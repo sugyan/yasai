@@ -1,11 +1,10 @@
-use crate::bitboard::Bitboard;
 use crate::board_piece::*;
 use crate::movegen::MoveList;
 use crate::shogi_move::MoveType;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
-use crate::{Move, Square};
-use shogi_core::{Color, Hand, Piece, PieceKind};
+use crate::Move;
+use shogi_core::{Bitboard, Color, Hand, Piece, PieceKind, Square};
 
 #[derive(Debug, Clone)]
 struct AttackInfo {
@@ -18,7 +17,7 @@ impl AttackInfo {
     fn new(checkers: Bitboard, pos: &Position) -> Self {
         let occ = &pos.occupied();
         let opp = pos.side_to_move().flip();
-        let mut pinned = [Bitboard::ZERO, Bitboard::ZERO];
+        let mut pinned = [Bitboard::empty(), Bitboard::empty()];
         for c in Color::all() {
             if let Some(sq) = pos.king(c) {
                 #[rustfmt::skip]
@@ -28,8 +27,8 @@ impl AttackInfo {
                     | (ATTACK_TABLE.pseudo_attack(PieceKind::Rook, sq, c) & (pos.pieces_p(PieceKind::Rook) | pos.pieces_p(PieceKind::ProRook)))
                 ) & pos.pieces_c(c.flip());
                 for sniper in snipers {
-                    let blockers = BETWEEN_TABLE[sq.index()][sniper.index()] & *occ;
-                    if blockers.count_ones() == 1 {
+                    let blockers = BETWEEN_TABLE[sq.array_index()][sniper.array_index()] & *occ;
+                    if blockers.count() == 1 {
                         pinned[c.array_index()] |= blockers;
                     }
                 }
@@ -50,7 +49,7 @@ impl AttackInfo {
                     ki,
                     ka,
                     hi,
-                    Bitboard::ZERO,
+                    Bitboard::empty(),
                     ki,
                     ki,
                     ki,
@@ -63,7 +62,7 @@ impl AttackInfo {
         } else {
             Self {
                 checkers,
-                checkables: [Bitboard::ZERO; PieceKind::NUM],
+                checkables: [Bitboard::empty(); PieceKind::NUM],
                 pinned,
             }
         }
@@ -82,7 +81,7 @@ impl AttackInfo {
                 | (ATTACK_TABLE.ki.attack(sq, opp)      & (pos.pieces_p(PieceKind::Gold) | pos.pieces_p(PieceKind::ProPawn) | pos.pieces_p(PieceKind::ProLance) | pos.pieces_p(PieceKind::ProKnight) | pos.pieces_p(PieceKind::ProSilver) | pos.pieces_p(PieceKind::ProBishop)))
             ) & pos.pieces_c(pos.side_to_move())
         } else {
-            Bitboard::ZERO
+            Bitboard::empty()
         }
     }
 }
@@ -126,11 +125,11 @@ impl Position {
     ) -> Position {
         let mut keys = (Key::ZERO, Key::ZERO);
         // board
-        let mut color_bbs = [Bitboard::ZERO; 2];
-        let mut piece_type_bbs = [Bitboard::ZERO; PieceKind::NUM];
-        let mut occupied_bb = Bitboard::ZERO;
-        for sq in Square::ALL {
-            if let Some(p) = board[sq.index()] {
+        let mut color_bbs = [Bitboard::empty(); 2];
+        let mut piece_type_bbs = [Bitboard::empty(); PieceKind::NUM];
+        let mut occupied_bb = Bitboard::empty();
+        for sq in Square::all() {
+            if let Some(p) = board[sq.array_index()] {
                 color_bbs[p.color().array_index()] |= sq;
                 piece_type_bbs[p.piece_kind().array_index()] |= sq;
                 occupied_bb |= sq;
@@ -179,7 +178,7 @@ impl Position {
         self.ply
     }
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
-        self.board[sq.index()]
+        self.board[sq.array_index()]
     }
     pub fn pieces_cp(&self, c: Color, pk: PieceKind) -> Bitboard {
         self.pieces_c(c) & self.pieces_p(pk)
@@ -209,7 +208,7 @@ impl Position {
         !self.checkers().is_empty()
     }
     fn checkable(&self, pk: PieceKind, sq: Square) -> bool {
-        !(self.state().attack_info.checkables[pk.array_index()] & sq).is_empty()
+        !(self.state().attack_info.checkables[pk.array_index()] & Bitboard::single(sq)).is_empty()
     }
     pub fn pinned(&self) -> [Bitboard; 2] {
         self.state().attack_info.pinned
@@ -268,7 +267,7 @@ impl Position {
                 if is_check {
                     AttackInfo::calculate_checkers(self)
                 } else {
-                    Bitboard::ZERO
+                    Bitboard::empty()
                 }
             }
             // 駒打ち
@@ -278,15 +277,15 @@ impl Position {
                     .count(pk)
                     .expect("invalid piece kind");
                 self.put_piece(to, piece);
-                keys.1 ^= ZOBRIST_TABLE.hand(c, pk, num - 1);
+                keys.1 ^= ZOBRIST_TABLE.hand(c, pk, num);
                 self.hands[c.array_index()] = self.hands[c.array_index()]
                     .removed(pk)
                     .expect("invalid piece kind");
                 keys.0 ^= ZOBRIST_TABLE.board(to, piece);
                 if is_check {
-                    Bitboard::from_square(to)
+                    Bitboard::single(to)
                 } else {
-                    Bitboard::ZERO
+                    Bitboard::empty()
                 }
             }
         };
@@ -346,11 +345,11 @@ impl Position {
     }
     fn put_piece(&mut self, sq: Square, p: Piece) {
         self.xor_bbs(p.color(), p.piece_kind(), sq);
-        self.board[sq.index()] = Some(p);
+        self.board[sq.array_index()] = Some(p);
     }
     fn remove_piece(&mut self, sq: Square, p: Piece) {
         self.xor_bbs(p.color(), p.piece_kind(), sq);
-        self.board[sq.index()] = None;
+        self.board[sq.array_index()] = None;
     }
     fn xor_bbs(&mut self, c: Color, pk: PieceKind, sq: Square) {
         self.color_bbs[c.array_index()] ^= sq;
@@ -392,10 +391,14 @@ impl Position {
                 }
                 // 開き王手
                 let c = self.side_to_move();
-                if !(self.pinned()[c.flip().array_index()] & from).is_empty() {
+                if !(self.pinned()[c.flip().array_index()] & Bitboard::single(from)).is_empty() {
                     if let Some(sq) = self.king(c.flip()) {
-                        return (BETWEEN_TABLE[sq.index()][from.index()] & to).is_empty()
-                            && (BETWEEN_TABLE[sq.index()][to.index()] & from).is_empty();
+                        return (BETWEEN_TABLE[sq.array_index()][from.array_index()]
+                            & Bitboard::single(to))
+                        .is_empty()
+                            && (BETWEEN_TABLE[sq.array_index()][to.array_index()]
+                                & Bitboard::single(from))
+                            .is_empty();
                     }
                 }
                 false
@@ -430,25 +433,25 @@ mod tests {
     #[test]
     fn default() {
         let pos = Position::default();
-        for sq in Square::ALL {
+        for sq in Square::all() {
             #[rustfmt::skip]
             let expected = match sq {
-                Square::SQ17 | Square::SQ27 | Square::SQ37 | Square::SQ47 | Square::SQ57 | Square::SQ67 | Square::SQ77 | Square::SQ87 | Square::SQ97 => Some(Piece::B_P),
-                Square::SQ19 | Square::SQ99 => Some(Piece::B_L),
-                Square::SQ29 | Square::SQ89 => Some(Piece::B_N),
-                Square::SQ39 | Square::SQ79 => Some(Piece::B_S),
-                Square::SQ49 | Square::SQ69 => Some(Piece::B_G),
-                Square::SQ59 => Some(Piece::B_K),
-                Square::SQ88 => Some(Piece::B_B),
-                Square::SQ28 => Some(Piece::B_R),
-                Square::SQ13 | Square::SQ23 | Square::SQ33 | Square::SQ43 | Square::SQ53 | Square::SQ63 | Square::SQ73 | Square::SQ83 | Square::SQ93 => Some(Piece::W_P),
-                Square::SQ11 | Square::SQ91 => Some(Piece::W_L),
-                Square::SQ21 | Square::SQ81 => Some(Piece::W_N),
-                Square::SQ31 | Square::SQ71 => Some(Piece::W_S),
-                Square::SQ41 | Square::SQ61 => Some(Piece::W_G),
-                Square::SQ51 => Some(Piece::W_K),
-                Square::SQ22 => Some(Piece::W_B),
-                Square::SQ82 => Some(Piece::W_R),
+                Square::SQ_1G | Square::SQ_2G | Square::SQ_3G | Square::SQ_4G | Square::SQ_5G | Square::SQ_6G | Square::SQ_7G | Square::SQ_8G | Square::SQ_9G => Some(Piece::B_P),
+                Square::SQ_1I | Square::SQ_9I => Some(Piece::B_L),
+                Square::SQ_2I | Square::SQ_8I => Some(Piece::B_N),
+                Square::SQ_3I | Square::SQ_7I => Some(Piece::B_S),
+                Square::SQ_4I | Square::SQ_6I => Some(Piece::B_G),
+                Square::SQ_5I => Some(Piece::B_K),
+                Square::SQ_8H => Some(Piece::B_B),
+                Square::SQ_2H => Some(Piece::B_R),
+                Square::SQ_1C | Square::SQ_2C | Square::SQ_3C | Square::SQ_4C | Square::SQ_5C | Square::SQ_6C | Square::SQ_7C | Square::SQ_8C | Square::SQ_9C => Some(Piece::W_P),
+                Square::SQ_1A | Square::SQ_9A => Some(Piece::W_L),
+                Square::SQ_2A | Square::SQ_8A => Some(Piece::W_N),
+                Square::SQ_3A | Square::SQ_7A => Some(Piece::W_S),
+                Square::SQ_4A | Square::SQ_6A => Some(Piece::W_G),
+                Square::SQ_5A => Some(Piece::W_K),
+                Square::SQ_2B => Some(Piece::W_B),
+                Square::SQ_8B => Some(Piece::W_R),
                 _ => None,
             };
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
@@ -470,11 +473,11 @@ mod tests {
     fn do_undo_move() {
         let mut pos = Position::default();
         let moves = [
-            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
-            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
-            Move::new_normal(Square::SQ88, Square::SQ22, true, Piece::B_B),
-            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::W_S),
-            Move::new_drop(Square::SQ33, Piece::B_B),
+            Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
+            Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
+            Move::new_normal(Square::SQ_8H, Square::SQ_2B, true, Piece::B_B),
+            Move::new_normal(Square::SQ_3A, Square::SQ_2B, false, Piece::W_S),
+            Move::new_drop(Square::SQ_3C, Piece::B_B),
         ];
         // do moves
         for &m in moves.iter() {
@@ -482,11 +485,11 @@ mod tests {
         }
         // check moved pieces, position states
         for (sq, expected) in [
-            (Square::SQ22, Some(Piece::W_S)),
-            (Square::SQ31, None),
-            (Square::SQ33, Some(Piece::B_B)),
-            (Square::SQ76, Some(Piece::B_P)),
-            (Square::SQ77, None),
+            (Square::SQ_2B, Some(Piece::W_S)),
+            (Square::SQ_3A, None),
+            (Square::SQ_3C, Some(Piece::B_B)),
+            (Square::SQ_7F, Some(Piece::B_P)),
+            (Square::SQ_7G, None),
         ] {
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
         }
@@ -512,9 +515,7 @@ mod tests {
             pos.undo_move(m);
         }
         let default = Position::default();
-        assert!(Square::ALL
-            .iter()
-            .all(|&sq| pos.piece_on(sq) == default.piece_on(sq)));
+        assert!(Square::all().all(|sq| pos.piece_on(sq) == default.piece_on(sq)));
         assert_eq!(Color::Black, pos.side_to_move());
         assert_eq!(1, pos.ply());
         assert_eq!(false, pos.in_check());
@@ -596,26 +597,26 @@ mod tests {
             [16, 2, 4, 4, 3, 1, 1, 0],
         ], Color::Black, 1);
         let test_cases = [
-            (Move::new_drop(Square::SQ12, Piece::B_L), true),
-            (Move::new_drop(Square::SQ14, Piece::B_L), false),
-            (Move::new_drop(Square::SQ22, Piece::B_B), true),
-            (Move::new_drop(Square::SQ55, Piece::B_B), false),
-            (Move::new_drop(Square::SQ21, Piece::B_R), true),
-            (Move::new_drop(Square::SQ51, Piece::B_R), false),
+            (Move::new_drop(Square::SQ_1B, Piece::B_L), true),
+            (Move::new_drop(Square::SQ_1D, Piece::B_L), false),
+            (Move::new_drop(Square::SQ_2B, Piece::B_B), true),
+            (Move::new_drop(Square::SQ_5E, Piece::B_B), false),
+            (Move::new_drop(Square::SQ_2A, Piece::B_R), true),
+            (Move::new_drop(Square::SQ_5A, Piece::B_R), false),
             (
-                Move::new_normal(Square::SQ13, Square::SQ12, false, Piece::B_G),
+                Move::new_normal(Square::SQ_1C, Square::SQ_1B, false, Piece::B_G),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ22, false, Piece::B_G),
+                Move::new_normal(Square::SQ_1C, Square::SQ_2B, false, Piece::B_G),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ23, false, Piece::B_G),
+                Move::new_normal(Square::SQ_1C, Square::SQ_2C, false, Piece::B_G),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ14, false, Piece::B_G),
+                Move::new_normal(Square::SQ_1C, Square::SQ_1D, false, Piece::B_G),
                 false,
             ),
         ];

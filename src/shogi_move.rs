@@ -1,5 +1,4 @@
-use crate::Square;
-use shogi_core::{Color, Piece, PieceKind};
+use shogi_core::{Color, Piece, PieceKind, Square};
 use std::fmt;
 
 pub enum MoveType {
@@ -34,8 +33,8 @@ impl Move {
 
     pub fn new_normal(from: Square, to: Square, is_promotion: bool, piece: Piece) -> Self {
         Move(
-            to.index() as u32
-                | ((from.0 as u32) << Move::FROM_SHIFT)
+            (to.index() as u32 - 1)
+                | ((from.index() as u32 - 1) << Move::FROM_SHIFT)
                 | if is_promotion {
                     Move::PROMOTION_FLAG
                 } else {
@@ -45,15 +44,15 @@ impl Move {
         )
     }
     pub fn new_drop(to: Square, piece: Piece) -> Self {
-        Move(to.index() as u32 | Move::DROP_FLAG | (piece.as_u8() as u32) << Move::PIECE_SHIFT)
+        Move(
+            (to.index() as u32 - 1) | Move::DROP_FLAG | (piece.as_u8() as u32) << Move::PIECE_SHIFT,
+        )
     }
     pub fn from(&self) -> Option<Square> {
         if self.is_drop() {
             None
         } else {
-            Some(Square(
-                ((self.0 & Move::FROM_MASK) >> Move::FROM_SHIFT) as i8,
-            ))
+            Square::from_u8(((self.0 & Move::FROM_MASK) >> Move::FROM_SHIFT) as u8 + 1)
         }
     }
     pub fn move_type(&self) -> MoveType {
@@ -72,7 +71,7 @@ impl Move {
         }
     }
     pub fn to(&self) -> Square {
-        Square((self.0 & Move::TO_MASK) as i8)
+        unsafe { Square::from_u8_unchecked((self.0 & Move::TO_MASK) as u8 + 1) }
     }
     pub fn is_promotion(&self) -> bool {
         (self.0 & Move::PROMOTION_FLAG) != 0
