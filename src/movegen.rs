@@ -1,5 +1,4 @@
 use crate::bitboard::Bitboard;
-use crate::pieces::PIECES;
 use crate::square::Rank;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::{Move, Position, Square};
@@ -101,8 +100,8 @@ impl MoveList {
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         let (to_bb, delta, p) = match c {
-            Color::Black => (pos.pieces_cp(c, PieceKind::Pawn).shr(), 1, PIECES.BFU),
-            Color::White => (pos.pieces_cp(c, PieceKind::Pawn).shl(), -1, PIECES.WFU),
+            Color::Black => (pos.pieces_cp(c, PieceKind::Pawn).shr(), 1, Piece::B_P),
+            Color::White => (pos.pieces_cp(c, PieceKind::Pawn).shl(), -1, Piece::W_P),
         };
         for to in to_bb & *target {
             let rank = to.rank();
@@ -364,15 +363,15 @@ mod tests {
     fn drop_moves() {
         #[rustfmt::skip]
         let pos = Position::new([
-            *WKY, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKY,
-            *WKE, *WGI, *WFU, *EMP, *EMP, *EMP, *BFU, *BHI, *BKE,
-            *EMP, *EMP, *EMP, *WFU, *EMP, *EMP, *BFU, *EMP, *BGI,
-            *WKI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKI,
-            *WOU, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BOU,
-            *WKI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKI,
-            *WGI, *EMP, *WFU, *EMP, *EMP, *BFU, *EMP, *EMP, *BGI,
-            *WKE, *WHI, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKE,
-            *WKY, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKY,
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            WKE, WGI, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
+            EMP, EMP, EMP, WFU, EMP, EMP, BFU, EMP, BGI,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WGI, EMP, WFU, EMP, EMP, BFU, EMP, EMP, BGI,
+            WKE, WHI, WFU, EMP, EMP, EMP, BFU, EMP, BKE,
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
         ], [
             [0, 0, 0, 0, 0, 1, 0, 0],
             [0, 0, 0, 0, 0, 1, 0, 0],
@@ -391,15 +390,15 @@ mod tests {
         // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
         #[rustfmt::skip]
         let pos = Position::new([
-            *EMP, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *BGI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *BGI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
-            *EMP, *BGI, *BKA, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
-            *EMP, *BOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
-            *BHI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            EMP, WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
+            EMP, BGI, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
+            EMP, BOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
+            BHI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
         ], [
             [ 1, 1, 1, 1, 1, 1, 1, 0],
             [17, 0, 3, 0, 3, 0, 0, 0],
@@ -427,15 +426,15 @@ mod tests {
             // +
             (
                 Position::new([
-                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *WFU, *EMP, *BFU, *BKI, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, WFU, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [14, 4, 4, 4, 3, 2, 2, 0],
@@ -457,15 +456,15 @@ mod tests {
             // +
             (
                 Position::new([
-                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *WFU, *WKI, *EMP, *BKI, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, WFU, WKI, EMP, BKI, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 4, 4, 2, 2, 2, 0],
@@ -487,15 +486,15 @@ mod tests {
             // +
             (
                 Position::new([
-                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *WFU, *WKI, *BFU, *BKI, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *BHI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, WFU, WKI, BFU, BKI, EMP, EMP, EMP, EMP,
+                    EMP, EMP, BHI, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 4, 4, 2, 2, 1, 0],
@@ -517,15 +516,15 @@ mod tests {
             // +
             (
                 Position::new([
-                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *WKE, *EMP, *BFU, *BKI, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, WKE, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 2, 2, 0],
@@ -547,15 +546,15 @@ mod tests {
             // +
             (
                 Position::new([
-                    *EMP, *WFU, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *WKE, *EMP, *BFU, *BKI, *EMP, *EMP, *EMP, *EMP,
-                    *BKA, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, WKE, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
+                    BKA, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 1, 2, 0],
@@ -578,15 +577,15 @@ mod tests {
             // +
             (
                 Position::new([
-                    *EMP, *WKY, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *BKA, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *BKI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                    *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+                    EMP, WKY, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, BKI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
                     [ 1, 0, 0, 0, 0, 0, 0, 0],
                     [15, 4, 3, 4, 3, 1, 2, 0],

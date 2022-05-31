@@ -92,7 +92,6 @@ pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pieces::PIECES;
     use crate::{Move, Position};
     use std::collections::HashSet;
 
@@ -152,9 +151,9 @@ mod tests {
             let mut pos = Position::default();
             // +7776FU,-3334FU,+2726FU
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
-                Move::new_normal(Square::SQ27, Square::SQ26, false, PIECES.BFU),
+                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
+                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
+                Move::new_normal(Square::SQ27, Square::SQ26, false, Piece::B_P),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.key()
@@ -163,9 +162,9 @@ mod tests {
             let mut pos = Position::default();
             // +2726FU,-3334FU,+7776FU
             let moves = [
-                Move::new_normal(Square::SQ27, Square::SQ26, false, PIECES.BFU),
-                Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
+                Move::new_normal(Square::SQ27, Square::SQ26, false, Piece::B_P),
+                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
+                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.key()
@@ -190,12 +189,12 @@ mod tests {
             // +7776FU,-3334FU,+8822KA,-3122GI,+0088KA,-2231GI
             // => P-00KA
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
-                Move::new_normal(Square::SQ88, Square::SQ22, false, PIECES.BKA),
-                Move::new_normal(Square::SQ31, Square::SQ22, false, PIECES.WGI),
-                Move::new_drop(Square::SQ88, PIECES.BKA),
-                Move::new_normal(Square::SQ22, Square::SQ31, false, PIECES.WGI),
+                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
+                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
+                Move::new_normal(Square::SQ88, Square::SQ22, false, Piece::B_B),
+                Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::W_S),
+                Move::new_drop(Square::SQ88, Piece::B_B),
+                Move::new_normal(Square::SQ22, Square::SQ31, false, Piece::W_S),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()
@@ -205,12 +204,12 @@ mod tests {
             // +7776FU,-3334FU,+8822KA,-3142GI,+2288KA,-4231GI
             // => P+00KA
             let moves = [
-                Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
-                Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
-                Move::new_normal(Square::SQ88, Square::SQ22, false, PIECES.BKA),
-                Move::new_normal(Square::SQ31, Square::SQ42, false, PIECES.WGI),
-                Move::new_normal(Square::SQ22, Square::SQ88, false, PIECES.BKA),
-                Move::new_normal(Square::SQ42, Square::SQ31, false, PIECES.WGI),
+                Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
+                Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
+                Move::new_normal(Square::SQ88, Square::SQ22, false, Piece::B_B),
+                Move::new_normal(Square::SQ31, Square::SQ42, false, Piece::W_S),
+                Move::new_normal(Square::SQ22, Square::SQ88, false, Piece::B_B),
+                Move::new_normal(Square::SQ42, Square::SQ31, false, Piece::W_S),
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()

@@ -1,7 +1,6 @@
 mod bitboard;
 mod board_piece;
 mod movegen;
-mod pieces;
 mod position;
 mod shogi_move;
 mod square;

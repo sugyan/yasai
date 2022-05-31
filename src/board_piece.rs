@@ -1,62 +1,60 @@
-use crate::pieces::PIECES;
-use once_cell::sync::Lazy;
 use shogi_core::Piece;
 
 #[allow(dead_code)]
-pub(crate) static EMP: Lazy<Option<Piece>> = Lazy::new(|| None);
+pub(crate) static EMP: Option<Piece> = None;
 #[allow(dead_code)]
-pub(crate) static BFU: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BFU));
+pub(crate) static BFU: Option<Piece> = Some(Piece::B_P);
 #[allow(dead_code)]
-pub(crate) static BKY: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BKY));
+pub(crate) static BKY: Option<Piece> = Some(Piece::B_L);
 #[allow(dead_code)]
-pub(crate) static BKE: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BKE));
+pub(crate) static BKE: Option<Piece> = Some(Piece::B_N);
 #[allow(dead_code)]
-pub(crate) static BGI: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BGI));
+pub(crate) static BGI: Option<Piece> = Some(Piece::B_S);
 #[allow(dead_code)]
-pub(crate) static BKA: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BKA));
+pub(crate) static BKA: Option<Piece> = Some(Piece::B_B);
 #[allow(dead_code)]
-pub(crate) static BHI: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BHI));
+pub(crate) static BHI: Option<Piece> = Some(Piece::B_R);
 #[allow(dead_code)]
-pub(crate) static BKI: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BKI));
+pub(crate) static BKI: Option<Piece> = Some(Piece::B_G);
 #[allow(dead_code)]
-pub(crate) static BOU: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BOU));
+pub(crate) static BOU: Option<Piece> = Some(Piece::B_K);
 #[allow(dead_code)]
-pub(crate) static BTO: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BTO));
+pub(crate) static BTO: Option<Piece> = Some(Piece::B_PP);
 #[allow(dead_code)]
-pub(crate) static BNY: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BNY));
+pub(crate) static BNY: Option<Piece> = Some(Piece::B_PL);
 #[allow(dead_code)]
-pub(crate) static BNK: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BNK));
+pub(crate) static BNK: Option<Piece> = Some(Piece::B_PN);
 #[allow(dead_code)]
-pub(crate) static BNG: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BNG));
+pub(crate) static BNG: Option<Piece> = Some(Piece::B_PS);
 #[allow(dead_code)]
-pub(crate) static BUM: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BUM));
+pub(crate) static BUM: Option<Piece> = Some(Piece::B_PB);
 #[allow(dead_code)]
-pub(crate) static BRY: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.BRY));
+pub(crate) static BRY: Option<Piece> = Some(Piece::B_PR);
 #[allow(dead_code)]
-pub(crate) static WFU: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WFU));
+pub(crate) static WFU: Option<Piece> = Some(Piece::W_P);
 #[allow(dead_code)]
-pub(crate) static WKY: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WKY));
+pub(crate) static WKY: Option<Piece> = Some(Piece::W_L);
 #[allow(dead_code)]
-pub(crate) static WKE: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WKE));
+pub(crate) static WKE: Option<Piece> = Some(Piece::W_N);
 #[allow(dead_code)]
-pub(crate) static WGI: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WGI));
+pub(crate) static WGI: Option<Piece> = Some(Piece::W_S);
 #[allow(dead_code)]
-pub(crate) static WKA: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WKA));
+pub(crate) static WKA: Option<Piece> = Some(Piece::W_B);
 #[allow(dead_code)]
-pub(crate) static WHI: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WHI));
+pub(crate) static WHI: Option<Piece> = Some(Piece::W_R);
 #[allow(dead_code)]
-pub(crate) static WKI: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WKI));
+pub(crate) static WKI: Option<Piece> = Some(Piece::W_G);
 #[allow(dead_code)]
-pub(crate) static WOU: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WOU));
+pub(crate) static WOU: Option<Piece> = Some(Piece::W_K);
 #[allow(dead_code)]
-pub(crate) static WTO: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WTO));
+pub(crate) static WTO: Option<Piece> = Some(Piece::W_PP);
 #[allow(dead_code)]
-pub(crate) static WNY: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WNY));
+pub(crate) static WNY: Option<Piece> = Some(Piece::W_PL);
 #[allow(dead_code)]
-pub(crate) static WNK: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WNK));
+pub(crate) static WNK: Option<Piece> = Some(Piece::W_PN);
 #[allow(dead_code)]
-pub(crate) static WNG: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WNG));
+pub(crate) static WNG: Option<Piece> = Some(Piece::W_PS);
 #[allow(dead_code)]
-pub(crate) static WUM: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WUM));
+pub(crate) static WUM: Option<Piece> = Some(Piece::W_PB);
 #[allow(dead_code)]
-pub(crate) static WRY: Lazy<Option<Piece>> = Lazy::new(|| Some(PIECES.WRY));
+pub(crate) static WRY: Option<Piece> = Some(Piece::W_PR);

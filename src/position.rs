@@ -1,7 +1,6 @@
 use crate::bitboard::Bitboard;
 use crate::board_piece::*;
 use crate::movegen::MoveList;
-use crate::pieces::{PieceKinds, Pieces};
 use crate::shogi_move::MoveType;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
@@ -241,7 +240,11 @@ impl Position {
                 if let Some(p) = captured {
                     let pk = p.piece_kind();
                     self.xor_bbs(c.flip(), pk, to);
-                    let pk_unpromoted = PieceKinds::unpromoted(p.piece_kind());
+                    let pk_unpromoted = if let Some(pk) = pk.unpromote() {
+                        pk
+                    } else {
+                        pk
+                    };
                     let h = self.hands[c.array_index()]
                         .added(pk_unpromoted)
                         .expect("invalid piece kind");
@@ -251,7 +254,11 @@ impl Position {
                     keys.1 ^= ZOBRIST_TABLE.hand(c, pk_unpromoted, num - 1);
                 }
                 let p = if is_promotion {
-                    Pieces::promoted(piece)
+                    if let Some(p) = piece.promote() {
+                        p
+                    } else {
+                        piece
+                    }
                 } else {
                     piece
                 };
@@ -299,14 +306,23 @@ impl Position {
                 piece,
             } => {
                 let p_to = if is_promotion {
-                    Pieces::promoted(piece)
+                    if let Some(p) = piece.promote() {
+                        p
+                    } else {
+                        piece
+                    }
                 } else {
                     piece
                 };
                 self.remove_piece(to, p_to);
                 if let Some(p_cap) = self.captured() {
+                    let pk = p_cap.piece_kind();
                     self.put_piece(to, p_cap);
-                    let pk_unpromoted = PieceKinds::unpromoted(p_cap.piece_kind());
+                    let pk_unpromoted = if let Some(pk) = pk.unpromote() {
+                        pk
+                    } else {
+                        pk
+                    };
                     self.hands[c.flip().array_index()] = self.hands[c.flip().array_index()]
                         .removed(pk_unpromoted)
                         .expect("invalid piece kind");
@@ -363,7 +379,11 @@ impl Position {
             } => {
                 // 直接王手
                 let p = if is_promotion {
-                    Pieces::promoted(piece)
+                    if let Some(p) = piece.promote() {
+                        p
+                    } else {
+                        piece
+                    }
                 } else {
                     piece
                 };
@@ -389,15 +409,15 @@ impl Default for Position {
     fn default() -> Self {
         #[rustfmt::skip]
         let board = [
-            *WKY, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKY,
-            *WKE, *WKA, *WFU, *EMP, *EMP, *EMP, *BFU, *BHI, *BKE,
-            *WGI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BGI,
-            *WKI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKI,
-            *WOU, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BOU,
-            *WKI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKI,
-            *WGI, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BGI,
-            *WKE, *WHI, *WFU, *EMP, *EMP, *EMP, *BFU, *BKA, *BKE,
-            *WKY, *EMP, *WFU, *EMP, *EMP, *EMP, *BFU, *EMP, *BKY,
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
+            WKE, WKA, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
+            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
+            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
+            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
+            WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
+            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
         ];
         Self::new(board, [[0; 8]; 2], Color::Black, 1)
     }
@@ -406,7 +426,6 @@ impl Default for Position {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pieces::PIECES;
 
     #[test]
     fn default() {
@@ -414,22 +433,22 @@ mod tests {
         for sq in Square::ALL {
             #[rustfmt::skip]
             let expected = match sq {
-                Square::SQ17 | Square::SQ27 | Square::SQ37 | Square::SQ47 | Square::SQ57 | Square::SQ67 | Square::SQ77 | Square::SQ87 | Square::SQ97 => Some(PIECES.BFU),
-                Square::SQ19 | Square::SQ99 => Some(PIECES.BKY),
-                Square::SQ29 | Square::SQ89 => Some(PIECES.BKE),
-                Square::SQ39 | Square::SQ79 => Some(PIECES.BGI),
-                Square::SQ49 | Square::SQ69 => Some(PIECES.BKI),
-                Square::SQ59 => Some(PIECES.BOU),
-                Square::SQ88 => Some(PIECES.BKA),
-                Square::SQ28 => Some(PIECES.BHI),
-                Square::SQ13 | Square::SQ23 | Square::SQ33 | Square::SQ43 | Square::SQ53 | Square::SQ63 | Square::SQ73 | Square::SQ83 | Square::SQ93 => Some(PIECES.WFU),
-                Square::SQ11 | Square::SQ91 => Some(PIECES.WKY),
-                Square::SQ21 | Square::SQ81 => Some(PIECES.WKE),
-                Square::SQ31 | Square::SQ71 => Some(PIECES.WGI),
-                Square::SQ41 | Square::SQ61 => Some(PIECES.WKI),
-                Square::SQ51 => Some(PIECES.WOU),
-                Square::SQ22 => Some(PIECES.WKA),
-                Square::SQ82 => Some(PIECES.WHI),
+                Square::SQ17 | Square::SQ27 | Square::SQ37 | Square::SQ47 | Square::SQ57 | Square::SQ67 | Square::SQ77 | Square::SQ87 | Square::SQ97 => Some(Piece::B_P),
+                Square::SQ19 | Square::SQ99 => Some(Piece::B_L),
+                Square::SQ29 | Square::SQ89 => Some(Piece::B_N),
+                Square::SQ39 | Square::SQ79 => Some(Piece::B_S),
+                Square::SQ49 | Square::SQ69 => Some(Piece::B_G),
+                Square::SQ59 => Some(Piece::B_K),
+                Square::SQ88 => Some(Piece::B_B),
+                Square::SQ28 => Some(Piece::B_R),
+                Square::SQ13 | Square::SQ23 | Square::SQ33 | Square::SQ43 | Square::SQ53 | Square::SQ63 | Square::SQ73 | Square::SQ83 | Square::SQ93 => Some(Piece::W_P),
+                Square::SQ11 | Square::SQ91 => Some(Piece::W_L),
+                Square::SQ21 | Square::SQ81 => Some(Piece::W_N),
+                Square::SQ31 | Square::SQ71 => Some(Piece::W_S),
+                Square::SQ41 | Square::SQ61 => Some(Piece::W_G),
+                Square::SQ51 => Some(Piece::W_K),
+                Square::SQ22 => Some(Piece::W_B),
+                Square::SQ82 => Some(Piece::W_R),
                 _ => None,
             };
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
@@ -451,11 +470,11 @@ mod tests {
     fn do_undo_move() {
         let mut pos = Position::default();
         let moves = [
-            Move::new_normal(Square::SQ77, Square::SQ76, false, PIECES.BFU),
-            Move::new_normal(Square::SQ33, Square::SQ34, false, PIECES.WFU),
-            Move::new_normal(Square::SQ88, Square::SQ22, true, PIECES.BKA),
-            Move::new_normal(Square::SQ31, Square::SQ22, false, PIECES.WGI),
-            Move::new_drop(Square::SQ33, PIECES.BKA),
+            Move::new_normal(Square::SQ77, Square::SQ76, false, Piece::B_P),
+            Move::new_normal(Square::SQ33, Square::SQ34, false, Piece::W_P),
+            Move::new_normal(Square::SQ88, Square::SQ22, true, Piece::B_B),
+            Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::W_S),
+            Move::new_drop(Square::SQ33, Piece::B_B),
         ];
         // do moves
         for &m in moves.iter() {
@@ -463,10 +482,10 @@ mod tests {
         }
         // check moved pieces, position states
         for (sq, expected) in [
-            (Square::SQ22, Some(PIECES.WGI)),
+            (Square::SQ22, Some(Piece::W_S)),
             (Square::SQ31, None),
-            (Square::SQ33, Some(PIECES.BKA)),
-            (Square::SQ76, Some(PIECES.BFU)),
+            (Square::SQ33, Some(Piece::B_B)),
+            (Square::SQ76, Some(Piece::B_P)),
             (Square::SQ77, None),
         ] {
             assert_eq!(expected, pos.piece_on(sq), "square: {:?}", sq);
@@ -529,15 +548,15 @@ mod tests {
             // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
             #[rustfmt::skip]
             let mut pos = Position::new([
-                *EMP, *WOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                *EMP, *BGI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                *EMP, *BGI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
-                *EMP, *BGI, *BKA, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
-                *EMP, *BOU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-                *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *BKY,
-                *BHI, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP
+                EMP, WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
+                EMP, BGI, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
+                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
+                EMP, BOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
+                BHI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP
             ], [
                 [ 1, 1, 1, 1, 1, 1, 1, 0],
                 [17, 0, 3, 0, 3, 0, 0, 0],
@@ -550,53 +569,53 @@ mod tests {
     #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn is_check_move() {
+        #[rustfmt::skip]
         // P1 *  *  *  *  *  * -FU * -OU
-        // P2 *  *  *  *  *  *  *  *  *
+        // P2 *  *  *  *  *  *  *  *  * 
         // P3 *  *  *  *  *  * +FU * +KI
-        // P4 *  *  *  *  *  *  *  *  *
+        // P4 *  *  *  *  *  *  *  *  * 
         // P5 *  *  *  *  *  *  *  * +KY
-        // P6 *  *  *  *  *  *  *  *  *
-        // P7 *  *  *  *  *  *  *  *  *
-        // P8 *  *  *  *  *  *  *  *  *
-        // P9 *  *  *  *  *  *  *  *  *
+        // P6 *  *  *  *  *  *  *  *  * 
+        // P7 *  *  *  *  *  *  *  *  * 
+        // P8 *  *  *  *  *  *  *  *  * 
+        // P9 *  *  *  *  *  *  *  *  * 
         // P-00AL
         // +
-        #[rustfmt::skip]
         let pos = Position::new([
-            *WOU, *EMP, *BKI, *EMP, *BKY, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *WFU, *EMP, *BFU, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
-            *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP, *EMP,
+            WOU, EMP, BKI, EMP, BKY, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            WFU, EMP, BFU, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
+            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
         ], [
             [ 0, 1, 0, 0, 0, 1, 1, 0],
             [16, 2, 4, 4, 3, 1, 1, 0],
         ], Color::Black, 1);
         let test_cases = [
-            (Move::new_drop(Square::SQ12, PIECES.BKY), true),
-            (Move::new_drop(Square::SQ14, PIECES.BKY), false),
-            (Move::new_drop(Square::SQ22, PIECES.BKA), true),
-            (Move::new_drop(Square::SQ55, PIECES.BKA), false),
-            (Move::new_drop(Square::SQ21, PIECES.BHI), true),
-            (Move::new_drop(Square::SQ51, PIECES.BHI), false),
+            (Move::new_drop(Square::SQ12, Piece::B_L), true),
+            (Move::new_drop(Square::SQ14, Piece::B_L), false),
+            (Move::new_drop(Square::SQ22, Piece::B_B), true),
+            (Move::new_drop(Square::SQ55, Piece::B_B), false),
+            (Move::new_drop(Square::SQ21, Piece::B_R), true),
+            (Move::new_drop(Square::SQ51, Piece::B_R), false),
             (
-                Move::new_normal(Square::SQ13, Square::SQ12, false, PIECES.BKI),
+                Move::new_normal(Square::SQ13, Square::SQ12, false, Piece::B_G),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ22, false, PIECES.BKI),
+                Move::new_normal(Square::SQ13, Square::SQ22, false, Piece::B_G),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ23, false, PIECES.BKI),
+                Move::new_normal(Square::SQ13, Square::SQ23, false, Piece::B_G),
                 true,
             ),
             (
-                Move::new_normal(Square::SQ13, Square::SQ14, false, PIECES.BKI),
+                Move::new_normal(Square::SQ13, Square::SQ14, false, Piece::B_G),
                 false,
             ),
         ];
