@@ -40,19 +40,19 @@ mod tests {
         b.iter(|| {
             #[rustfmt::skip]
             let mut pos = Position::new([
-                Piece::EMP, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::BGI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::BGI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
-                Piece::EMP, Piece::BGI, Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
-                Piece::EMP, Piece::BOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
-                Piece::BHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                            None, Some(Piece::WOU),             None,             None,             None,             None,             None,             None,             None,
+                            None, Some(Piece::BGI),             None,             None,             None,             None,             None,             None,             None,
+                            None, Some(Piece::BGI),             None,             None,             None,             None,             None,             None,             None,
+                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
+                            None, Some(Piece::BGI), Some(Piece::BKA),             None,             None,             None,             None,             None,             None,
+                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
+                            None, Some(Piece::BOU),             None,             None,             None,             None,             None,             None,             None,
+                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
+                Some(Piece::BHI),             None,             None,             None,             None,             None,             None,             None,             None,
             ], [
                 [ 1, 1, 1, 1, 1, 1, 1],
                 [17, 0, 3, 0, 3, 0, 0],
-            ], Color::Black);
+            ], Color::Black, 1);
             assert_eq!(53_393_368, perft(&mut pos, 3));
         });
     }
