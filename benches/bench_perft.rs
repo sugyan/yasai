@@ -4,8 +4,9 @@ extern crate test;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shogi_core::{Color, Piece};
     use test::Bencher;
-    use yasai::{Color, Piece, Position};
+    use yasai::Position;
 
     fn perft(pos: &mut Position, depth: usize) -> usize {
         let mut ret = 0;
@@ -40,19 +41,19 @@ mod tests {
         b.iter(|| {
             #[rustfmt::skip]
             let mut pos = Position::new([
-                Piece::EMP, Piece::WOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::BGI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::BGI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
-                Piece::EMP, Piece::BGI, Piece::BKA, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
-                Piece::EMP, Piece::BOU, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
-                Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::BKY,
-                Piece::BHI, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP, Piece::EMP,
+                None, Some(Piece::W_K), None, None, None, None, None, None, None,
+                None, Some(Piece::B_S), None, None, None, None, None, None, None,
+                None, Some(Piece::B_S), None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                None, Some(Piece::B_S), Some(Piece::B_B), None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                None, Some(Piece::B_K), None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                Some(Piece::B_R), None, None, None, None, None, None, None, None,
             ], [
-                [ 1, 1, 1, 1, 1, 1, 1],
-                [17, 0, 3, 0, 3, 0, 0],
-            ], Color::Black);
+                [ 1, 1, 1, 1, 1, 1, 1, 0],
+                [17, 0, 3, 0, 3, 0, 0, 0],
+            ], Color::Black, 1);
             assert_eq!(53_393_368, perft(&mut pos, 3));
         });
     }
