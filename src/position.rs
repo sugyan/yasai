@@ -208,7 +208,7 @@ impl Position {
         !self.checkers().is_empty()
     }
     fn checkable(&self, pk: PieceKind, sq: Square) -> bool {
-        !(self.state().attack_info.checkables[pk.array_index()] & Bitboard::single(sq)).is_empty()
+        self.state().attack_info.checkables[pk.array_index()].contains(sq)
     }
     pub fn pinned(&self) -> [Bitboard; 2] {
         self.state().attack_info.pinned
@@ -391,14 +391,10 @@ impl Position {
                 }
                 // 開き王手
                 let c = self.side_to_move();
-                if !(self.pinned()[c.flip().array_index()] & Bitboard::single(from)).is_empty() {
+                if self.pinned()[c.flip().array_index()].contains(from) {
                     if let Some(sq) = self.king(c.flip()) {
-                        return (BETWEEN_TABLE[sq.array_index()][from.array_index()]
-                            & Bitboard::single(to))
-                        .is_empty()
-                            && (BETWEEN_TABLE[sq.array_index()][to.array_index()]
-                                & Bitboard::single(from))
-                            .is_empty();
+                        return !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(to)
+                            || BETWEEN_TABLE[sq.array_index()][to.array_index()].contains(from));
                     }
                 }
                 false

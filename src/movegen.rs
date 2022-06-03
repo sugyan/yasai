@@ -250,9 +250,7 @@ impl MoveList {
                 // 打ち歩詰めチェック
                 if let Some(sq) = pos.king(c.flip()) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
-                        if !(*target & Bitboard::single(to)).is_empty()
-                            && Self::is_uchifuzume(pos, to)
-                        {
+                        if target.contains(to) && Self::is_uchifuzume(pos, to) {
                             exclude |= to;
                         }
                     }
@@ -285,14 +283,10 @@ impl MoveList {
                 return false;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if !(pos.pinned()[c.array_index()] & Bitboard::single(from)).is_empty() {
+            if pos.pinned()[c.array_index()].contains(from) {
                 if let Some(sq) = pos.king(c) {
-                    if (BETWEEN_TABLE[sq.array_index()][from.array_index()]
-                        & Bitboard::single(m.to()))
-                    .is_empty()
-                        && (BETWEEN_TABLE[sq.array_index()][m.to().array_index()]
-                            & Bitboard::single(from))
-                        .is_empty()
+                    if !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(m.to())
+                        || BETWEEN_TABLE[sq.array_index()][m.to().array_index()].contains(from))
                     {
                         return false;
                     }

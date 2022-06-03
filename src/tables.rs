@@ -64,7 +64,7 @@ fn sliding_attacks(sq: Square, occ: Bitboard, deltas: &[Delta]) -> Bitboard {
         let mut curr = sq.shift(delta.file, delta.rank);
         while let Some(to) = curr {
             bb |= to;
-            if !(occ & Bitboard::single(to)).is_empty() {
+            if occ.contains(to) {
                 break;
             }
             curr = to.shift(delta.file, delta.rank);

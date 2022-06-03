@@ -2,8 +2,7 @@
 extern crate test;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod perft {
     use shogi_core::{Color, Piece};
     use test::Bencher;
     use yasai::Position;

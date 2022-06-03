@@ -2,8 +2,7 @@
 extern crate test;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod movegen {
     use shogi_core::{Color, Piece};
     use test::Bencher;
     use yasai::Position;
@@ -20,7 +19,7 @@ mod tests {
     fn bench_legal_moves_maximum(b: &mut Bencher) {
         b.iter(|| {
             #[rustfmt::skip]
-            let mut pos = Position::new([
+            let pos = Position::new([
                 None, Some(Piece::W_K), None, None, None, None, None, None, None,
                 None, Some(Piece::B_S), None, None, None, None, None, None, None,
                 None, Some(Piece::B_S), None, None, None, None, None, None, None,
