@@ -13,7 +13,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -22,9 +22,27 @@ jobs:
   clippy_check:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - run: rustup component add clippy
     - uses: actions-rs/clippy-check@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         args: --all-features
+
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install nightly
+      run: rustup toolchain install nightly
+    - name: Benchmark
+      run: cargo +nightly bench perft::bench_perft_5 | tee bench-output.txt
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: cargo
+        output-file-path: bench-output.txt
+        auto-push: false
+    - name: Push benchmark result
+      run: git push 'https://github-actions:${{ secrets.GITHUB_TOKEN }}@github.com/sugyan/yasai.git' gh-pages:gh-pages
+      if: github.event_name != 'pull_request'

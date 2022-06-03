@@ -28,7 +28,7 @@ mod perft {
     }
 
     #[bench]
-    fn bench_perft_from_default(b: &mut Bencher) {
+    fn bench_perft_5_from_default(b: &mut Bencher) {
         b.iter(|| {
             let mut pos = Position::default();
             assert_eq!(19_861_490, perft(&mut pos, 5));
@@ -36,7 +36,7 @@ mod perft {
     }
 
     #[bench]
-    fn bench_perft_from_maximum_moves(b: &mut Bencher) {
+    fn bench_perft_3_from_maximum_moves(b: &mut Bencher) {
         b.iter(|| {
             #[rustfmt::skip]
             let mut pos = Position::new([
