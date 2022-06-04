@@ -1,4 +1,4 @@
-use crate::bb::{BitboardExt, FILES, RANKS};
+use crate::bb::{FILES, RANKS};
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::{Move, Position};
 use arrayvec::{ArrayVec, IntoIter};
@@ -99,8 +99,16 @@ impl MoveList {
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         let (to_bb, delta, p) = match c {
-            Color::Black => (pos.pieces_cp(c, PieceKind::Pawn).shr(), 1, Piece::B_P),
-            Color::White => (pos.pieces_cp(c, PieceKind::Pawn).shl(), !0, Piece::W_P),
+            Color::Black => (
+                unsafe { pos.pieces_cp(c, PieceKind::Pawn).shift_up(1) },
+                1,
+                Piece::B_P,
+            ),
+            Color::White => (
+                unsafe { pos.pieces_cp(c, PieceKind::Pawn).shift_down(1) },
+                !0,
+                Piece::W_P,
+            ),
         };
         for to in to_bb & *target {
             let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
