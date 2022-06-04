@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654270625084,
+  "lastUpdate": 1654352153259,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -25,6 +25,32 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 796994781,
             "range": "± 85166811",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "sugyan",
+            "username": "sugyan"
+          },
+          "committer": {
+            "name": "sugyan",
+            "username": "sugyan"
+          },
+          "id": "40e7d38de8495a8b4bc8fe0d1f3ce1a2fb67ed66",
+          "message": "Use shogi_core",
+          "timestamp": "2022-06-02T11:42:34Z",
+          "url": "https://github.com/sugyan/yasai/pull/7/commits/40e7d38de8495a8b4bc8fe0d1f3ce1a2fb67ed66"
+        },
+        "date": 1654352152878,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 403142522,
+            "range": "± 130245",
             "unit": "ns/iter"
           }
         ]
