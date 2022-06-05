@@ -1,8 +1,12 @@
-use crate::bb::{BitboardExt, FILES, RANKS};
 use bitintr::Pext;
 use once_cell::sync::Lazy;
 use shogi_core::{Bitboard, Color, PieceKind, Square};
 use std::cmp::Ordering;
+
+fn bb_values(bb: &Bitboard) -> (u64, u64) {
+    let repr = bb.to_u128();
+    ((repr & 0x7fff_ffff_ffff_ffff) as u64, (repr >> 64) as u64)
+}
 
 #[derive(Clone, Copy)]
 struct Delta {
@@ -133,9 +137,9 @@ impl LanceAttackTable {
     }
     pub fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let index = ((if sq.index() >= 64 {
-            occ.values().1
+            bb_values(occ).1
         } else {
-            occ.values().0
+            bb_values(occ).0
         } >> LanceAttackTable::OFFSET_BITS[sq.array_index()]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
         self.table[self.offsets[sq.array_index()][c.array_index()] + index]
@@ -175,8 +179,8 @@ impl SlidingAttackTable {
         bb
     }
     fn occupied_to_index(occ: Bitboard, mask: Bitboard) -> usize {
-        let values = (occ & mask).values();
-        let mask_values = mask.values();
+        let values = bb_values(&(occ & mask));
+        let mask_values = bb_values(&mask);
         (values.0 | values.1).pext(mask_values.0 | mask_values.1) as usize
     }
     fn new(table_size: usize, deltas: &[Delta]) -> Self {
@@ -270,7 +274,7 @@ pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| {
     }
 });
 
-pub static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::new(|| {
+pub(crate) static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::new(|| {
     let mut bbs = [[Bitboard::empty(); Square::NUM]; Square::NUM];
     for sq0 in Square::all() {
         for sq1 in Square::all() {
@@ -298,4 +302,42 @@ pub static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::n
         }
     }
     bbs
+});
+
+pub(crate) static FILES: Lazy<[Bitboard; 10]> = Lazy::new(|| {
+    let mut bbs = [Bitboard::empty(); 10];
+    for sq in Square::all() {
+        bbs[sq.file() as usize] |= Bitboard::single(sq);
+    }
+    bbs
+});
+
+pub(crate) static RANKS: Lazy<[Bitboard; 10]> = Lazy::new(|| {
+    let mut bbs = [Bitboard::empty(); 10];
+    for sq in Square::all() {
+        bbs[sq.rank() as usize] |= Bitboard::single(sq);
+    }
+    bbs
+});
+
+pub(crate) static RELATIVE_RANKS: Lazy<[[usize; Color::NUM]; Square::NUM]> = Lazy::new(|| {
+    let mut ranks = [[0; Color::NUM]; Square::NUM];
+    for sq in Square::all() {
+        for c in Color::all() {
+            ranks[sq.array_index()][c.array_index()] = sq.relative_rank(c) as usize;
+        }
+    }
+    ranks
+});
+
+pub(crate) static PROMOTABLE: Lazy<[[bool; Color::NUM]; Square::NUM]> = Lazy::new(|| {
+    let mut table = [[false; Color::NUM]; Square::NUM];
+    for sq in Square::all() {
+        for c in Color::all() {
+            if RELATIVE_RANKS[sq.array_index()][c.array_index()] <= 3 {
+                table[sq.array_index()][c.array_index()] = true;
+            }
+        }
+    }
+    table
 });

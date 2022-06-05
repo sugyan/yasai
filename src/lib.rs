@@ -1,4 +1,3 @@
-mod bb;
 mod board_piece;
 mod movegen;
 mod position;
