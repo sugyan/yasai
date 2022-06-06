@@ -1,9 +1,12 @@
-use crate::bitboard::Bitboard;
-use crate::square::{File, Rank};
-use crate::{Color, PieceType, Square};
 use bitintr::Pext;
 use once_cell::sync::Lazy;
+use shogi_core::{Bitboard, Color, PieceKind, Square};
 use std::cmp::Ordering;
+
+fn bb_values(bb: &Bitboard) -> (u64, u64) {
+    let repr = bb.to_u128();
+    ((repr & 0x7fff_ffff_ffff_ffff) as u64, (repr >> 64) as u64)
+}
 
 #[derive(Clone, Copy)]
 struct Delta {
@@ -42,12 +45,12 @@ impl PieceAttackTable {
     #[rustfmt::skip]    const WOU_DELTAS: &'static [Delta] = &[Delta::N, Delta::E, Delta::S, Delta::W, Delta::NE, Delta::SE, Delta::SW, Delta::NW];
 
     fn new(deltas: &[&[Delta]; Color::NUM]) -> Self {
-        let mut table = [[Bitboard::ZERO; Color::NUM]; Square::NUM];
-        for sq in Square::ALL {
-            for color in Color::ALL {
-                for &delta in deltas[color.index()] {
-                    if let Some(to) = sq.checked_shift(delta.file, delta.rank) {
-                        table[sq.index()][color.index()] |= to;
+        let mut table = [[Bitboard::empty(); Color::NUM]; Square::NUM];
+        for sq in Square::all() {
+            for color in Color::all() {
+                for &delta in deltas[color.array_index()] {
+                    if let Some(to) = sq.shift(delta.file, delta.rank) {
+                        table[sq.array_index()][color.array_index()] |= to;
                     }
                 }
             }
@@ -55,20 +58,20 @@ impl PieceAttackTable {
         Self(table)
     }
     pub fn attack(&self, sq: Square, c: Color) -> Bitboard {
-        self.0[sq.index()][c.index()]
+        self.0[sq.array_index()][c.array_index()]
     }
 }
 
 fn sliding_attacks(sq: Square, occ: Bitboard, deltas: &[Delta]) -> Bitboard {
-    let mut bb = Bitboard::ZERO;
+    let mut bb = Bitboard::empty();
     for &delta in deltas {
-        let mut curr = sq.checked_shift(delta.file, delta.rank);
+        let mut curr = sq.shift(delta.file, delta.rank);
         while let Some(to) = curr {
             bb |= to;
-            if !(occ & to).is_empty() {
+            if occ.contains(to) {
                 break;
             }
-            curr = to.checked_shift(delta.file, delta.rank);
+            curr = to.shift(delta.file, delta.rank);
         }
     }
     bb
@@ -96,11 +99,10 @@ impl LanceAttackTable {
     ];
 
     fn attack_mask(sq: Square) -> Bitboard {
-        Bitboard::from_file(sq.file())
-            & !(Bitboard::from_rank(Rank::RANK1) | Bitboard::from_rank(Rank::RANK9))
+        FILES[sq.file() as usize] & !(RANKS[1] | RANKS[9])
     }
     fn index_to_occupied(index: usize, mask: Bitboard) -> Bitboard {
-        let mut bb = Bitboard::ZERO;
+        let mut bb = Bitboard::empty();
         for (i, sq) in mask.enumerate() {
             if (index & (1 << i)) != 0 {
                 bb |= sq;
@@ -110,17 +112,17 @@ impl LanceAttackTable {
     }
     fn new() -> Self {
         let mut table =
-            vec![Bitboard::ZERO; Square::NUM * Color::NUM * LanceAttackTable::MASK_TABLE_NUM];
+            vec![Bitboard::empty(); Square::NUM * Color::NUM * LanceAttackTable::MASK_TABLE_NUM];
         let mut offsets = [[0; Color::NUM]; Square::NUM];
         let mut offset = 0;
-        for sq in Square::ALL {
+        for sq in Square::all() {
             let mask = Self::attack_mask(sq);
-            for c in Color::ALL {
+            for c in Color::all() {
                 let deltas = match c {
                     Color::Black => vec![Delta::N],
                     Color::White => vec![Delta::S],
                 };
-                offsets[sq.index()][c.index()] = offset;
+                offsets[sq.array_index()][c.array_index()] = offset;
                 for index in 0..LanceAttackTable::MASK_TABLE_NUM {
                     let occ = Self::index_to_occupied(index, mask);
                     table[offset + index] = sliding_attacks(sq, occ, &deltas);
@@ -131,13 +133,16 @@ impl LanceAttackTable {
         Self { table, offsets }
     }
     fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
-        self.table[self.offsets[sq.index()][c.index()]]
+        self.table[self.offsets[sq.array_index()][c.array_index()]]
     }
     pub fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
-        let index = ((occ.value(if sq.index() >= 63 { 1 } else { 0 })
-            >> LanceAttackTable::OFFSET_BITS[sq.index()]) as usize)
+        let index = ((if sq.index() >= 64 {
+            bb_values(occ).1
+        } else {
+            bb_values(occ).0
+        } >> LanceAttackTable::OFFSET_BITS[sq.array_index()]) as usize)
             & (Self::MASK_TABLE_NUM - 1);
-        self.table[self.offsets[sq.index()][c.index()] + index]
+        self.table[self.offsets[sq.array_index()][c.array_index()] + index]
     }
 }
 
@@ -149,23 +154,23 @@ pub struct SlidingAttackTable {
 
 impl SlidingAttackTable {
     fn attack_mask(sq: Square, deltas: &[Delta]) -> Bitboard {
-        let mut bb = sliding_attacks(sq, Bitboard::ZERO, deltas);
-        if sq.file() != File::FILE1 {
-            bb &= !Bitboard::FILES[File::FILE1.0 as usize];
+        let mut bb = sliding_attacks(sq, Bitboard::empty(), deltas);
+        if sq.file() != 1 {
+            bb &= !FILES[1];
         }
-        if sq.file() != File::FILE9 {
-            bb &= !Bitboard::FILES[File::FILE9.0 as usize];
+        if sq.file() != 9 {
+            bb &= !FILES[9];
         }
-        if sq.rank() != Rank::RANK1 {
-            bb &= !Bitboard::RANKS[Rank::RANK1.0 as usize];
+        if sq.rank() != 1 {
+            bb &= !RANKS[1];
         }
-        if sq.rank() != Rank::RANK9 {
-            bb &= !Bitboard::RANKS[Rank::RANK9.0 as usize];
+        if sq.rank() != 9 {
+            bb &= !RANKS[9];
         }
         bb
     }
     fn index_to_occupied(index: usize, mask: Bitboard) -> Bitboard {
-        let mut bb = Bitboard::ZERO;
+        let mut bb = Bitboard::empty();
         for (i, sq) in mask.enumerate() {
             if (index & (1 << i)) != 0 {
                 bb |= sq;
@@ -174,18 +179,20 @@ impl SlidingAttackTable {
         bb
     }
     fn occupied_to_index(occ: Bitboard, mask: Bitboard) -> usize {
-        (occ & mask).merge().pext(mask.merge()) as usize
+        let values = bb_values(&(occ & mask));
+        let mask_values = bb_values(&mask);
+        (values.0 | values.1).pext(mask_values.0 | mask_values.1) as usize
     }
     fn new(table_size: usize, deltas: &[Delta]) -> Self {
-        let mut table = vec![Bitboard::ZERO; table_size];
-        let mut masks = [Bitboard::ZERO; Square::NUM];
+        let mut table = vec![Bitboard::empty(); table_size];
+        let mut masks = [Bitboard::empty(); Square::NUM];
         let mut offsets = [0; Square::NUM];
         let mut offset = 0;
-        for sq in Square::ALL {
+        for sq in Square::all() {
             let mask = SlidingAttackTable::attack_mask(sq, deltas);
-            let ones = mask.count_ones();
-            masks[sq.index()] = mask;
-            offsets[sq.index()] = offset;
+            let ones = mask.count();
+            masks[sq.array_index()] = mask;
+            offsets[sq.array_index()] = offset;
             for index in 0..1 << ones {
                 let occ = Self::index_to_occupied(index, mask);
                 table[offset + Self::occupied_to_index(occ, mask)] =
@@ -200,10 +207,11 @@ impl SlidingAttackTable {
         }
     }
     fn pseudo_attack(&self, sq: Square) -> Bitboard {
-        self.table[self.offsets[sq.index()]]
+        self.table[self.offsets[sq.array_index()]]
     }
     pub fn attack(&self, sq: Square, occ: &Bitboard) -> Bitboard {
-        self.table[self.offsets[sq.index()] + Self::occupied_to_index(*occ, self.masks[sq.index()])]
+        self.table[self.offsets[sq.array_index()]
+            + Self::occupied_to_index(*occ, self.masks[sq.array_index()])]
     }
 }
 
@@ -219,29 +227,30 @@ pub struct AttackTable {
 }
 
 impl AttackTable {
-    pub fn attack(&self, pt: PieceType, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
-        match pt {
-            PieceType::FU => self.fu.attack(sq, c),
-            PieceType::KY => self.ky.attack(sq, c, occ),
-            PieceType::KE => self.ke.attack(sq, c),
-            PieceType::GI => self.gi.attack(sq, c),
-            PieceType::KA => self.ka.attack(sq, occ),
-            PieceType::HI => self.hi.attack(sq, occ),
-            PieceType::KI | PieceType::TO | PieceType::NY | PieceType::NK | PieceType::NG => {
-                self.ki.attack(sq, c)
-            }
-            PieceType::OU => self.ou.attack(sq, c),
-            PieceType::UM => self.ka.attack(sq, occ) | self.ou.attack(sq, c),
-            PieceType::RY => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
-            _ => unreachable!(),
+    pub fn attack(&self, pk: PieceKind, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
+        match pk {
+            PieceKind::Pawn => self.fu.attack(sq, c),
+            PieceKind::Lance => self.ky.attack(sq, c, occ),
+            PieceKind::Knight => self.ke.attack(sq, c),
+            PieceKind::Silver => self.gi.attack(sq, c),
+            PieceKind::Bishop => self.ka.attack(sq, occ),
+            PieceKind::Rook => self.hi.attack(sq, occ),
+            PieceKind::Gold
+            | PieceKind::ProPawn
+            | PieceKind::ProLance
+            | PieceKind::ProKnight
+            | PieceKind::ProSilver => self.ki.attack(sq, c),
+            PieceKind::King => self.ou.attack(sq, c),
+            PieceKind::ProBishop => self.ka.attack(sq, occ) | self.ou.attack(sq, c),
+            PieceKind::ProRook => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
         }
     }
-    pub fn pseudo_attack(&self, pt: PieceType, sq: Square, c: Color) -> Bitboard {
-        match pt {
-            PieceType::KY => self.ky.pseudo_attack(sq, c),
-            PieceType::KA | PieceType::UM => self.ka.pseudo_attack(sq),
-            PieceType::HI | PieceType::RY => self.hi.pseudo_attack(sq),
-            pt => self.attack(pt, sq, c, &Bitboard::ZERO),
+    pub fn pseudo_attack(&self, pk: PieceKind, sq: Square, c: Color) -> Bitboard {
+        match pk {
+            PieceKind::Lance => self.ky.pseudo_attack(sq, c),
+            PieceKind::Bishop | PieceKind::ProBishop => self.ka.pseudo_attack(sq),
+            PieceKind::Rook | PieceKind::ProRook => self.hi.pseudo_attack(sq),
+            pk => self.attack(pk, sq, c, &Bitboard::empty()),
         }
     }
 }
@@ -265,11 +274,14 @@ pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| {
     }
 });
 
-pub static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::new(|| {
-    let mut bbs = [[Bitboard::ZERO; Square::NUM]; Square::NUM];
-    for sq0 in Square::ALL {
-        for sq1 in Square::ALL {
-            let (df, dr) = (sq1.file() - sq0.file(), sq1.rank() - sq0.rank());
+pub(crate) static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::new(|| {
+    let mut bbs = [[Bitboard::empty(); Square::NUM]; Square::NUM];
+    for sq0 in Square::all() {
+        for sq1 in Square::all() {
+            let (df, dr) = (
+                sq1.file() as i8 - sq0.file() as i8,
+                sq1.rank() as i8 - sq0.rank() as i8,
+            );
             if (df | dr == 0) || (df != 0 && dr != 0 && df.abs() != dr.abs()) {
                 continue;
             }
@@ -285,10 +297,47 @@ pub static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::n
                 (Ordering::Greater, Ordering::Less)    => Delta::NW,
                 _ => unreachable!(),
             };
-            bbs[sq0.index()][sq1.index()] =
-                sliding_attacks(sq0, Bitboard::from_square(sq1), &[delta])
-                    & !Bitboard::from_square(sq1);
+            bbs[sq0.array_index()][sq1.array_index()] =
+                sliding_attacks(sq0, Bitboard::single(sq1), &[delta]) & !Bitboard::single(sq1);
         }
     }
     bbs
+});
+
+pub(crate) static FILES: Lazy<[Bitboard; 10]> = Lazy::new(|| {
+    let mut bbs = [Bitboard::empty(); 10];
+    for sq in Square::all() {
+        bbs[sq.file() as usize] |= Bitboard::single(sq);
+    }
+    bbs
+});
+
+pub(crate) static RANKS: Lazy<[Bitboard; 10]> = Lazy::new(|| {
+    let mut bbs = [Bitboard::empty(); 10];
+    for sq in Square::all() {
+        bbs[sq.rank() as usize] |= Bitboard::single(sq);
+    }
+    bbs
+});
+
+pub(crate) static RELATIVE_RANKS: Lazy<[[usize; Color::NUM]; Square::NUM]> = Lazy::new(|| {
+    let mut ranks = [[0; Color::NUM]; Square::NUM];
+    for sq in Square::all() {
+        for c in Color::all() {
+            ranks[sq.array_index()][c.array_index()] = sq.relative_rank(c) as usize;
+        }
+    }
+    ranks
+});
+
+pub(crate) static PROMOTABLE: Lazy<[[bool; Color::NUM]; Square::NUM]> = Lazy::new(|| {
+    let mut table = [[false; Color::NUM]; Square::NUM];
+    for sq in Square::all() {
+        for c in Color::all() {
+            if RELATIVE_RANKS[sq.array_index()][c.array_index()] <= 3 {
+                table[sq.array_index()][c.array_index()] = true;
+            }
+        }
+    }
+    table
 });

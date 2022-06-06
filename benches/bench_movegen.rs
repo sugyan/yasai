@@ -2,10 +2,10 @@
 extern crate test;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod movegen {
+    use shogi_core::{Color, Piece};
     use test::Bencher;
-    use yasai::{Color, Piece, Position};
+    use yasai::Position;
 
     #[bench]
     fn bench_legal_moves_from_default(b: &mut Bencher) {
@@ -20,18 +20,18 @@ mod tests {
         b.iter(|| {
             #[rustfmt::skip]
             let pos = Position::new([
-                            None, Some(Piece::WOU),             None,             None,             None,             None,             None,             None,             None,
-                            None, Some(Piece::BGI),             None,             None,             None,             None,             None,             None,             None,
-                            None, Some(Piece::BGI),             None,             None,             None,             None,             None,             None,             None,
-                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
-                            None, Some(Piece::BGI), Some(Piece::BKA),             None,             None,             None,             None,             None,             None,
-                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
-                            None, Some(Piece::BOU),             None,             None,             None,             None,             None,             None,             None,
-                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
-                Some(Piece::BHI),             None,             None,             None,             None,             None,             None,             None,             None,
+                None, Some(Piece::W_K), None, None, None, None, None, None, None,
+                None, Some(Piece::B_S), None, None, None, None, None, None, None,
+                None, Some(Piece::B_S), None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                None, Some(Piece::B_S), Some(Piece::B_B), None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                None, Some(Piece::B_K), None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                Some(Piece::B_R), None, None, None, None, None, None, None, None,
             ], [
-                [ 1, 1, 1, 1, 1, 1, 1],
-                [17, 0, 3, 0, 3, 0, 0],
+                [ 1, 1, 1, 1, 1, 1, 1, 0],
+                [17, 0, 3, 0, 3, 0, 0, 0],
             ], Color::Black, 1);
             assert_eq!(593, pos.legal_moves().len());
         });

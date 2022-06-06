@@ -2,10 +2,10 @@
 extern crate test;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod perft {
+    use shogi_core::{Color, Piece};
     use test::Bencher;
-    use yasai::{Color, Piece, Position};
+    use yasai::Position;
 
     fn perft(pos: &mut Position, depth: usize) -> usize {
         let mut ret = 0;
@@ -28,7 +28,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_perft_from_default(b: &mut Bencher) {
+    fn bench_perft_5_from_default(b: &mut Bencher) {
         b.iter(|| {
             let mut pos = Position::default();
             assert_eq!(19_861_490, perft(&mut pos, 5));
@@ -36,22 +36,22 @@ mod tests {
     }
 
     #[bench]
-    fn bench_perft_from_maximum_moves(b: &mut Bencher) {
+    fn bench_perft_3_from_maximum_moves(b: &mut Bencher) {
         b.iter(|| {
             #[rustfmt::skip]
             let mut pos = Position::new([
-                            None, Some(Piece::WOU),             None,             None,             None,             None,             None,             None,             None,
-                            None, Some(Piece::BGI),             None,             None,             None,             None,             None,             None,             None,
-                            None, Some(Piece::BGI),             None,             None,             None,             None,             None,             None,             None,
-                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
-                            None, Some(Piece::BGI), Some(Piece::BKA),             None,             None,             None,             None,             None,             None,
-                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
-                            None, Some(Piece::BOU),             None,             None,             None,             None,             None,             None,             None,
-                            None,             None,             None,             None,             None,             None,             None,             None, Some(Piece::BKY),
-                Some(Piece::BHI),             None,             None,             None,             None,             None,             None,             None,             None,
+                None, Some(Piece::W_K), None, None, None, None, None, None, None,
+                None, Some(Piece::B_S), None, None, None, None, None, None, None,
+                None, Some(Piece::B_S), None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                None, Some(Piece::B_S), Some(Piece::B_B), None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                None, Some(Piece::B_K), None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, Some(Piece::B_L),
+                Some(Piece::B_R), None, None, None, None, None, None, None, None,
             ], [
-                [ 1, 1, 1, 1, 1, 1, 1],
-                [17, 0, 3, 0, 3, 0, 0],
+                [ 1, 1, 1, 1, 1, 1, 1, 0],
+                [17, 0, 3, 0, 3, 0, 0, 0],
             ], Color::Black, 1);
             assert_eq!(53_393_368, perft(&mut pos, 3));
         });

@@ -1,8 +1,7 @@
-use crate::bitboard::Bitboard;
-use crate::square::Rank;
-use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
-use crate::{Color, Move, Piece, PieceType, Position, Square};
+use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RANKS, RELATIVE_RANKS};
+use crate::Position;
 use arrayvec::{ArrayVec, IntoIter};
+use shogi_core::{Bitboard, Color, Move, Piece, PieceKind, Square};
 
 pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
@@ -22,10 +21,9 @@ impl MoveList {
                 i += 1;
             } else {
                 size -= 1;
-                self.0.swap(i, size);
+                self.0.swap_remove(i);
             }
         }
-        self.0.truncate(size);
     }
     pub fn len(&self) -> usize {
         self.0.len()
@@ -45,39 +43,41 @@ impl MoveList {
         self.generate_for_ou(pos, &target);
         self.generate_for_um(pos, &target);
         self.generate_for_ry(pos, &target);
-        self.generate_drop(pos, &(!pos.occupied() & Bitboard::ONES));
+        self.generate_drop(pos, &(!pos.occupied() & !Bitboard::empty()));
     }
     fn generate_evasions(&mut self, pos: &Position) {
         let c = pos.side_to_move();
-        if let Some(ou) = pos.king(c) {
-            let mut checkers_attacks = Bitboard::ZERO;
+        if let Some(king) = pos.king(c) {
+            let mut checkers_attacks = Bitboard::empty();
             let mut checkers_count = 0;
             for ch in pos.checkers() {
                 if let Some(p) = pos.piece_on(ch) {
-                    let pt = p.piece_type();
+                    let pk = p.piece_kind();
                     // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
-                    if pt == PieceType::RY && ch.file() != ou.file() && ch.rank() != ou.rank() {
+                    if pk == PieceKind::ProRook
+                        && ch.file() != king.file()
+                        && ch.rank() != king.rank()
+                    {
                         checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &pos.occupied());
                     } else {
-                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pt, ch, !c);
+                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
                     }
                 }
                 checkers_count += 1;
             }
-            for to in ATTACK_TABLE.ou.attack(ou, c) & !pos.pieces_c(c) & !checkers_attacks {
-                self.push(Move::new_normal(
-                    ou,
+            for to in ATTACK_TABLE.ou.attack(king, c) & !pos.pieces_c(c) & !checkers_attacks {
+                self.push(Move::Normal {
+                    from: king,
                     to,
-                    false,
-                    Piece::from_cp(c, PieceType::OU),
-                ));
+                    promote: false,
+                });
             }
             // 両王手の場合は玉が逃げるしかない
             if checkers_count > 1 {
                 return;
             }
             if let Some(ch) = pos.checkers().pop() {
-                let target_drop = BETWEEN_TABLE[ch.index()][ou.index()];
+                let target_drop = BETWEEN_TABLE[ch.array_index()][king.array_index()];
                 let target_move = target_drop | pos.checkers();
                 self.generate_for_fu(pos, &target_move);
                 self.generate_for_ky(pos, &target_move);
@@ -97,174 +97,249 @@ impl MoveList {
     }
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let (to_bb, delta, p) = match c {
-            Color::Black => (pos.pieces_cp(c, PieceType::FU).shr(), 1, Piece::BFU),
-            Color::White => (pos.pieces_cp(c, PieceType::FU).shl(), -1, Piece::WFU),
+        let (to_bb, delta) = match c {
+            Color::Black => (unsafe { pos.pieces_cp(c, PieceKind::Pawn).shift_up(1) }, 1),
+            Color::White => (
+                unsafe { pos.pieces_cp(c, PieceKind::Pawn).shift_down(1) },
+                !0,
+            ),
         };
         for to in to_bb & *target {
-            let rank = to.rank();
-            let from = Square(to.0 + delta);
-            if rank.is_opponent_field(c) {
-                self.push(Move::new_normal(from, to, true, p));
-                if rank.is_valid_for_piece(c, PieceType::FU) {
-                    self.push(Move::new_normal(from, to, false, p));
+            let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
+            if PROMOTABLE[to.array_index()][c.array_index()] {
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: true,
+                });
+                if RELATIVE_RANKS[to.array_index()][c.array_index()] > 1 {
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: false,
+                    });
                 }
             } else {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_for_ky(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::KY);
-        for from in pos.pieces_cp(c, PieceType::KY) {
+        for from in pos.pieces_cp(c, PieceKind::Lance) {
             for to in ATTACK_TABLE.ky.attack(from, c, &pos.occupied()) & *target {
-                let rank = to.rank();
-                if rank.is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p));
-                    if rank.is_valid_for_piece(c, PieceType::KY) {
-                        self.push(Move::new_normal(from, to, false, p));
+                if PROMOTABLE[to.array_index()][c.array_index()] {
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
+                    if RELATIVE_RANKS[to.array_index()][c.array_index()] > 1 {
+                        self.push(Move::Normal {
+                            from,
+                            to,
+                            promote: false,
+                        });
                     }
                 } else {
-                    self.push(Move::new_normal(from, to, false, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: false,
+                    });
                 }
             }
         }
     }
     fn generate_for_ke(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::KE);
-        for from in pos.pieces_cp(c, PieceType::KE) {
+        for from in pos.pieces_cp(c, PieceKind::Knight) {
             for to in ATTACK_TABLE.ke.attack(from, c) & *target {
-                let rank = to.rank();
-                if rank.is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p));
-                    if rank.is_valid_for_piece(c, PieceType::KE) {
-                        self.push(Move::new_normal(from, to, false, p));
+                if PROMOTABLE[to.array_index()][c.array_index()] {
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
+                    if RELATIVE_RANKS[to.array_index()][c.array_index()] > 2 {
+                        self.push(Move::Normal {
+                            from,
+                            to,
+                            promote: false,
+                        });
                     }
                 } else {
-                    self.push(Move::new_normal(from, to, false, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: false,
+                    });
                 }
             }
         }
     }
     fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::GI);
-        for from in pos.pieces_cp(c, PieceType::GI) {
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
+        for from in pos.pieces_cp(c, PieceKind::Silver) {
+            let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
             for to in ATTACK_TABLE.gi.attack(from, c) & *target {
-                self.push(Move::new_normal(from, to, false, p));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
+                if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
                 }
             }
         }
     }
     fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::KA);
-        for from in pos.pieces_cp(c, PieceType::KA) {
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
+        for from in pos.pieces_cp(c, PieceKind::Bishop) {
+            let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
             for to in ATTACK_TABLE.ka.attack(from, &pos.occupied()) & *target {
-                self.push(Move::new_normal(from, to, false, p));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
+                if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
                 }
             }
         }
     }
     fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::HI);
-        for from in pos.pieces_cp(c, PieceType::HI) {
-            let from_is_opponent_field = from.rank().is_opponent_field(c);
+        for from in pos.pieces_cp(c, PieceKind::Rook) {
+            let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
             for to in ATTACK_TABLE.hi.attack(from, &pos.occupied()) & *target {
-                self.push(Move::new_normal(from, to, false, p));
-                if from_is_opponent_field || to.rank().is_opponent_field(c) {
-                    self.push(Move::new_normal(from, to, true, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
+                if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
                 }
             }
         }
     }
     fn generate_for_ki(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        for from in (pos.pieces_p(PieceType::KI)
-            | pos.pieces_p(PieceType::TO)
-            | pos.pieces_p(PieceType::NY)
-            | pos.pieces_p(PieceType::NK)
-            | pos.pieces_p(PieceType::NG))
+        for from in (pos.pieces_p(PieceKind::Gold)
+            | pos.pieces_p(PieceKind::ProPawn)
+            | pos.pieces_p(PieceKind::ProLance)
+            | pos.pieces_p(PieceKind::ProKnight)
+            | pos.pieces_p(PieceKind::ProSilver))
             & pos.pieces_c(c)
         {
-            if let Some(p) = pos.piece_on(from) {
-                for to in ATTACK_TABLE.ki.attack(from, c) & *target {
-                    self.push(Move::new_normal(from, to, false, p));
-                }
+            for to in ATTACK_TABLE.ki.attack(from, c) & *target {
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_for_ou(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::OU);
-        for from in pos.pieces_cp(c, PieceType::OU) {
+        for from in pos.pieces_cp(c, PieceKind::King) {
             for to in ATTACK_TABLE.ou.attack(from, c) & *target {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_for_um(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::UM);
-        for from in pos.pieces_cp(c, PieceType::UM) {
+        for from in pos.pieces_cp(c, PieceKind::ProBishop) {
             for to in (ATTACK_TABLE.ka.attack(from, &pos.occupied())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
             {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_for_ry(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = Piece::from_cp(c, PieceType::RY);
-        for from in pos.pieces_cp(c, PieceType::RY) {
+        for from in pos.pieces_cp(c, PieceKind::ProRook) {
             for to in (ATTACK_TABLE.hi.attack(from, &pos.occupied())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
             {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_drop(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
         let hand = pos.hand(pos.side_to_move());
-        for pt in PieceType::ALL_HAND {
-            if hand.num(pt) == 0 {
+        for pk in PieceKind::all() {
+            if hand.count(pk).unwrap_or_default() == 0 {
                 continue;
             }
-            let mut exclude = Bitboard::ZERO;
-            if pt == PieceType::FU {
+            let mut exclude = Bitboard::empty();
+            if pk == PieceKind::Pawn {
                 // 二歩
-                for sq in pos.pieces_cp(c, pt) {
-                    exclude |= Bitboard::from_file(sq.file());
+                for sq in pos.pieces_cp(c, pk) {
+                    exclude |= FILES[sq.file() as usize];
                 }
                 // 打ち歩詰めチェック
-                if let Some(sq) = pos.king(!c) {
-                    if let Some(to) = ATTACK_TABLE.fu.attack(sq, !c).pop() {
-                        if !(*target & to).is_empty() && Self::is_uchifuzume(pos, to) {
+                if let Some(sq) = pos.king(c.flip()) {
+                    if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
+                        if target.contains(to) && Self::is_uchifuzume(pos, to) {
                             exclude |= to;
                         }
                     }
                 }
                 exclude |= match c {
-                    Color::Black => Bitboard::from_rank(Rank::RANK1),
-                    Color::White => Bitboard::from_rank(Rank::RANK9),
+                    Color::Black => RANKS[1],
+                    Color::White => RANKS[9],
                 };
             }
             for to in *target & !exclude {
-                if to.rank().is_valid_for_piece(c, pt) {
-                    self.push(Move::new_drop(to, Piece::from_cp(c, pt)));
+                if match pk {
+                    PieceKind::Pawn | PieceKind::Lance => {
+                        RELATIVE_RANKS[to.array_index()][c.array_index()] > 1
+                    }
+                    PieceKind::Knight => RELATIVE_RANKS[to.array_index()][c.array_index()] > 2,
+                    _ => true,
+                } {
+                    self.push(Move::Drop {
+                        to,
+                        piece: Piece::new(pk, c),
+                    });
                 }
             }
         }
@@ -272,17 +347,23 @@ impl MoveList {
     fn is_legal(pos: &Position, m: Move) -> bool {
         if let Some(from) = m.from() {
             let c = pos.side_to_move();
+            let king = match c {
+                Color::Black => Piece::B_K,
+                Color::White => Piece::W_K,
+            };
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
-            if pos.piece_on(from) == Some(Piece::from_cp(c, PieceType::OU))
-                && !pos.attackers_to(!c, m.to(), &pos.occupied()).is_empty()
+            if pos.piece_on(from) == Some(king)
+                && !pos
+                    .attackers_to(c.flip(), m.to(), &pos.occupied())
+                    .is_empty()
             {
                 return false;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if !(pos.pinned()[c.index()] & from).is_empty() {
+            if pos.pinned()[c.array_index()].contains(from) {
                 if let Some(sq) = pos.king(c) {
-                    if (BETWEEN_TABLE[sq.index()][from.index()] & m.to()).is_empty()
-                        && (BETWEEN_TABLE[sq.index()][m.to().index()] & from).is_empty()
+                    if !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(m.to())
+                        || BETWEEN_TABLE[sq.array_index()][m.to().array_index()].contains(from))
                     {
                         return false;
                     }
@@ -298,16 +379,17 @@ impl MoveList {
             return false;
         }
         // 他の駒が歩を取れる
-        let capture_candidates = Self::attackers_to_except_klp(pos, !c, sq);
-        if !(capture_candidates & !pos.pinned()[(!c).index()]).is_empty() {
+        let capture_candidates = Self::attackers_to_except_klp(pos, c.flip(), sq);
+        if !(capture_candidates & !pos.pinned()[c.flip().array_index()]).is_empty() {
             return false;
         }
         // 玉が逃げられる
-        if let Some(king) = pos.king(!c) {
-            let escape =
-                ATTACK_TABLE.ou.attack(king, !c) & !pos.pieces_c(!c) & !Bitboard::from_square(sq);
-            let occupied = pos.occupied() | Bitboard::from_square(sq);
-            for to in escape ^ sq {
+        if let Some(king) = pos.king(c.flip()) {
+            let escape = ATTACK_TABLE.ou.attack(king, c.flip())
+                & !pos.pieces_c(c.flip())
+                & !Bitboard::single(sq);
+            let occupied = pos.occupied() | Bitboard::single(sq);
+            for to in escape ^ Bitboard::single(sq) {
                 if pos.attackers_to(c, to, &occupied).is_empty() {
                     return false;
                 }
@@ -317,13 +399,13 @@ impl MoveList {
     }
     #[rustfmt::skip]
     fn attackers_to_except_klp(pos: &Position, c: Color, to: Square) -> Bitboard {
-        let opp = !c;
+        let opp = c.flip();
         let occ = &pos.occupied();
-        (     (ATTACK_TABLE.ke.attack(to, opp) & pos.pieces_p(PieceType::KE))
-            | (ATTACK_TABLE.gi.attack(to, opp) & (pos.pieces_p(PieceType::GI) | pos.pieces_p(PieceType::RY)))
-            | (ATTACK_TABLE.ka.attack(to, occ) & (pos.pieces_p(PieceType::KA) | pos.pieces_p(PieceType::UM)))
-            | (ATTACK_TABLE.hi.attack(to, occ) & (pos.pieces_p(PieceType::HI) | pos.pieces_p(PieceType::RY)))
-            | (ATTACK_TABLE.ki.attack(to, opp) & (pos.pieces_p(PieceType::KI) | pos.pieces_p(PieceType::TO) | pos.pieces_p(PieceType::NY) | pos.pieces_p(PieceType::NK) | pos.pieces_p(PieceType::NG) | pos.pieces_p(PieceType::UM)))
+        (     (ATTACK_TABLE.ke.attack(to, opp) & pos.pieces_p(PieceKind::Knight))
+            | (ATTACK_TABLE.gi.attack(to, opp) & (pos.pieces_p(PieceKind::Silver) | pos.pieces_p(PieceKind::ProRook)))
+            | (ATTACK_TABLE.ka.attack(to, occ) & (pos.pieces_p(PieceKind::Bishop) | pos.pieces_p(PieceKind::ProBishop)))
+            | (ATTACK_TABLE.hi.attack(to, occ) & (pos.pieces_p(PieceKind::Rook) | pos.pieces_p(PieceKind::ProRook)))
+            | (ATTACK_TABLE.ki.attack(to, opp) & (pos.pieces_p(PieceKind::Gold) | pos.pieces_p(PieceKind::ProPawn) | pos.pieces_p(PieceKind::ProLance) | pos.pieces_p(PieceKind::ProKnight) | pos.pieces_p(PieceKind::ProSilver) | pos.pieces_p(PieceKind::ProBishop)))
         ) & pos.pieces_c(c)
     }
 }
@@ -347,7 +429,6 @@ impl IntoIterator for MoveList {
 mod tests {
     use super::*;
     use crate::board_piece::*;
-    use crate::Color;
 
     #[test]
     fn from_default() {
@@ -369,8 +450,8 @@ mod tests {
             WKE, WHI, WFU, EMP, EMP, EMP, BFU, EMP, BKE,
             WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
         ], [
-            [0, 0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 0, 1, 0, 0],
         ], Color::Black, 1);
         assert_eq!(
             43,
@@ -396,8 +477,8 @@ mod tests {
             EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
             BHI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
         ], [
-            [ 1, 1, 1, 1, 1, 1, 1],
-            [17, 0, 3, 0, 3, 0, 0],
+            [ 1, 1, 1, 1, 1, 1, 1, 0],
+            [17, 0, 3, 0, 3, 0, 0, 0],
         ], Color::Black, 1);
         assert_eq!(593, pos.legal_moves().len());
     }
@@ -432,10 +513,10 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [14, 4, 4, 4, 3, 2, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [14, 4, 4, 4, 3, 2, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ14, true,
+                Square::SQ_1D, true,
             ),
             // 金で歩を取れる
             // P1 *  *  *  *  *  *  *  *  * 
@@ -462,10 +543,10 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 4, 4, 2, 2, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 4, 4, 2, 2, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ14, false,
+                Square::SQ_1D, false,
             ),
             // 飛がいるので金が動けない
             // P1 *  *  *  *  *  *  *  *  * 
@@ -492,10 +573,10 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 4, 4, 2, 2, 1],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 4, 4, 2, 2, 1, 0],
                 ], Color::Black, 1),
-                Square::SQ14, true,
+                Square::SQ_1D, true,
             ),
             // 桂で歩を取れる
             // P1 *  *  *  *  *  *  *  *  * 
@@ -522,10 +603,10 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 2, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 2, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ14, false,
+                Square::SQ_1D, false,
             ),
             // 角がいるので桂が動けない
             // P1 *  *  *  *  *  * +KA *  * 
@@ -552,10 +633,10 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 1, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 1, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ14, true,
+                Square::SQ_1D, true,
             ),
             // https://github.com/nozaq/shogi-rs/pull/41
             // 打った歩によって△1一玉の逃げ場ができる
@@ -583,14 +664,14 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ], [
-                    [ 1, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 1, 2],
+                    [ 1, 0, 0, 0, 0, 0, 0, 0],
+                    [15, 4, 3, 4, 3, 1, 2, 0],
                 ], Color::Black, 1),
-                Square::SQ22, false,
+                Square::SQ_2B, false,
             ),
         ];
         for (pos, sq, expected) in test_cases {
-            assert_eq!(expected, MoveList::is_uchifuzume(&pos, sq), "\n{pos}");
+            assert_eq!(expected, MoveList::is_uchifuzume(&pos, sq));
         }
     }
 }

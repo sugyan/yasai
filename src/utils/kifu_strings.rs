@@ -1,5 +1,5 @@
-use crate::bitboard::Bitboard;
-use crate::{Color, File, Move, PieceType, Position, Rank};
+use crate::Position;
+use shogi_core::{Bitboard, Color, Move, Piece, PieceKind};
 use std::cmp::Ordering;
 
 pub trait KifuStrings {
@@ -48,19 +48,27 @@ impl Orderings {
 }
 
 fn move2str(pos: &Position, m: &Move, prev: Option<&Move>) -> String {
+    let piece = match m {
+        Move::Normal {
+            from,
+            to: _,
+            promote: _,
+        } => pos.piece_on(*from).unwrap(),
+        Move::Drop { to: _, piece: p } => *p,
+    };
     let parts = vec![
-        parts_color(m),
+        parts_color(&piece.color()),
         parts_to(m, prev),
-        parts_piece_type(m),
-        parts_direction_relative(m, pos),
-        parts_promotion(m),
+        parts_piece_type(&piece),
+        parts_direction_relative(m, &piece, pos),
+        parts_promotion(m, &piece),
         parts_drop(m, pos),
     ];
     parts.join("")
 }
 
-fn parts_color(m: &Move) -> String {
-    String::from(match m.piece().color() {
+fn parts_color(c: &Color) -> String {
+    String::from(match c {
         Color::Black => "▲",
         Color::White => "△",
     })
@@ -76,33 +84,31 @@ fn parts_to(m: &Move, prev: Option<&Move>) -> String {
     }
 }
 
-fn parts_piece_type(m: &Move) -> String {
-    String::from(match m.piece().piece_type() {
-        PieceType::FU => "歩",
-        PieceType::KY => "香",
-        PieceType::KE => "桂",
-        PieceType::GI => "銀",
-        PieceType::KI => "金",
-        PieceType::KA => "角",
-        PieceType::HI => "飛",
-        PieceType::OU => "玉",
-        PieceType::TO => "と",
-        PieceType::NY => "成香",
-        PieceType::NK => "成桂",
-        PieceType::NG => "成銀",
-        PieceType::UM => "馬",
-        PieceType::RY => "竜",
-        _ => unreachable!(),
+fn parts_piece_type(p: &Piece) -> String {
+    String::from(match p.piece_kind() {
+        PieceKind::Pawn => "歩",
+        PieceKind::Lance => "香",
+        PieceKind::Knight => "桂",
+        PieceKind::Silver => "銀",
+        PieceKind::Gold => "金",
+        PieceKind::Bishop => "角",
+        PieceKind::Rook => "飛",
+        PieceKind::King => "玉",
+        PieceKind::ProPawn => "と",
+        PieceKind::ProLance => "成香",
+        PieceKind::ProKnight => "成桂",
+        PieceKind::ProSilver => "成銀",
+        PieceKind::ProBishop => "馬",
+        PieceKind::ProRook => "竜",
     })
 }
 
-fn parts_direction_relative(m: &Move, pos: &Position) -> String {
+fn parts_direction_relative(m: &Move, piece: &Piece, pos: &Position) -> String {
     let mut ret = String::new();
     if let Some(from) = m.from() {
-        let piece = m.piece();
-        let bb = pos.pieces_cp(piece.color(), piece.piece_type())
+        let bb = pos.pieces_cp(piece.color(), piece.piece_kind())
             & pos.attackers_to(piece.color(), m.to(), &pos.occupied())
-            & !Bitboard::from_square(from);
+            & !Bitboard::single(from);
         if let Some(other) = bb.into_iter().next() {
             let (file_ordering, rank_ordering) = (
                 from.file().cmp(&m.to().file()),
@@ -122,7 +128,10 @@ fn parts_direction_relative(m: &Move, pos: &Position) -> String {
             // 到達地点に2枚の同じ駒が動ける場合、動作でどの駒が動いたかわからない時は、「左」「右」を記入します。
             // 例外で、金銀が横に2枚以上並んでいる場合のみ1段上に上がる時「直」を記入します。
             if rank_orderings.get(rank_ordering) {
-                ret += if matches!(piece.piece_type(), PieceType::RY | PieceType::UM) {
+                ret += if matches!(
+                    piece.piece_kind(),
+                    PieceKind::ProRook | PieceKind::ProBishop
+                ) {
                     // 竜、馬が2枚の場合は、「直」は使わずに「左」「右」で記入します。
                     match translated_ordering(from.file().cmp(&other.file())) {
                         Ordering::Less => "右",
@@ -153,14 +162,12 @@ fn parts_direction_relative(m: &Move, pos: &Position) -> String {
 }
 
 // 到達地点に移動することによって「成る」ことが可能な場合、成るか成らないかを区別するために「成」「不成」いずれかを追加記入します。
-fn parts_promotion(m: &Move) -> String {
-    if m.is_promotion() {
-        return String::from("成");
-    } else if let Some(from) = m.from() {
-        let piece = m.piece();
-        if piece.is_promotable()
-            && (from.rank().is_opponent_field(piece.color())
-                || m.to().rank().is_opponent_field(piece.color()))
+fn parts_promotion(m: &Move, piece: &Piece) -> String {
+    if let Move::Normal { from, to, promote } = m {
+        if *promote {
+            return String::from("成");
+        } else if piece.promote().is_some()
+            && (from.relative_rank(piece.color()) <= 3 || to.relative_rank(piece.color()) <= 3)
         {
             return String::from("不成");
         }
@@ -172,43 +179,43 @@ fn parts_promotion(m: &Move) -> String {
 // 盤上の駒が動いた場合は通常の表記と同じ
 // 持駒を打った場合は「打」と記入
 fn parts_drop(m: &Move, pos: &Position) -> String {
-    let piece = m.piece();
-    if m.is_drop()
-        && !(pos.pieces_cp(piece.color(), piece.piece_type())
-            & pos.attackers_to(piece.color(), m.to(), &pos.occupied()))
+    if let Move::Drop { to, piece } = m {
+        if !(pos.pieces_cp(piece.color(), piece.piece_kind())
+            & pos.attackers_to(piece.color(), *to, &pos.occupied()))
         .is_empty()
-    {
-        return String::from("打");
+        {
+            return String::from("打");
+        }
     }
     String::new()
 }
 
-fn file2str(file: File) -> String {
+fn file2str(file: u8) -> String {
     String::from(match file {
-        File::FILE1 => "1",
-        File::FILE2 => "2",
-        File::FILE3 => "3",
-        File::FILE4 => "4",
-        File::FILE5 => "5",
-        File::FILE6 => "6",
-        File::FILE7 => "7",
-        File::FILE8 => "8",
-        File::FILE9 => "9",
+        1 => "1",
+        2 => "2",
+        3 => "3",
+        4 => "4",
+        5 => "5",
+        6 => "6",
+        7 => "7",
+        8 => "8",
+        9 => "9",
         _ => unreachable!(),
     })
 }
 
-fn rank2str(rank: Rank) -> String {
+fn rank2str(rank: u8) -> String {
     String::from(match rank {
-        Rank::RANK1 => "一",
-        Rank::RANK2 => "二",
-        Rank::RANK3 => "三",
-        Rank::RANK4 => "四",
-        Rank::RANK5 => "五",
-        Rank::RANK6 => "六",
-        Rank::RANK7 => "七",
-        Rank::RANK8 => "八",
-        Rank::RANK9 => "九",
+        1 => "一",
+        2 => "二",
+        3 => "三",
+        4 => "四",
+        5 => "五",
+        6 => "六",
+        7 => "七",
+        8 => "八",
+        9 => "九",
         _ => unreachable!(),
     })
 }
@@ -218,8 +225,8 @@ mod tests {
     use super::*;
     use crate::board_piece::*;
     use crate::tables::ATTACK_TABLE;
-    use crate::{Piece, Square};
     use itertools::Itertools;
+    use shogi_core::{Piece, Square};
     use std::collections::HashSet;
 
     #[test]
@@ -227,12 +234,11 @@ mod tests {
         let pos = Position::default();
         assert_eq!(
             vec!["▲7六歩"],
-            pos.kifu_strings(&[Move::new_normal(
-                Square::SQ77,
-                Square::SQ76,
-                false,
-                Piece::BFU
-            )])
+            pos.kifu_strings(&[Move::Normal {
+                from: Square::SQ_7G,
+                to: Square::SQ_7F,
+                promote: false,
+            }])
         );
     }
 
@@ -250,13 +256,21 @@ mod tests {
             WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
             WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
         ];
-        let hand_nums = [[0; PieceType::NUM_HAND]; Color::NUM];
+        let hand_nums = [[0; 8]; 2];
         {
             let pos = Position::new(board, hand_nums, Color::Black, 1);
             let test_cases = [(
                 vec![
-                    Move::new_normal(Square::SQ56, Square::SQ55, false, Piece::BFU),
-                    Move::new_normal(Square::SQ54, Square::SQ55, false, Piece::WFU),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                 ],
                 vec!["▲5五歩", "△同歩"],
             )];
@@ -268,8 +282,16 @@ mod tests {
             let pos = Position::new(board, hand_nums, Color::White, 1);
             let test_cases = [(
                 vec![
-                    Move::new_normal(Square::SQ54, Square::SQ55, false, Piece::WFU),
-                    Move::new_normal(Square::SQ56, Square::SQ55, false, Piece::BFU),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                 ],
                 vec!["△5五歩", "▲同歩"],
             )];
@@ -293,15 +315,25 @@ mod tests {
             EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
             EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
         ];
-        let hand_nums = [[9, 2, 2, 2, 1, 1, 1]; 2];
+        let hand_nums = [[9, 2, 2, 2, 1, 1, 1, 0]; 2];
         {
             let pos = Position::new(board, hand_nums, Color::Black, 1);
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ53, Square::SQ52, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_5B,
+                        promote: false,
+                    },
                     "▲5二金",
                 ),
-                (Move::new_drop(Square::SQ52, Piece::BKI), "▲5二金打"),
+                (
+                    Move::Drop {
+                        to: Square::SQ_5B,
+                        piece: Piece::B_G,
+                    },
+                    "▲5二金打",
+                ),
             ];
             for (m, expected) in test_cases {
                 assert_eq!(vec![expected], pos.kifu_strings(&[m]));
@@ -311,10 +343,20 @@ mod tests {
             let pos = Position::new(board, hand_nums, Color::White, 1);
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ57, Square::SQ58, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_5H,
+                        promote: false,
+                    },
                     "△5八金",
                 ),
-                (Move::new_drop(Square::SQ58, Piece::WKI), "△5八金打"),
+                (
+                    Move::Drop {
+                        to: Square::SQ_5H,
+                        piece: Piece::W_G,
+                    },
+                    "△5八金打",
+                ),
             ];
             for (m, expected) in test_cases {
                 assert_eq!(vec![expected], pos.kifu_strings(&[m]));
@@ -336,77 +378,133 @@ mod tests {
             EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
             EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
         ];
-        let hand_nums = [[9, 2, 2, 0, 2, 1, 1]; 2];
+        let hand_nums = [[9, 2, 2, 0, 2, 1, 1, 0]; 2];
         {
             let pos = Position::new(board, hand_nums, Color::Black, 1);
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ53, Square::SQ42, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_4B,
+                        promote: false,
+                    },
                     "▲4二銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ53, Square::SQ42, true, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_4B,
+                        promote: true,
+                    },
                     "▲4二銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ53, Square::SQ44, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_4D,
+                        promote: false,
+                    },
                     "▲4四銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ53, Square::SQ44, true, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_4D,
+                        promote: true,
+                    },
                     "▲4四銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ54, Square::SQ43, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_4C,
+                        promote: false,
+                    },
                     "▲4三銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ54, Square::SQ43, true, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_4C,
+                        promote: true,
+                    },
                     "▲4三銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ54, Square::SQ45, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_4E,
+                        promote: false,
+                    },
                     "▲4五銀",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
             let pos = Position::new(board, hand_nums, Color::White, 1);
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ57, Square::SQ68, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_6H,
+                        promote: false,
+                    },
                     "△6八銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ57, Square::SQ68, true, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_6H,
+                        promote: true,
+                    },
                     "△6八銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ57, Square::SQ66, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_6F,
+                        promote: false,
+                    },
                     "△6六銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ57, Square::SQ66, true, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_6F,
+                        promote: true,
+                    },
                     "△6六銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ56, Square::SQ67, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_6G,
+                        promote: false,
+                    },
                     "△6七銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ56, Square::SQ67, true, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_6G,
+                        promote: true,
+                    },
                     "△6七銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ56, Square::SQ65, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_6E,
+                        promote: false,
+                    },
                     "△6五銀",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
     }
@@ -427,54 +525,94 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BGI,
                     EMP, EMP, BKI, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ93, Square::SQ82, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_9C,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ72, Square::SQ82, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_7B,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二金寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ43, Square::SQ32, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_4C,
+                        to: Square::SQ_3B,
+                        promote: false,
+                    },
                     "▲3二金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ31, Square::SQ32, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_3A,
+                        to: Square::SQ_3B,
+                        promote: false,
+                    },
                     "▲3二金引",
                 ),
                 (
-                    Move::new_normal(Square::SQ56, Square::SQ55, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                     "▲5五金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ45, Square::SQ55, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_4E,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                     "▲5五金寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ89, Square::SQ88, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_8I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八銀上",
                 ),
                 (
-                    Move::new_normal(Square::SQ77, Square::SQ88, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_7G,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八銀引",
                 ),
                 (
-                    Move::new_normal(Square::SQ49, Square::SQ38, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_4I,
+                        to: Square::SQ_3H,
+                        promote: false,
+                    },
                     "▲3八銀上",
                 ),
                 (
-                    Move::new_normal(Square::SQ27, Square::SQ38, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_2G,
+                        to: Square::SQ_3H,
+                        promote: false,
+                    },
                     "▲3八銀引",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -491,54 +629,94 @@ mod tests {
                     EMP, EMP, WGI, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::White,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ17, Square::SQ28, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_1G,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ38, Square::SQ28, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_3H,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八金寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ67, Square::SQ78, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_6G,
+                        to: Square::SQ_7H,
+                        promote: false,
+                    },
                     "△7八金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ79, Square::SQ78, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_7I,
+                        to: Square::SQ_7H,
+                        promote: false,
+                    },
                     "△7八金引",
                 ),
                 (
-                    Move::new_normal(Square::SQ54, Square::SQ55, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                     "△5五金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ65, Square::SQ55, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_6E,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                     "△5五金寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ21, Square::SQ22, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_2A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二銀上",
                 ),
                 (
-                    Move::new_normal(Square::SQ33, Square::SQ22, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_3C,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二銀引",
                 ),
                 (
-                    Move::new_normal(Square::SQ61, Square::SQ72, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_6A,
+                        to: Square::SQ_7B,
+                        promote: false,
+                    },
                     "△7二銀上",
                 ),
                 (
-                    Move::new_normal(Square::SQ83, Square::SQ72, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_8C,
+                        to: Square::SQ_7B,
+                        promote: false,
+                    },
                     "△7二銀引",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
     }
@@ -559,54 +737,94 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKI,
                     EMP, BKI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ92, Square::SQ81, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_9B,
+                        to: Square::SQ_8A,
+                        promote: false,
+                    },
                     "▲8一金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ72, Square::SQ81, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_7B,
+                        to: Square::SQ_8A,
+                        promote: false,
+                    },
                     "▲8一金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ32, Square::SQ22, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_3B,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "▲2二金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ12, Square::SQ22, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_1B,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "▲2二金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ65, Square::SQ56, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_6E,
+                        to: Square::SQ_5F,
+                        promote: false,
+                    },
                     "▲5六銀左",
                 ),
                 (
-                    Move::new_normal(Square::SQ45, Square::SQ56, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_4E,
+                        to: Square::SQ_5F,
+                        promote: false,
+                    },
                     "▲5六銀右",
                 ),
                 (
-                    Move::new_normal(Square::SQ89, Square::SQ78, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_8I,
+                        to: Square::SQ_7H,
+                        promote: false,
+                    },
                     "▲7八金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ79, Square::SQ78, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_7I,
+                        to: Square::SQ_7H,
+                        promote: false,
+                    },
                     "▲7八金直",
                 ),
                 (
-                    Move::new_normal(Square::SQ39, Square::SQ38, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_3I,
+                        to: Square::SQ_3H,
+                        promote: false,
+                    },
                     "▲3八銀直",
                 ),
                 (
-                    Move::new_normal(Square::SQ29, Square::SQ38, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_2I,
+                        to: Square::SQ_3H,
+                        promote: false,
+                    },
                     "▲3八銀右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -623,54 +841,94 @@ mod tests {
                     WGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, WKI, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::White,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ18, Square::SQ29, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_1H,
+                        to: Square::SQ_2I,
+                        promote: false,
+                    },
                     "△2九金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ38, Square::SQ29, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_3H,
+                        to: Square::SQ_2I,
+                        promote: false,
+                    },
                     "△2九金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ78, Square::SQ88, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_7H,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "△8八金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ98, Square::SQ88, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_9H,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "△8八金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ45, Square::SQ54, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_4E,
+                        to: Square::SQ_5D,
+                        promote: false,
+                    },
                     "△5四銀左",
                 ),
                 (
-                    Move::new_normal(Square::SQ65, Square::SQ54, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_6E,
+                        to: Square::SQ_5D,
+                        promote: false,
+                    },
                     "△5四銀右",
                 ),
                 (
-                    Move::new_normal(Square::SQ21, Square::SQ32, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_2A,
+                        to: Square::SQ_3B,
+                        promote: false,
+                    },
                     "△3二金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ31, Square::SQ32, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_3A,
+                        to: Square::SQ_3B,
+                        promote: false,
+                    },
                     "△3二金直",
                 ),
                 (
-                    Move::new_normal(Square::SQ71, Square::SQ72, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_7A,
+                        to: Square::SQ_7B,
+                        promote: false,
+                    },
                     "△7二銀直",
                 ),
                 (
-                    Move::new_normal(Square::SQ81, Square::SQ72, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_8A,
+                        to: Square::SQ_7B,
+                        promote: false,
+                    },
                     "△7二銀右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
     }
@@ -691,62 +949,110 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, BTO, EMP, BTO,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, BTO, BTO,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ63, Square::SQ52, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_6C,
+                        to: Square::SQ_5B,
+                        promote: false,
+                    },
                     "▲5二金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ53, Square::SQ52, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_5B,
+                        promote: false,
+                    },
                     "▲5二金直",
                 ),
                 (
-                    Move::new_normal(Square::SQ43, Square::SQ52, false, Piece::BKI),
+                    Move::Normal {
+                        from: Square::SQ_4C,
+                        to: Square::SQ_5B,
+                        promote: false,
+                    },
                     "▲5二金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ79, Square::SQ88, false, Piece::BTO),
+                    Move::Normal {
+                        from: Square::SQ_7I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と右",
                 ),
                 (
-                    Move::new_normal(Square::SQ89, Square::SQ88, false, Piece::BTO),
+                    Move::Normal {
+                        from: Square::SQ_8I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と直",
                 ),
                 (
-                    Move::new_normal(Square::SQ99, Square::SQ88, false, Piece::BTO),
+                    Move::Normal {
+                        from: Square::SQ_9I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と左上",
                 ),
                 (
-                    Move::new_normal(Square::SQ98, Square::SQ88, false, Piece::BTO),
+                    Move::Normal {
+                        from: Square::SQ_9H,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ87, Square::SQ88, false, Piece::BTO),
+                    Move::Normal {
+                        from: Square::SQ_8G,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と引",
                 ),
                 (
-                    Move::new_normal(Square::SQ29, Square::SQ28, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_2I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "▲2八銀直",
                 ),
                 (
-                    Move::new_normal(Square::SQ17, Square::SQ28, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_1G,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "▲2八銀右",
                 ),
                 (
-                    Move::new_normal(Square::SQ39, Square::SQ28, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_3I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "▲2八銀左上",
                 ),
                 (
-                    Move::new_normal(Square::SQ37, Square::SQ28, false, Piece::BGI),
+                    Move::Normal {
+                        from: Square::SQ_3G,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "▲2八銀左引",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -763,62 +1069,110 @@ mod tests {
                     WGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, WGI, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::White,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ47, Square::SQ58, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_4G,
+                        to: Square::SQ_5H,
+                        promote: false,
+                    },
                     "△5八金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ57, Square::SQ58, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_5H,
+                        promote: false,
+                    },
                     "△5八金直",
                 ),
                 (
-                    Move::new_normal(Square::SQ67, Square::SQ58, false, Piece::WKI),
+                    Move::Normal {
+                        from: Square::SQ_6G,
+                        to: Square::SQ_5H,
+                        promote: false,
+                    },
                     "△5八金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ31, Square::SQ22, false, Piece::WTO),
+                    Move::Normal {
+                        from: Square::SQ_3A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と右",
                 ),
                 (
-                    Move::new_normal(Square::SQ21, Square::SQ22, false, Piece::WTO),
+                    Move::Normal {
+                        from: Square::SQ_2A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と直",
                 ),
                 (
-                    Move::new_normal(Square::SQ11, Square::SQ22, false, Piece::WTO),
+                    Move::Normal {
+                        from: Square::SQ_1A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と左上",
                 ),
                 (
-                    Move::new_normal(Square::SQ12, Square::SQ22, false, Piece::WTO),
+                    Move::Normal {
+                        from: Square::SQ_1B,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ23, Square::SQ22, false, Piece::WTO),
+                    Move::Normal {
+                        from: Square::SQ_2C,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と引",
                 ),
                 (
-                    Move::new_normal(Square::SQ81, Square::SQ82, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_8A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "△8二銀直",
                 ),
                 (
-                    Move::new_normal(Square::SQ93, Square::SQ82, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_9C,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "△8二銀右",
                 ),
                 (
-                    Move::new_normal(Square::SQ71, Square::SQ82, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_7A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "△8二銀左上",
                 ),
                 (
-                    Move::new_normal(Square::SQ73, Square::SQ82, false, Piece::WGI),
+                    Move::Normal {
+                        from: Square::SQ_7C,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "△8二銀左引",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
     }
@@ -839,22 +1193,30 @@ mod tests {
                     EMP, EMP, EMP, BRY, EMP, EMP, EMP, EMP, EMP,
                     BRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ91, Square::SQ82, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_9A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二竜引",
                 ),
                 (
-                    Move::new_normal(Square::SQ84, Square::SQ82, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_8D,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二竜上",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -871,22 +1233,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ23, Square::SQ43, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_2C,
+                        to: Square::SQ_4C,
+                        promote: false,
+                    },
                     "▲4三竜寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ52, Square::SQ43, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_5B,
+                        to: Square::SQ_4C,
+                        promote: false,
+                    },
                     "▲4三竜引",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -903,22 +1273,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ55, Square::SQ35, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_5E,
+                        to: Square::SQ_3E,
+                        promote: false,
+                    },
                     "▲3五竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ15, Square::SQ35, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_1E,
+                        to: Square::SQ_3E,
+                        promote: false,
+                    },
                     "▲3五竜右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -935,22 +1313,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BRY,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BRY,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ99, Square::SQ88, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_9I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ89, Square::SQ88, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_8I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八竜右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -967,22 +1353,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ28, Square::SQ17, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_2H,
+                        to: Square::SQ_1G,
+                        promote: false,
+                    },
                     "▲1七竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ19, Square::SQ17, false, Piece::BRY),
+                    Move::Normal {
+                        from: Square::SQ_1I,
+                        to: Square::SQ_1G,
+                        promote: false,
+                    },
                     "▲1七竜右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -999,22 +1393,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ19, Square::SQ28, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_1I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八竜引",
                 ),
                 (
-                    Move::new_normal(Square::SQ26, Square::SQ28, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_2F,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八竜上",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1031,22 +1433,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, WRY, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ87, Square::SQ67, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_8G,
+                        to: Square::SQ_6G,
+                        promote: false,
+                    },
                     "△6七竜寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ58, Square::SQ67, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_5H,
+                        to: Square::SQ_6G,
+                        promote: false,
+                    },
                     "△6七竜引",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1063,22 +1473,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, WRY, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ55, Square::SQ75, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_5E,
+                        to: Square::SQ_7E,
+                        promote: false,
+                    },
                     "△7五竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ95, Square::SQ75, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_9E,
+                        to: Square::SQ_7E,
+                        promote: false,
+                    },
                     "△7五竜右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1095,22 +1513,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ11, Square::SQ22, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_1A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ21, Square::SQ22, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_2A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二竜右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1127,22 +1553,30 @@ mod tests {
                     EMP, WRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     WRY, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ82, Square::SQ93, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_8B,
+                        to: Square::SQ_9C,
+                        promote: false,
+                    },
                     "△9三竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ91, Square::SQ93, false, Piece::WRY),
+                    Move::Normal {
+                        from: Square::SQ_9A,
+                        to: Square::SQ_9C,
+                        promote: false,
+                    },
                     "△9三竜右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
     }
@@ -1163,22 +1597,30 @@ mod tests {
                     BUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     BUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ91, Square::SQ82, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_9A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ81, Square::SQ82, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_8A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二馬右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1195,22 +1637,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, BUM, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ95, Square::SQ85, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_9E,
+                        to: Square::SQ_8E,
+                        promote: false,
+                    },
                     "▲8五馬寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ63, Square::SQ85, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_6C,
+                        to: Square::SQ_8E,
+                        promote: false,
+                    },
                     "▲8五馬引",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1227,22 +1677,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ11, Square::SQ12, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_1A,
+                        to: Square::SQ_1B,
+                        promote: false,
+                    },
                     "▲1二馬引",
                 ),
                 (
-                    Move::new_normal(Square::SQ34, Square::SQ12, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_3D,
+                        to: Square::SQ_1B,
+                        promote: false,
+                    },
                     "▲1二馬上",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1259,22 +1717,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BUM,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ99, Square::SQ77, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_9I,
+                        to: Square::SQ_7G,
+                        promote: false,
+                    },
                     "▲7七馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ59, Square::SQ77, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_5I,
+                        to: Square::SQ_7G,
+                        promote: false,
+                    },
                     "▲7七馬右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1291,22 +1757,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ47, Square::SQ29, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_4G,
+                        to: Square::SQ_2I,
+                        promote: false,
+                    },
                     "▲2九馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ18, Square::SQ29, false, Piece::BUM),
+                    Move::Normal {
+                        from: Square::SQ_1H,
+                        to: Square::SQ_2I,
+                        promote: false,
+                    },
                     "▲2九馬右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1323,22 +1797,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ19, Square::SQ28, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_1I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ29, Square::SQ28, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_2I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八馬右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1355,22 +1837,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ15, Square::SQ25, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_1E,
+                        to: Square::SQ_2E,
+                        promote: false,
+                    },
                     "△2五馬寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ47, Square::SQ25, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_4G,
+                        to: Square::SQ_2E,
+                        promote: false,
+                    },
                     "△2五馬引",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1387,22 +1877,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, WUM,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ99, Square::SQ98, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_9I,
+                        to: Square::SQ_9H,
+                        promote: false,
+                    },
                     "△9八馬引",
                 ),
                 (
-                    Move::new_normal(Square::SQ76, Square::SQ98, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_7F,
+                        to: Square::SQ_9H,
+                        promote: false,
+                    },
                     "△9八馬上",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1419,22 +1917,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ11, Square::SQ33, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_1A,
+                        to: Square::SQ_3C,
+                        promote: false,
+                    },
                     "△3三馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ51, Square::SQ33, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_5A,
+                        to: Square::SQ_3C,
+                        promote: false,
+                    },
                     "△3三馬右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
         {
@@ -1451,22 +1957,30 @@ mod tests {
                     EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                     EMP, WUM, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
                 ],
-                [[0; PieceType::NUM_HAND]; Color::NUM],
+                [[0; 8]; 2],
                 Color::Black,
                 1,
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ63, Square::SQ81, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_6C,
+                        to: Square::SQ_8A,
+                        promote: false,
+                    },
                     "△8一馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ92, Square::SQ81, false, Piece::WUM),
+                    Move::Normal {
+                        from: Square::SQ_9B,
+                        to: Square::SQ_8A,
+                        promote: false,
+                    },
                     "△8一馬右",
                 ),
             ];
             for (m, expected) in test_cases {
-                assert_eq!(vec![expected], pos.kifu_strings(&[m]), "{m}");
+                assert_eq!(vec![expected], pos.kifu_strings(&[m]));
             }
         }
     }
@@ -1474,33 +1988,45 @@ mod tests {
     #[test]
     fn all_unique() {
         let piece_type_nums = [
-            (PieceType::KE, 4),
-            (PieceType::GI, 4),
-            (PieceType::KI, 4),
-            (PieceType::KA, 2),
-            (PieceType::HI, 2),
-            (PieceType::TO, 6),
-            (PieceType::UM, 2),
-            (PieceType::RY, 2),
+            (PieceKind::Knight, 4),
+            (PieceKind::Silver, 4),
+            (PieceKind::Gold, 4),
+            (PieceKind::Bishop, 2),
+            (PieceKind::Rook, 2),
+            (PieceKind::ProPawn, 6),
+            (PieceKind::ProBishop, 2),
+            (PieceKind::ProRook, 2),
         ];
-        for c in Color::ALL {
-            for (pt, num) in piece_type_nums {
-                let piece = Piece::from_cp(c, pt);
-                for to in Square::ALL {
-                    let froms = ATTACK_TABLE.pseudo_attack(pt, to, !c).collect::<Vec<_>>();
+        for c in Color::all() {
+            for (pk, num) in piece_type_nums {
+                let piece = Piece::new(pk, c);
+                for to in Square::all() {
+                    let froms = ATTACK_TABLE
+                        .pseudo_attack(pk, to, c.flip())
+                        .collect::<Vec<_>>();
                     for k in 2..=num {
                         for v in (0..froms.len()).combinations(k) {
                             let mut board = [None; 81];
                             let mut moves = Vec::new();
                             for i in v {
                                 let from = froms[i];
-                                board[from.index()] = Some(piece);
-                                moves.push(Move::new_normal(from, to, false, piece));
+                                board[from.array_index()] = Some(piece);
+                                moves.push(Move::Normal {
+                                    from,
+                                    to,
+                                    promote: false,
+                                });
                             }
-                            let pos =
-                                Position::new(board, [[0; PieceType::NUM_HAND]; Color::NUM], c, 1);
-                            let legal_moves = pos.legal_moves().into_iter().collect::<HashSet<_>>();
-                            if moves.iter().any(|m| !legal_moves.contains(m)) {
+                            let pos = Position::new(board, [[0; 8]; 2], c, 1);
+                            let legal_moves = pos
+                                .legal_moves()
+                                .into_iter()
+                                .map(|m| format!("{m:?}"))
+                                .collect::<HashSet<_>>();
+                            if moves
+                                .iter()
+                                .any(|m| !legal_moves.contains(&format!("{m:?}")))
+                            {
                                 continue;
                             }
                             let mut results = HashSet::new();
@@ -1513,7 +2039,7 @@ mod tests {
                                         .chars()
                                         .count()
                                         > 4,
-                                    "{result}: move {m}"
+                                    "{result}"
                                 );
                                 results.insert(result);
                             }
