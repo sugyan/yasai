@@ -1,5 +1,5 @@
-use crate::{Move, Position};
-use shogi_core::{Bitboard, Color, PieceKind};
+use crate::Position;
+use shogi_core::{Bitboard, Color, Move, Piece, PieceKind};
 use std::cmp::Ordering;
 
 pub trait KifuStrings {
@@ -48,19 +48,27 @@ impl Orderings {
 }
 
 fn move2str(pos: &Position, m: &Move, prev: Option<&Move>) -> String {
+    let piece = match m {
+        Move::Normal {
+            from,
+            to: _,
+            promote: _,
+        } => pos.piece_on(*from).unwrap(),
+        Move::Drop { to: _, piece: p } => *p,
+    };
     let parts = vec![
-        parts_color(m),
+        parts_color(&piece.color()),
         parts_to(m, prev),
-        parts_piece_type(m),
-        parts_direction_relative(m, pos),
-        parts_promotion(m),
+        parts_piece_type(&piece),
+        parts_direction_relative(m, &piece, pos),
+        parts_promotion(m, &piece),
         parts_drop(m, pos),
     ];
     parts.join("")
 }
 
-fn parts_color(m: &Move) -> String {
-    String::from(match m.piece().color() {
+fn parts_color(c: &Color) -> String {
+    String::from(match c {
         Color::Black => "▲",
         Color::White => "△",
     })
@@ -76,8 +84,8 @@ fn parts_to(m: &Move, prev: Option<&Move>) -> String {
     }
 }
 
-fn parts_piece_type(m: &Move) -> String {
-    String::from(match m.piece().piece_kind() {
+fn parts_piece_type(p: &Piece) -> String {
+    String::from(match p.piece_kind() {
         PieceKind::Pawn => "歩",
         PieceKind::Lance => "香",
         PieceKind::Knight => "桂",
@@ -95,10 +103,9 @@ fn parts_piece_type(m: &Move) -> String {
     })
 }
 
-fn parts_direction_relative(m: &Move, pos: &Position) -> String {
+fn parts_direction_relative(m: &Move, piece: &Piece, pos: &Position) -> String {
     let mut ret = String::new();
     if let Some(from) = m.from() {
-        let piece = m.piece();
         let bb = pos.pieces_cp(piece.color(), piece.piece_kind())
             & pos.attackers_to(piece.color(), m.to(), &pos.occupied())
             & !Bitboard::single(from);
@@ -155,13 +162,12 @@ fn parts_direction_relative(m: &Move, pos: &Position) -> String {
 }
 
 // 到達地点に移動することによって「成る」ことが可能な場合、成るか成らないかを区別するために「成」「不成」いずれかを追加記入します。
-fn parts_promotion(m: &Move) -> String {
-    if m.is_promotion() {
-        return String::from("成");
-    } else if let Some(from) = m.from() {
-        let piece = m.piece();
-        if piece.promote().is_some()
-            && (from.relative_rank(piece.color()) <= 3 || m.to().relative_rank(piece.color()) <= 3)
+fn parts_promotion(m: &Move, piece: &Piece) -> String {
+    if let Move::Normal { from, to, promote } = m {
+        if *promote {
+            return String::from("成");
+        } else if piece.promote().is_some()
+            && (from.relative_rank(piece.color()) <= 3 || to.relative_rank(piece.color()) <= 3)
         {
             return String::from("不成");
         }
@@ -173,13 +179,13 @@ fn parts_promotion(m: &Move) -> String {
 // 盤上の駒が動いた場合は通常の表記と同じ
 // 持駒を打った場合は「打」と記入
 fn parts_drop(m: &Move, pos: &Position) -> String {
-    let piece = m.piece();
-    if m.is_drop()
-        && !(pos.pieces_cp(piece.color(), piece.piece_kind())
-            & pos.attackers_to(piece.color(), m.to(), &pos.occupied()))
+    if let Move::Drop { to, piece } = m {
+        if !(pos.pieces_cp(piece.color(), piece.piece_kind())
+            & pos.attackers_to(piece.color(), *to, &pos.occupied()))
         .is_empty()
-    {
-        return String::from("打");
+        {
+            return String::from("打");
+        }
     }
     String::new()
 }
@@ -228,12 +234,11 @@ mod tests {
         let pos = Position::default();
         assert_eq!(
             vec!["▲7六歩"],
-            pos.kifu_strings(&[Move::new_normal(
-                Square::SQ_7G,
-                Square::SQ_7F,
-                false,
-                Piece::B_P,
-            )])
+            pos.kifu_strings(&[Move::Normal {
+                from: Square::SQ_7G,
+                to: Square::SQ_7F,
+                promote: false,
+            }])
         );
     }
 
@@ -256,8 +261,16 @@ mod tests {
             let pos = Position::new(board, hand_nums, Color::Black, 1);
             let test_cases = [(
                 vec![
-                    Move::new_normal(Square::SQ_5F, Square::SQ_5E, false, Piece::B_P),
-                    Move::new_normal(Square::SQ_5D, Square::SQ_5E, false, Piece::W_P),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                 ],
                 vec!["▲5五歩", "△同歩"],
             )];
@@ -269,8 +282,16 @@ mod tests {
             let pos = Position::new(board, hand_nums, Color::White, 1);
             let test_cases = [(
                 vec![
-                    Move::new_normal(Square::SQ_5D, Square::SQ_5E, false, Piece::W_P),
-                    Move::new_normal(Square::SQ_5F, Square::SQ_5E, false, Piece::B_P),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                 ],
                 vec!["△5五歩", "▲同歩"],
             )];
@@ -299,10 +320,20 @@ mod tests {
             let pos = Position::new(board, hand_nums, Color::Black, 1);
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_5C, Square::SQ_5B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_5B,
+                        promote: false,
+                    },
                     "▲5二金",
                 ),
-                (Move::new_drop(Square::SQ_5B, Piece::B_G), "▲5二金打"),
+                (
+                    Move::Drop {
+                        to: Square::SQ_5B,
+                        piece: Piece::B_G,
+                    },
+                    "▲5二金打",
+                ),
             ];
             for (m, expected) in test_cases {
                 assert_eq!(vec![expected], pos.kifu_strings(&[m]));
@@ -312,10 +343,20 @@ mod tests {
             let pos = Position::new(board, hand_nums, Color::White, 1);
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_5G, Square::SQ_5H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_5H,
+                        promote: false,
+                    },
                     "△5八金",
                 ),
-                (Move::new_drop(Square::SQ_5H, Piece::W_G), "△5八金打"),
+                (
+                    Move::Drop {
+                        to: Square::SQ_5H,
+                        piece: Piece::W_G,
+                    },
+                    "△5八金打",
+                ),
             ];
             for (m, expected) in test_cases {
                 assert_eq!(vec![expected], pos.kifu_strings(&[m]));
@@ -342,31 +383,59 @@ mod tests {
             let pos = Position::new(board, hand_nums, Color::Black, 1);
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_5C, Square::SQ_4B, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_4B,
+                        promote: false,
+                    },
                     "▲4二銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5C, Square::SQ_4B, true, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_4B,
+                        promote: true,
+                    },
                     "▲4二銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5C, Square::SQ_4D, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_4D,
+                        promote: false,
+                    },
                     "▲4四銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5C, Square::SQ_4D, true, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_4D,
+                        promote: true,
+                    },
                     "▲4四銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5D, Square::SQ_4C, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_4C,
+                        promote: false,
+                    },
                     "▲4三銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5D, Square::SQ_4C, true, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_4C,
+                        promote: true,
+                    },
                     "▲4三銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5D, Square::SQ_4E, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_4E,
+                        promote: false,
+                    },
                     "▲4五銀",
                 ),
             ];
@@ -378,31 +447,59 @@ mod tests {
             let pos = Position::new(board, hand_nums, Color::White, 1);
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_5G, Square::SQ_6H, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_6H,
+                        promote: false,
+                    },
                     "△6八銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5G, Square::SQ_6H, true, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_6H,
+                        promote: true,
+                    },
                     "△6八銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5G, Square::SQ_6F, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_6F,
+                        promote: false,
+                    },
                     "△6六銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5G, Square::SQ_6F, true, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_6F,
+                        promote: true,
+                    },
                     "△6六銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5F, Square::SQ_6G, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_6G,
+                        promote: false,
+                    },
                     "△6七銀不成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5F, Square::SQ_6G, true, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_6G,
+                        promote: true,
+                    },
                     "△6七銀成",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5F, Square::SQ_6E, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_6E,
+                        promote: false,
+                    },
                     "△6五銀",
                 ),
             ];
@@ -434,43 +531,83 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_9C, Square::SQ_8B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_9C,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7B, Square::SQ_8B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_7B,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二金寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_4C, Square::SQ_3B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_4C,
+                        to: Square::SQ_3B,
+                        promote: false,
+                    },
                     "▲3二金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3A, Square::SQ_3B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_3A,
+                        to: Square::SQ_3B,
+                        promote: false,
+                    },
                     "▲3二金引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5F, Square::SQ_5E, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_5F,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                     "▲5五金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_4E, Square::SQ_5E, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_4E,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                     "▲5五金寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8I, Square::SQ_8H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_8I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八銀上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7G, Square::SQ_8H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_7G,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八銀引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_4I, Square::SQ_3H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_4I,
+                        to: Square::SQ_3H,
+                        promote: false,
+                    },
                     "▲3八銀上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2G, Square::SQ_3H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_2G,
+                        to: Square::SQ_3H,
+                        promote: false,
+                    },
                     "▲3八銀引",
                 ),
             ];
@@ -498,43 +635,83 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_1G, Square::SQ_2H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_1G,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3H, Square::SQ_2H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_3H,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八金寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_6G, Square::SQ_7H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_6G,
+                        to: Square::SQ_7H,
+                        promote: false,
+                    },
                     "△7八金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7I, Square::SQ_7H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_7I,
+                        to: Square::SQ_7H,
+                        promote: false,
+                    },
                     "△7八金引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5D, Square::SQ_5E, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_5D,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                     "△5五金上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_6E, Square::SQ_5E, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_6E,
+                        to: Square::SQ_5E,
+                        promote: false,
+                    },
                     "△5五金寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2A, Square::SQ_2B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_2A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二銀上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3C, Square::SQ_2B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_3C,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二銀引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_6A, Square::SQ_7B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_6A,
+                        to: Square::SQ_7B,
+                        promote: false,
+                    },
                     "△7二銀上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8C, Square::SQ_7B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_8C,
+                        to: Square::SQ_7B,
+                        promote: false,
+                    },
                     "△7二銀引",
                 ),
             ];
@@ -566,43 +743,83 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_9B, Square::SQ_8A, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_9B,
+                        to: Square::SQ_8A,
+                        promote: false,
+                    },
                     "▲8一金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7B, Square::SQ_8A, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_7B,
+                        to: Square::SQ_8A,
+                        promote: false,
+                    },
                     "▲8一金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3B, Square::SQ_2B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_3B,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "▲2二金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_1B, Square::SQ_2B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_1B,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "▲2二金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_6E, Square::SQ_5F, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_6E,
+                        to: Square::SQ_5F,
+                        promote: false,
+                    },
                     "▲5六銀左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_4E, Square::SQ_5F, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_4E,
+                        to: Square::SQ_5F,
+                        promote: false,
+                    },
                     "▲5六銀右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8I, Square::SQ_7H, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_8I,
+                        to: Square::SQ_7H,
+                        promote: false,
+                    },
                     "▲7八金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7I, Square::SQ_7H, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_7I,
+                        to: Square::SQ_7H,
+                        promote: false,
+                    },
                     "▲7八金直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3I, Square::SQ_3H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_3I,
+                        to: Square::SQ_3H,
+                        promote: false,
+                    },
                     "▲3八銀直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2I, Square::SQ_3H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_2I,
+                        to: Square::SQ_3H,
+                        promote: false,
+                    },
                     "▲3八銀右",
                 ),
             ];
@@ -630,43 +847,83 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_1H, Square::SQ_2I, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_1H,
+                        to: Square::SQ_2I,
+                        promote: false,
+                    },
                     "△2九金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3H, Square::SQ_2I, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_3H,
+                        to: Square::SQ_2I,
+                        promote: false,
+                    },
                     "△2九金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7H, Square::SQ_8H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_7H,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "△8八金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_9H, Square::SQ_8H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_9H,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "△8八金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_4E, Square::SQ_5D, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_4E,
+                        to: Square::SQ_5D,
+                        promote: false,
+                    },
                     "△5四銀左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_6E, Square::SQ_5D, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_6E,
+                        to: Square::SQ_5D,
+                        promote: false,
+                    },
                     "△5四銀右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2A, Square::SQ_3B, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_2A,
+                        to: Square::SQ_3B,
+                        promote: false,
+                    },
                     "△3二金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3A, Square::SQ_3B, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_3A,
+                        to: Square::SQ_3B,
+                        promote: false,
+                    },
                     "△3二金直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7A, Square::SQ_7B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_7A,
+                        to: Square::SQ_7B,
+                        promote: false,
+                    },
                     "△7二銀直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8A, Square::SQ_7B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_8A,
+                        to: Square::SQ_7B,
+                        promote: false,
+                    },
                     "△7二銀右",
                 ),
             ];
@@ -698,51 +955,99 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_6C, Square::SQ_5B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_6C,
+                        to: Square::SQ_5B,
+                        promote: false,
+                    },
                     "▲5二金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5C, Square::SQ_5B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_5C,
+                        to: Square::SQ_5B,
+                        promote: false,
+                    },
                     "▲5二金直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_4C, Square::SQ_5B, false, Piece::B_G),
+                    Move::Normal {
+                        from: Square::SQ_4C,
+                        to: Square::SQ_5B,
+                        promote: false,
+                    },
                     "▲5二金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7I, Square::SQ_8H, false, Piece::B_PP),
+                    Move::Normal {
+                        from: Square::SQ_7I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8I, Square::SQ_8H, false, Piece::B_PP),
+                    Move::Normal {
+                        from: Square::SQ_8I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_9I, Square::SQ_8H, false, Piece::B_PP),
+                    Move::Normal {
+                        from: Square::SQ_9I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と左上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_9H, Square::SQ_8H, false, Piece::B_PP),
+                    Move::Normal {
+                        from: Square::SQ_9H,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8G, Square::SQ_8H, false, Piece::B_PP),
+                    Move::Normal {
+                        from: Square::SQ_8G,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八と引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2I, Square::SQ_2H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_2I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "▲2八銀直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_1G, Square::SQ_2H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_1G,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "▲2八銀右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3I, Square::SQ_2H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_3I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "▲2八銀左上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3G, Square::SQ_2H, false, Piece::B_S),
+                    Move::Normal {
+                        from: Square::SQ_3G,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "▲2八銀左引",
                 ),
             ];
@@ -770,51 +1075,99 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_4G, Square::SQ_5H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_4G,
+                        to: Square::SQ_5H,
+                        promote: false,
+                    },
                     "△5八金左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5G, Square::SQ_5H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_5G,
+                        to: Square::SQ_5H,
+                        promote: false,
+                    },
                     "△5八金直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_6G, Square::SQ_5H, false, Piece::W_G),
+                    Move::Normal {
+                        from: Square::SQ_6G,
+                        to: Square::SQ_5H,
+                        promote: false,
+                    },
                     "△5八金右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3A, Square::SQ_2B, false, Piece::W_PP),
+                    Move::Normal {
+                        from: Square::SQ_3A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2A, Square::SQ_2B, false, Piece::W_PP),
+                    Move::Normal {
+                        from: Square::SQ_2A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_1A, Square::SQ_2B, false, Piece::W_PP),
+                    Move::Normal {
+                        from: Square::SQ_1A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と左上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_1B, Square::SQ_2B, false, Piece::W_PP),
+                    Move::Normal {
+                        from: Square::SQ_1B,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2C, Square::SQ_2B, false, Piece::W_PP),
+                    Move::Normal {
+                        from: Square::SQ_2C,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二と引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8A, Square::SQ_8B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_8A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "△8二銀直",
                 ),
                 (
-                    Move::new_normal(Square::SQ_9C, Square::SQ_8B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_9C,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "△8二銀右",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7A, Square::SQ_8B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_7A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "△8二銀左上",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7C, Square::SQ_8B, false, Piece::W_S),
+                    Move::Normal {
+                        from: Square::SQ_7C,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "△8二銀左引",
                 ),
             ];
@@ -846,11 +1199,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_9A, Square::SQ_8B, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_9A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二竜引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8D, Square::SQ_8B, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_8D,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二竜上",
                 ),
             ];
@@ -878,11 +1239,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_2C, Square::SQ_4C, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_2C,
+                        to: Square::SQ_4C,
+                        promote: false,
+                    },
                     "▲4三竜寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5B, Square::SQ_4C, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_5B,
+                        to: Square::SQ_4C,
+                        promote: false,
+                    },
                     "▲4三竜引",
                 ),
             ];
@@ -910,11 +1279,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_5E, Square::SQ_3E, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_5E,
+                        to: Square::SQ_3E,
+                        promote: false,
+                    },
                     "▲3五竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_1E, Square::SQ_3E, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_1E,
+                        to: Square::SQ_3E,
+                        promote: false,
+                    },
                     "▲3五竜右",
                 ),
             ];
@@ -942,11 +1319,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_9I, Square::SQ_8H, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_9I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8I, Square::SQ_8H, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_8I,
+                        to: Square::SQ_8H,
+                        promote: false,
+                    },
                     "▲8八竜右",
                 ),
             ];
@@ -974,11 +1359,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_2H, Square::SQ_1G, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_2H,
+                        to: Square::SQ_1G,
+                        promote: false,
+                    },
                     "▲1七竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_1I, Square::SQ_1G, false, Piece::B_PR),
+                    Move::Normal {
+                        from: Square::SQ_1I,
+                        to: Square::SQ_1G,
+                        promote: false,
+                    },
                     "▲1七竜右",
                 ),
             ];
@@ -1006,11 +1399,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_1I, Square::SQ_2H, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_1I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八竜引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2F, Square::SQ_2H, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_2F,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八竜上",
                 ),
             ];
@@ -1038,11 +1439,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_8G, Square::SQ_6G, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_8G,
+                        to: Square::SQ_6G,
+                        promote: false,
+                    },
                     "△6七竜寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5H, Square::SQ_6G, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_5H,
+                        to: Square::SQ_6G,
+                        promote: false,
+                    },
                     "△6七竜引",
                 ),
             ];
@@ -1070,11 +1479,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_5E, Square::SQ_7E, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_5E,
+                        to: Square::SQ_7E,
+                        promote: false,
+                    },
                     "△7五竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_9E, Square::SQ_7E, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_9E,
+                        to: Square::SQ_7E,
+                        promote: false,
+                    },
                     "△7五竜右",
                 ),
             ];
@@ -1102,11 +1519,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_1A, Square::SQ_2B, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_1A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2A, Square::SQ_2B, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_2A,
+                        to: Square::SQ_2B,
+                        promote: false,
+                    },
                     "△2二竜右",
                 ),
             ];
@@ -1134,11 +1559,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_8B, Square::SQ_9C, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_8B,
+                        to: Square::SQ_9C,
+                        promote: false,
+                    },
                     "△9三竜左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_9A, Square::SQ_9C, false, Piece::W_PR),
+                    Move::Normal {
+                        from: Square::SQ_9A,
+                        to: Square::SQ_9C,
+                        promote: false,
+                    },
                     "△9三竜右",
                 ),
             ];
@@ -1170,11 +1603,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_9A, Square::SQ_8B, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_9A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_8A, Square::SQ_8B, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_8A,
+                        to: Square::SQ_8B,
+                        promote: false,
+                    },
                     "▲8二馬右",
                 ),
             ];
@@ -1202,11 +1643,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_9E, Square::SQ_8E, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_9E,
+                        to: Square::SQ_8E,
+                        promote: false,
+                    },
                     "▲8五馬寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_6C, Square::SQ_8E, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_6C,
+                        to: Square::SQ_8E,
+                        promote: false,
+                    },
                     "▲8五馬引",
                 ),
             ];
@@ -1234,11 +1683,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_1A, Square::SQ_1B, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_1A,
+                        to: Square::SQ_1B,
+                        promote: false,
+                    },
                     "▲1二馬引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_3D, Square::SQ_1B, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_3D,
+                        to: Square::SQ_1B,
+                        promote: false,
+                    },
                     "▲1二馬上",
                 ),
             ];
@@ -1266,11 +1723,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_9I, Square::SQ_7G, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_9I,
+                        to: Square::SQ_7G,
+                        promote: false,
+                    },
                     "▲7七馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5I, Square::SQ_7G, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_5I,
+                        to: Square::SQ_7G,
+                        promote: false,
+                    },
                     "▲7七馬右",
                 ),
             ];
@@ -1298,11 +1763,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_4G, Square::SQ_2I, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_4G,
+                        to: Square::SQ_2I,
+                        promote: false,
+                    },
                     "▲2九馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_1H, Square::SQ_2I, false, Piece::B_PB),
+                    Move::Normal {
+                        from: Square::SQ_1H,
+                        to: Square::SQ_2I,
+                        promote: false,
+                    },
                     "▲2九馬右",
                 ),
             ];
@@ -1330,11 +1803,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_1I, Square::SQ_2H, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_1I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_2I, Square::SQ_2H, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_2I,
+                        to: Square::SQ_2H,
+                        promote: false,
+                    },
                     "△2八馬右",
                 ),
             ];
@@ -1362,11 +1843,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_1E, Square::SQ_2E, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_1E,
+                        to: Square::SQ_2E,
+                        promote: false,
+                    },
                     "△2五馬寄",
                 ),
                 (
-                    Move::new_normal(Square::SQ_4G, Square::SQ_2E, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_4G,
+                        to: Square::SQ_2E,
+                        promote: false,
+                    },
                     "△2五馬引",
                 ),
             ];
@@ -1394,11 +1883,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_9I, Square::SQ_9H, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_9I,
+                        to: Square::SQ_9H,
+                        promote: false,
+                    },
                     "△9八馬引",
                 ),
                 (
-                    Move::new_normal(Square::SQ_7F, Square::SQ_9H, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_7F,
+                        to: Square::SQ_9H,
+                        promote: false,
+                    },
                     "△9八馬上",
                 ),
             ];
@@ -1426,11 +1923,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_1A, Square::SQ_3C, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_1A,
+                        to: Square::SQ_3C,
+                        promote: false,
+                    },
                     "△3三馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_5A, Square::SQ_3C, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_5A,
+                        to: Square::SQ_3C,
+                        promote: false,
+                    },
                     "△3三馬右",
                 ),
             ];
@@ -1458,11 +1963,19 @@ mod tests {
             );
             let test_cases = [
                 (
-                    Move::new_normal(Square::SQ_6C, Square::SQ_8A, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_6C,
+                        to: Square::SQ_8A,
+                        promote: false,
+                    },
                     "△8一馬左",
                 ),
                 (
-                    Move::new_normal(Square::SQ_9B, Square::SQ_8A, false, Piece::W_PB),
+                    Move::Normal {
+                        from: Square::SQ_9B,
+                        to: Square::SQ_8A,
+                        promote: false,
+                    },
                     "△8一馬右",
                 ),
             ];
@@ -1498,11 +2011,22 @@ mod tests {
                             for i in v {
                                 let from = froms[i];
                                 board[from.array_index()] = Some(piece);
-                                moves.push(Move::new_normal(from, to, false, piece));
+                                moves.push(Move::Normal {
+                                    from,
+                                    to,
+                                    promote: false,
+                                });
                             }
                             let pos = Position::new(board, [[0; 8]; 2], c, 1);
-                            let legal_moves = pos.legal_moves().into_iter().collect::<HashSet<_>>();
-                            if moves.iter().any(|m| !legal_moves.contains(m)) {
+                            let legal_moves = pos
+                                .legal_moves()
+                                .into_iter()
+                                .map(|m| format!("{m:?}"))
+                                .collect::<HashSet<_>>();
+                            if moves
+                                .iter()
+                                .any(|m| !legal_moves.contains(&format!("{m:?}")))
+                            {
                                 continue;
                             }
                             let mut results = HashSet::new();

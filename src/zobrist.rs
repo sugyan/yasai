@@ -91,8 +91,10 @@ pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
 
 #[cfg(test)]
 mod tests {
+    use shogi_core::Move;
+
     use super::*;
-    use crate::{Move, Position};
+    use crate::Position;
     use std::collections::HashSet;
 
     #[test]
@@ -151,9 +153,21 @@ mod tests {
             let mut pos = Position::default();
             // +7776FU,-3334FU,+2726FU
             let moves = [
-                Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
-                Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
-                Move::new_normal(Square::SQ_2G, Square::SQ_2F, false, Piece::B_P),
+                Move::Normal {
+                    from: Square::SQ_7G,
+                    to: Square::SQ_7F,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_3C,
+                    to: Square::SQ_3D,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_2G,
+                    to: Square::SQ_2F,
+                    promote: false,
+                },
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.key()
@@ -162,9 +176,21 @@ mod tests {
             let mut pos = Position::default();
             // +2726FU,-3334FU,+7776FU
             let moves = [
-                Move::new_normal(Square::SQ_2G, Square::SQ_2F, false, Piece::B_P),
-                Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
-                Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
+                Move::Normal {
+                    from: Square::SQ_2G,
+                    to: Square::SQ_2F,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_7G,
+                    to: Square::SQ_7F,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_3C,
+                    to: Square::SQ_3D,
+                    promote: false,
+                },
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.key()
@@ -189,12 +215,35 @@ mod tests {
             // +7776FU,-3334FU,+8822KA,-3122GI,+0088KA,-2231GI
             // => P-00KA
             let moves = [
-                Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
-                Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
-                Move::new_normal(Square::SQ_8H, Square::SQ_2B, false, Piece::B_B),
-                Move::new_normal(Square::SQ_3A, Square::SQ_2B, false, Piece::W_S),
-                Move::new_drop(Square::SQ_8H, Piece::B_B),
-                Move::new_normal(Square::SQ_2B, Square::SQ_3A, false, Piece::W_S),
+                Move::Normal {
+                    from: Square::SQ_7G,
+                    to: Square::SQ_7F,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_3C,
+                    to: Square::SQ_3D,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_8H,
+                    to: Square::SQ_2B,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_3A,
+                    to: Square::SQ_2B,
+                    promote: false,
+                },
+                Move::Drop {
+                    to: Square::SQ_8H,
+                    piece: Piece::B_B,
+                },
+                Move::Normal {
+                    from: Square::SQ_2B,
+                    to: Square::SQ_3A,
+                    promote: false,
+                },
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()
@@ -204,12 +253,36 @@ mod tests {
             // +7776FU,-3334FU,+8822KA,-3142GI,+2288KA,-4231GI
             // => P+00KA
             let moves = [
-                Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
-                Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
-                Move::new_normal(Square::SQ_8H, Square::SQ_2B, false, Piece::B_B),
-                Move::new_normal(Square::SQ_3A, Square::SQ_4B, false, Piece::W_S),
-                Move::new_normal(Square::SQ_2B, Square::SQ_8H, false, Piece::B_B),
-                Move::new_normal(Square::SQ_4B, Square::SQ_3A, false, Piece::W_S),
+                Move::Normal {
+                    from: Square::SQ_7G,
+                    to: Square::SQ_7F,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_3C,
+                    to: Square::SQ_3D,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_8H,
+                    to: Square::SQ_2B,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_3A,
+                    to: Square::SQ_4B,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_2B,
+                    to: Square::SQ_8H,
+                    promote: false,
+                },
+                Move::Normal {
+                    from: Square::SQ_4B,
+                    to: Square::SQ_3A,
+                    promote: false,
+                },
             ];
             moves.iter().for_each(|&m| pos.do_move(m));
             pos.keys()

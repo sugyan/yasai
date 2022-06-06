@@ -1,7 +1,7 @@
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RANKS, RELATIVE_RANKS};
-use crate::{Move, Position};
+use crate::Position;
 use arrayvec::{ArrayVec, IntoIter};
-use shogi_core::{Bitboard, Color, Piece, PieceKind, Square};
+use shogi_core::{Bitboard, Color, Move, Piece, PieceKind, Square};
 
 pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
 
@@ -47,14 +47,16 @@ impl MoveList {
     }
     fn generate_evasions(&mut self, pos: &Position) {
         let c = pos.side_to_move();
-        if let Some(ou) = pos.king(c) {
+        if let Some(king) = pos.king(c) {
             let mut checkers_attacks = Bitboard::empty();
             let mut checkers_count = 0;
             for ch in pos.checkers() {
                 if let Some(p) = pos.piece_on(ch) {
                     let pk = p.piece_kind();
                     // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
-                    if pk == PieceKind::ProRook && ch.file() != ou.file() && ch.rank() != ou.rank()
+                    if pk == PieceKind::ProRook
+                        && ch.file() != king.file()
+                        && ch.rank() != king.rank()
                     {
                         checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &pos.occupied());
                     } else {
@@ -63,20 +65,19 @@ impl MoveList {
                 }
                 checkers_count += 1;
             }
-            for to in ATTACK_TABLE.ou.attack(ou, c) & !pos.pieces_c(c) & !checkers_attacks {
-                self.push(Move::new_normal(
-                    ou,
+            for to in ATTACK_TABLE.ou.attack(king, c) & !pos.pieces_c(c) & !checkers_attacks {
+                self.push(Move::Normal {
+                    from: king,
                     to,
-                    false,
-                    Piece::new(PieceKind::King, c),
-                ));
+                    promote: false,
+                });
             }
             // 両王手の場合は玉が逃げるしかない
             if checkers_count > 1 {
                 return;
             }
             if let Some(ch) = pos.checkers().pop() {
-                let target_drop = BETWEEN_TABLE[ch.array_index()][ou.array_index()];
+                let target_drop = BETWEEN_TABLE[ch.array_index()][king.array_index()];
                 let target_move = target_drop | pos.checkers();
                 self.generate_for_fu(pos, &target_move);
                 self.generate_for_ky(pos, &target_move);
@@ -96,112 +97,147 @@ impl MoveList {
     }
     fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let (to_bb, delta, p) = match c {
-            Color::Black => (
-                unsafe { pos.pieces_cp(c, PieceKind::Pawn).shift_up(1) },
-                1,
-                Piece::B_P,
-            ),
+        let (to_bb, delta) = match c {
+            Color::Black => (unsafe { pos.pieces_cp(c, PieceKind::Pawn).shift_up(1) }, 1),
             Color::White => (
                 unsafe { pos.pieces_cp(c, PieceKind::Pawn).shift_down(1) },
                 !0,
-                Piece::W_P,
             ),
         };
         for to in to_bb & *target {
             let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
             if PROMOTABLE[to.array_index()][c.array_index()] {
-                self.push(Move::new_normal(from, to, true, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: true,
+                });
                 if RELATIVE_RANKS[to.array_index()][c.array_index()] > 1 {
-                    self.push(Move::new_normal(from, to, false, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: false,
+                    });
                 }
             } else {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_for_ky(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = match c {
-            Color::Black => Piece::B_L,
-            Color::White => Piece::W_L,
-        };
         for from in pos.pieces_cp(c, PieceKind::Lance) {
             for to in ATTACK_TABLE.ky.attack(from, c, &pos.occupied()) & *target {
                 if PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::new_normal(from, to, true, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
                     if RELATIVE_RANKS[to.array_index()][c.array_index()] > 1 {
-                        self.push(Move::new_normal(from, to, false, p));
+                        self.push(Move::Normal {
+                            from,
+                            to,
+                            promote: false,
+                        });
                     }
                 } else {
-                    self.push(Move::new_normal(from, to, false, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: false,
+                    });
                 }
             }
         }
     }
     fn generate_for_ke(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = match c {
-            Color::Black => Piece::B_N,
-            Color::White => Piece::W_N,
-        };
         for from in pos.pieces_cp(c, PieceKind::Knight) {
             for to in ATTACK_TABLE.ke.attack(from, c) & *target {
                 if PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::new_normal(from, to, true, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
                     if RELATIVE_RANKS[to.array_index()][c.array_index()] > 2 {
-                        self.push(Move::new_normal(from, to, false, p));
+                        self.push(Move::Normal {
+                            from,
+                            to,
+                            promote: false,
+                        });
                     }
                 } else {
-                    self.push(Move::new_normal(from, to, false, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: false,
+                    });
                 }
             }
         }
     }
     fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = match c {
-            Color::Black => Piece::B_S,
-            Color::White => Piece::W_S,
-        };
         for from in pos.pieces_cp(c, PieceKind::Silver) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
             for to in ATTACK_TABLE.gi.attack(from, c) & *target {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
                 if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::new_normal(from, to, true, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
                 }
             }
         }
     }
     fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = match c {
-            Color::Black => Piece::B_B,
-            Color::White => Piece::W_B,
-        };
         for from in pos.pieces_cp(c, PieceKind::Bishop) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
             for to in ATTACK_TABLE.ka.attack(from, &pos.occupied()) & *target {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
                 if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::new_normal(from, to, true, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
                 }
             }
         }
     }
     fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = match c {
-            Color::Black => Piece::B_R,
-            Color::White => Piece::W_R,
-        };
         for from in pos.pieces_cp(c, PieceKind::Rook) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
             for to in ATTACK_TABLE.hi.attack(from, &pos.occupied()) & *target {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
                 if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::new_normal(from, to, true, p));
+                    self.push(Move::Normal {
+                        from,
+                        to,
+                        promote: true,
+                    });
                 }
             }
         }
@@ -215,52 +251,54 @@ impl MoveList {
             | pos.pieces_p(PieceKind::ProSilver))
             & pos.pieces_c(c)
         {
-            if let Some(p) = pos.piece_on(from) {
-                for to in ATTACK_TABLE.ki.attack(from, c) & *target {
-                    self.push(Move::new_normal(from, to, false, p));
-                }
+            for to in ATTACK_TABLE.ki.attack(from, c) & *target {
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_for_ou(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = match c {
-            Color::Black => Piece::B_K,
-            Color::White => Piece::W_K,
-        };
         for from in pos.pieces_cp(c, PieceKind::King) {
             for to in ATTACK_TABLE.ou.attack(from, c) & *target {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_for_um(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = match c {
-            Color::Black => Piece::B_PB,
-            Color::White => Piece::W_PB,
-        };
         for from in pos.pieces_cp(c, PieceKind::ProBishop) {
             for to in (ATTACK_TABLE.ka.attack(from, &pos.occupied())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
             {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
     fn generate_for_ry(&mut self, pos: &Position, target: &Bitboard) {
         let c = pos.side_to_move();
-        let p = match c {
-            Color::Black => Piece::B_PR,
-            Color::White => Piece::W_PR,
-        };
         for from in pos.pieces_cp(c, PieceKind::ProRook) {
             for to in (ATTACK_TABLE.hi.attack(from, &pos.occupied())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
             {
-                self.push(Move::new_normal(from, to, false, p));
+                self.push(Move::Normal {
+                    from,
+                    to,
+                    promote: false,
+                });
             }
         }
     }
@@ -298,7 +336,10 @@ impl MoveList {
                     PieceKind::Knight => RELATIVE_RANKS[to.array_index()][c.array_index()] > 2,
                     _ => true,
                 } {
-                    self.push(Move::new_drop(to, Piece::new(pk, c)));
+                    self.push(Move::Drop {
+                        to,
+                        piece: Piece::new(pk, c),
+                    });
                 }
             }
         }

@@ -1,10 +1,8 @@
 use crate::board_piece::*;
 use crate::movegen::MoveList;
-use crate::shogi_move::MoveType;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
-use crate::Move;
-use shogi_core::{Bitboard, Color, Hand, Piece, PieceKind, Square};
+use shogi_core::{Bitboard, Color, Hand, Move, Piece, PieceKind, Square};
 
 #[derive(Debug, Clone)]
 struct AttackInfo {
@@ -90,14 +88,21 @@ impl AttackInfo {
 struct State {
     keys: (Key, Key),
     captured: Option<Piece>,
+    last_moved: Option<Piece>,
     attack_info: AttackInfo,
 }
 
 impl State {
-    fn new(keys: (Key, Key), captured: Option<Piece>, attack_info: AttackInfo) -> Self {
+    fn new(
+        keys: (Key, Key),
+        captured: Option<Piece>,
+        last_moved: Option<Piece>,
+        attack_info: AttackInfo,
+    ) -> Self {
         Self {
             keys,
             captured,
+            last_moved,
             attack_info,
         }
     }
@@ -164,8 +169,12 @@ impl Position {
         // create initial state
         let checkers = AttackInfo::calculate_checkers(&pos);
         pos.color = side_to_move;
-        pos.states
-            .push(State::new(keys, None, AttackInfo::new(checkers, &pos)));
+        pos.states.push(State::new(
+            keys,
+            None,
+            None,
+            AttackInfo::new(checkers, &pos),
+        ));
         pos
     }
     pub fn hand(&self, c: Color) -> Hand {
@@ -180,13 +189,13 @@ impl Position {
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
         self.board[sq.array_index()]
     }
-    pub fn pieces_cp(&self, c: Color, pk: PieceKind) -> Bitboard {
+    pub(crate) fn pieces_cp(&self, c: Color, pk: PieceKind) -> Bitboard {
         self.pieces_c(c) & self.pieces_p(pk)
     }
-    pub fn pieces_c(&self, c: Color) -> Bitboard {
+    pub(crate) fn pieces_c(&self, c: Color) -> Bitboard {
         self.color_bbs[c.array_index()]
     }
-    pub fn pieces_p(&self, pk: PieceKind) -> Bitboard {
+    pub(crate) fn pieces_p(&self, pk: PieceKind) -> Bitboard {
         self.piece_type_bbs[pk.array_index()]
     }
     pub fn occupied(&self) -> Bitboard {
@@ -198,10 +207,13 @@ impl Position {
     pub fn keys(&self) -> (u64, u64) {
         (self.state().keys.0.value(), self.state().keys.1.value())
     }
-    pub fn captured(&self) -> Option<Piece> {
+    pub(crate) fn captured(&self) -> Option<Piece> {
         self.state().captured
     }
-    pub fn checkers(&self) -> Bitboard {
+    pub(crate) fn last_moved(&self) -> Option<Piece> {
+        self.state().last_moved
+    }
+    pub(crate) fn checkers(&self) -> Bitboard {
         self.state().attack_info.checkers
     }
     pub fn in_check(&self) -> bool {
@@ -224,16 +236,14 @@ impl Position {
     pub fn do_move(&mut self, m: Move) {
         let is_check = self.is_check_move(m);
         let captured = self.piece_on(m.to());
+        let last_moved;
         let c = self.side_to_move();
         let mut keys = self.state().keys;
-        let checkers = match m.move_type() {
+        let checkers = match m {
             // 駒移動
-            MoveType::Normal {
-                from,
-                to,
-                is_promotion,
-                piece,
-            } => {
+            Move::Normal { from, to, promote } => {
+                last_moved = self.piece_on(from);
+                let piece = last_moved.expect("piece does not exist");
                 self.remove_piece(from, piece);
                 // 移動先に駒がある場合
                 if let Some(p) = captured {
@@ -252,7 +262,7 @@ impl Position {
                     keys.0 ^= ZOBRIST_TABLE.board(to, p);
                     keys.1 ^= ZOBRIST_TABLE.hand(c, pk_unpromoted, num - 1);
                 }
-                let p = if is_promotion {
+                let p = if promote {
                     if let Some(p) = piece.promote() {
                         p
                     } else {
@@ -271,7 +281,8 @@ impl Position {
                 }
             }
             // 駒打ち
-            MoveType::Drop { to, piece } => {
+            Move::Drop { to, piece } => {
+                last_moved = Some(piece);
                 let pk = piece.piece_kind();
                 let num = self.hands[c.array_index()]
                     .count(pk)
@@ -292,19 +303,19 @@ impl Position {
         self.color = c.flip();
         keys.0 ^= Key::COLOR;
         self.ply += 1;
-        self.states
-            .push(State::new(keys, captured, AttackInfo::new(checkers, self)));
+        self.states.push(State::new(
+            keys,
+            captured,
+            last_moved,
+            AttackInfo::new(checkers, self),
+        ));
     }
     pub fn undo_move(&mut self, m: Move) {
         let c = self.side_to_move();
-        match m.move_type() {
-            MoveType::Normal {
-                from,
-                to,
-                is_promotion,
-                piece,
-            } => {
-                let p_to = if is_promotion {
+        match m {
+            Move::Normal { from, to, promote } => {
+                let piece = self.last_moved().expect("last moved piece does not exist");
+                let p_to = if promote {
                     if let Some(p) = piece.promote() {
                         p
                     } else {
@@ -329,7 +340,7 @@ impl Position {
                 self.put_piece(from, piece);
             }
             // 駒打ち
-            MoveType::Drop { to, piece } => {
+            Move::Drop { to, piece } => {
                 self.remove_piece(to, piece);
                 self.hands[c.flip().array_index()] = self.hands[c.flip().array_index()]
                     .added(piece.piece_kind())
@@ -369,15 +380,10 @@ impl Position {
         ) & self.pieces_c(c)
     }
     pub fn is_check_move(&self, m: Move) -> bool {
-        match m.move_type() {
-            MoveType::Normal {
-                from,
-                to,
-                is_promotion,
-                piece,
-            } => {
-                // 直接王手
-                let p = if is_promotion {
+        match m {
+            Move::Normal { from, to, promote } => {
+                let piece = self.piece_on(from).expect("piece does not exist");
+                let p = if promote {
                     if let Some(p) = piece.promote() {
                         p
                     } else {
@@ -399,7 +405,7 @@ impl Position {
                 }
                 false
             }
-            MoveType::Drop { to, piece } => self.checkable(piece.piece_kind(), to),
+            Move::Drop { to, piece } => self.checkable(piece.piece_kind(), to),
         }
     }
 }
@@ -469,11 +475,30 @@ mod tests {
     fn do_undo_move() {
         let mut pos = Position::default();
         let moves = [
-            Move::new_normal(Square::SQ_7G, Square::SQ_7F, false, Piece::B_P),
-            Move::new_normal(Square::SQ_3C, Square::SQ_3D, false, Piece::W_P),
-            Move::new_normal(Square::SQ_8H, Square::SQ_2B, true, Piece::B_B),
-            Move::new_normal(Square::SQ_3A, Square::SQ_2B, false, Piece::W_S),
-            Move::new_drop(Square::SQ_3C, Piece::B_B),
+            Move::Normal {
+                from: Square::SQ_7G,
+                to: Square::SQ_7F,
+                promote: false,
+            },
+            Move::Normal {
+                from: Square::SQ_3C,
+                to: Square::SQ_3D,
+                promote: false,
+            },
+            Move::Normal {
+                from: Square::SQ_8H,
+                to: Square::SQ_2B,
+                promote: true,
+            },
+            Move::Normal {
+                from: Square::SQ_3A,
+                to: Square::SQ_2B,
+                promote: false,
+            },
+            Move::Drop {
+                to: Square::SQ_3C,
+                piece: Piece::B_B,
+            },
         ];
         // do moves
         for &m in moves.iter() {
@@ -593,26 +618,78 @@ mod tests {
             [16, 2, 4, 4, 3, 1, 1, 0],
         ], Color::Black, 1);
         let test_cases = [
-            (Move::new_drop(Square::SQ_1B, Piece::B_L), true),
-            (Move::new_drop(Square::SQ_1D, Piece::B_L), false),
-            (Move::new_drop(Square::SQ_2B, Piece::B_B), true),
-            (Move::new_drop(Square::SQ_5E, Piece::B_B), false),
-            (Move::new_drop(Square::SQ_2A, Piece::B_R), true),
-            (Move::new_drop(Square::SQ_5A, Piece::B_R), false),
             (
-                Move::new_normal(Square::SQ_1C, Square::SQ_1B, false, Piece::B_G),
+                Move::Drop {
+                    to: Square::SQ_1B,
+                    piece: Piece::B_L,
+                },
                 true,
             ),
             (
-                Move::new_normal(Square::SQ_1C, Square::SQ_2B, false, Piece::B_G),
+                Move::Drop {
+                    to: Square::SQ_1D,
+                    piece: Piece::B_L,
+                },
+                false,
+            ),
+            (
+                Move::Drop {
+                    to: Square::SQ_2B,
+                    piece: Piece::B_B,
+                },
                 true,
             ),
             (
-                Move::new_normal(Square::SQ_1C, Square::SQ_2C, false, Piece::B_G),
+                Move::Drop {
+                    to: Square::SQ_5E,
+                    piece: Piece::B_B,
+                },
+                false,
+            ),
+            (
+                Move::Drop {
+                    to: Square::SQ_2A,
+                    piece: Piece::B_R,
+                },
                 true,
             ),
             (
-                Move::new_normal(Square::SQ_1C, Square::SQ_1D, false, Piece::B_G),
+                Move::Drop {
+                    to: Square::SQ_5A,
+                    piece: Piece::B_R,
+                },
+                false,
+            ),
+            (
+                Move::Normal {
+                    from: Square::SQ_1C,
+                    to: Square::SQ_1B,
+                    promote: false,
+                },
+                true,
+            ),
+            (
+                Move::Normal {
+                    from: Square::SQ_1C,
+                    to: Square::SQ_2B,
+                    promote: false,
+                },
+                true,
+            ),
+            (
+                Move::Normal {
+                    from: Square::SQ_1C,
+                    to: Square::SQ_2C,
+                    promote: false,
+                },
+                true,
+            ),
+            (
+                Move::Normal {
+                    from: Square::SQ_1C,
+                    to: Square::SQ_1D,
+                    promote: false,
+                },
                 false,
             ),
         ];
