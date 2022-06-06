@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654524453337,
+  "lastUpdate": 1654526599470,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -133,6 +133,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 404256297,
             "range": "± 44090803",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "sugyan",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "sugi1982@gmail.com",
+            "name": "sugyan",
+            "username": "sugyan"
+          },
+          "distinct": true,
+          "id": "dc7e5bc4df5790b3f5d1953e7cb36fb794ed8360",
+          "message": "Bump version to 0.3.0",
+          "timestamp": "2022-06-06T23:39:14+09:00",
+          "tree_id": "8a33e6f0ca9ef4a4d62078e8cd8bf5d39c0a19be",
+          "url": "https://github.com/sugyan/yasai/commit/dc7e5bc4df5790b3f5d1953e7cb36fb794ed8360"
+        },
+        "date": 1654526598503,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 387958356,
+            "range": "± 50452229",
             "unit": "ns/iter"
           }
         ]
