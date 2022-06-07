@@ -1,8 +1,7 @@
-use crate::board_piece::*;
 use crate::movegen::MoveList;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
-use shogi_core::{Bitboard, Color, Hand, Move, Piece, PieceKind, Square};
+use shogi_core::{Bitboard, Color, Hand, Move, PartialPosition, Piece, PieceKind, Square};
 
 #[derive(Debug, Clone)]
 struct AttackInfo {
@@ -114,7 +113,7 @@ pub struct Position {
     board: [Option<Piece>; Square::NUM],
     hands: [Hand; 2],
     color: Color,
-    ply: u32,
+    ply: u16,
     color_bbs: [Bitboard; 2],
     piece_type_bbs: [Bitboard; PieceKind::NUM],
     occupied_bb: Bitboard,
@@ -122,18 +121,15 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn new(
-        board: [Option<Piece>; Square::NUM],
-        hand_nums: [[u8; 8]; 2],
-        side_to_move: Color,
-        ply: u32,
-    ) -> Position {
+    pub fn new(partial: PartialPosition) -> Position {
         let mut keys = (Key::ZERO, Key::ZERO);
         // board
+        let mut board = [None; Square::NUM];
         let mut color_bbs = [Bitboard::empty(); 2];
         let mut piece_type_bbs = [Bitboard::empty(); PieceKind::NUM];
         let mut occupied_bb = Bitboard::empty();
         for sq in Square::all() {
+            board[sq.array_index()] = partial.piece_at(sq);
             if let Some(p) = board[sq.array_index()] {
                 color_bbs[p.color().array_index()] |= sq;
                 piece_type_bbs[p.piece_kind().array_index()] |= sq;
@@ -143,15 +139,13 @@ impl Position {
         }
         // hands
         let mut hands = [Hand::new(); 2];
-        for c in Color::all() {
-            for (i, &num) in hand_nums[c.array_index()].iter().enumerate() {
-                if let Some(pk) = PieceKind::from_u8(i as u8 + 1) {
-                    for j in 0..num {
-                        if let Some(h) = hands[c.array_index()].added(pk) {
-                            hands[c.array_index()] = h;
-                        }
-                        keys.1 ^= ZOBRIST_TABLE.hand(c, pk, j);
+        for p in Piece::all() {
+            if let Some(num) = partial.hand(p) {
+                for i in 0..num {
+                    if let Some(h) = hands[p.color().array_index()].added(p.piece_kind()) {
+                        hands[p.color().array_index()] = h;
                     }
+                    keys.1 ^= ZOBRIST_TABLE.hand(p.color(), p.piece_kind(), i);
                 }
             }
         }
@@ -159,8 +153,8 @@ impl Position {
         let mut pos = Self {
             board,
             hands,
-            color: side_to_move.flip(),
-            ply,
+            color: partial.side_to_move().flip(),
+            ply: partial.ply(),
             color_bbs,
             piece_type_bbs,
             occupied_bb,
@@ -168,7 +162,7 @@ impl Position {
         };
         // create initial state
         let checkers = AttackInfo::calculate_checkers(&pos);
-        pos.color = side_to_move;
+        pos.color = partial.side_to_move();
         pos.states.push(State::new(
             keys,
             None,
@@ -183,7 +177,7 @@ impl Position {
     pub fn side_to_move(&self) -> Color {
         self.color
     }
-    pub fn ply(&self) -> u32 {
+    pub fn ply(&self) -> u16 {
         self.ply
     }
     pub fn piece_on(&self, sq: Square) -> Option<Piece> {
@@ -412,25 +406,14 @@ impl Position {
 
 impl Default for Position {
     fn default() -> Self {
-        #[rustfmt::skip]
-        let board = [
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
-            WKE, WKA, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
-            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WGI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BGI,
-            WKE, WHI, WFU, EMP, EMP, EMP, BFU, BKA, BKE,
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
-        ];
-        Self::new(board, [[0; 8]; 2], Color::Black, 1)
+        Self::new(PartialPosition::startpos())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shogi_usi_parser::FromUsi;
 
     #[test]
     fn default() {
@@ -567,22 +550,12 @@ mod tests {
         }
         // from maximum moves
         {
-            // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
-            #[rustfmt::skip]
-            let mut pos = Position::new([
-                EMP, WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-                EMP, BGI, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-                EMP, BOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-                BHI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP
-            ], [
-                [ 1, 1, 1, 1, 1, 1, 1, 0],
-                [17, 0, 3, 0, 3, 0, 0, 0],
-            ], Color::Black, 1);
+            let mut pos = Position::new(
+                PartialPosition::from_usi(
+                    "sfen R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1",
+                )
+                .expect("failed to parse"),
+            );
             assert_eq!(593, perft(&mut pos, 1));
             assert_eq!(105677, perft(&mut pos, 2));
         }
@@ -591,32 +564,21 @@ mod tests {
     #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn is_check_move() {
-        #[rustfmt::skip]
         // P1 *  *  *  *  *  * -FU * -OU
-        // P2 *  *  *  *  *  *  *  *  * 
+        // P2 *  *  *  *  *  *  *  *  *
         // P3 *  *  *  *  *  * +FU * +KI
-        // P4 *  *  *  *  *  *  *  *  * 
+        // P4 *  *  *  *  *  *  *  *  *
         // P5 *  *  *  *  *  *  *  * +KY
-        // P6 *  *  *  *  *  *  *  *  * 
-        // P7 *  *  *  *  *  *  *  *  * 
-        // P8 *  *  *  *  *  *  *  *  * 
-        // P9 *  *  *  *  *  *  *  *  * 
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 *  *  *  *  *  *  *  *  *
         // P-00AL
         // +
-        let pos = Position::new([
-            WOU, EMP, BKI, EMP, BKY, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            WFU, EMP, BFU, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-        ], [
-            [ 0, 1, 0, 0, 0, 1, 1, 0],
-            [16, 2, 4, 4, 3, 1, 1, 0],
-        ], Color::Black, 1);
+        let pos = Position::new(
+            PartialPosition::from_usi("sfen 6p1k/9/6P1G/9/8L/9/9/9/9 b RBLrb3g4s4n2l16p 1")
+                .expect("failed to parse"),
+        );
         let test_cases = [
             (
                 Move::Drop {

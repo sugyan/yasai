@@ -428,7 +428,8 @@ impl IntoIterator for MoveList {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::board_piece::*;
+    use shogi_core::PartialPosition;
+    use shogi_usi_parser::FromUsi;
 
     #[test]
     fn from_default() {
@@ -438,21 +439,24 @@ mod tests {
 
     #[test]
     fn drop_moves() {
-        #[rustfmt::skip]
-        let pos = Position::new([
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
-            WKE, WGI, WFU, EMP, EMP, EMP, BFU, BHI, BKE,
-            EMP, EMP, EMP, WFU, EMP, EMP, BFU, EMP, BGI,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WOU, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BOU,
-            WKI, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKI,
-            WGI, EMP, WFU, EMP, EMP, BFU, EMP, EMP, BGI,
-            WKE, WHI, WFU, EMP, EMP, EMP, BFU, EMP, BKE,
-            WKY, EMP, WFU, EMP, EMP, EMP, BFU, EMP, BKY,
-        ], [
-            [0, 0, 0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 0, 0, 1, 0, 0],
-        ], Color::Black, 1);
+        // P1-KY-KE-GI-KI-OU-KI * -KE-KY
+        // P2 * -HI *  *  *  *  * -GI *
+        // P3-FU-FU-FU-FU-FU-FU * -FU-FU
+        // P4 *  *  *  *  *  * -FU *  *
+        // P5 *  *  *  *  *  *  *  *  *
+        // P6 *  * +FU *  *  *  *  *  *
+        // P7+FU+FU * +FU+FU+FU+FU+FU+FU
+        // P8 *  *  *  *  *  *  * +HI *
+        // P9+KY+KE+GI+GI+KI+OU+KI+GI+KE+KY
+        // P+00KA
+        // P-00KA
+        // +
+        let pos = Position::new(
+            PartialPosition::from_usi(
+                "sfen lnsgkg1nl/1r5s1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/7R1/LNSGKGSNL b Bb 1",
+            )
+            .expect("failed to parse"),
+        );
         assert_eq!(
             43,
             pos.legal_moves()
@@ -464,210 +468,145 @@ mod tests {
 
     #[test]
     fn maximum_moves() {
-        // R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1
-        #[rustfmt::skip]
-        let pos = Position::new([
-            EMP, WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, BGI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-            EMP, BGI, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-            EMP, BOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-            EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, BKY,
-            BHI, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-        ], [
-            [ 1, 1, 1, 1, 1, 1, 1, 0],
-            [17, 0, 3, 0, 3, 0, 0, 0],
-        ], Color::Black, 1);
+        let pos = Position::new(
+            PartialPosition::from_usi("sfen R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1")
+                .expect("failed to parse"),
+        );
         assert_eq!(593, pos.legal_moves().len());
     }
 
     #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn is_uchifuzume() {
-        #[rustfmt::skip]
         let test_cases = [
             // 打ち歩詰め
-            // P1 *  *  *  *  *  *  *  *  * 
+            // P1 *  *  *  *  *  *  *  *  *
             // P2 *  *  *  *  *  *  * -FU-FU
             // P3 *  *  *  *  *  *  *  * -OU
-            // P4 *  *  *  *  *  *  * +FU * 
-            // P5 *  *  *  *  *  *  * +KI * 
-            // P6 *  *  *  *  *  *  *  *  * 
-            // P7 *  *  *  *  *  *  *  *  * 
-            // P8 *  *  *  *  *  *  *  *  * 
-            // P9 *  *  *  *  *  *  *  *  * 
+            // P4 *  *  *  *  *  *  * +FU *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
             // P+00FU
             // P-00AL
             // +
             (
-                Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WFU, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                ], [
-                    [ 1, 0, 0, 0, 0, 0, 0, 0],
-                    [14, 4, 4, 4, 3, 2, 2, 0],
-                ], Color::Black, 1),
-                Square::SQ_1D, true,
+                Position::new(
+                    PartialPosition::from_usi("sfen 9/7pp/8k/7P1/7G1/9/9/9/9 b P2r2b3g4s4n4l14p 1")
+                        .expect("failed to parse"),
+                ),
+                Square::SQ_1D,
+                true,
             ),
             // 金で歩を取れる
-            // P1 *  *  *  *  *  *  *  *  * 
+            // P1 *  *  *  *  *  *  *  *  *
             // P2 *  *  *  *  *  *  * -FU-FU
             // P3 *  *  *  *  *  *  * -KI-OU
-            // P4 *  *  *  *  *  *  *  *  * 
-            // P5 *  *  *  *  *  *  * +KI * 
-            // P6 *  *  *  *  *  *  *  *  * 
-            // P7 *  *  *  *  *  *  *  *  * 
-            // P8 *  *  *  *  *  *  *  *  * 
-            // P9 *  *  *  *  *  *  *  *  * 
+            // P4 *  *  *  *  *  *  *  *  *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
             // P+00FU
             // P-00AL
             // +
             (
-                Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WFU, WKI, EMP, BKI, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                ], [
-                    [ 1, 0, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 4, 4, 2, 2, 2, 0],
-                ], Color::Black, 1),
-                Square::SQ_1D, false,
+                Position::new(
+                    PartialPosition::from_usi("sfen 9/7pp/7gk/9/7G1/9/9/9/9 b P2r2b2g4s4n4l15p 1")
+                        .expect("failed to parse"),
+                ),
+                Square::SQ_1D,
+                false,
             ),
             // 飛がいるので金が動けない
-            // P1 *  *  *  *  *  *  *  *  * 
+            // P1 *  *  *  *  *  *  *  *  *
             // P2 *  *  *  *  *  *  * -FU-FU
             // P3 *  *  *  *  *  * +HI-KI-OU
-            // P4 *  *  *  *  *  *  *  *  * 
-            // P5 *  *  *  *  *  *  * +KI * 
-            // P6 *  *  *  *  *  *  *  *  * 
-            // P7 *  *  *  *  *  *  *  *  * 
-            // P8 *  *  *  *  *  *  *  *  * 
-            // P9 *  *  *  *  *  *  *  *  * 
+            // P4 *  *  *  *  *  *  *  *  *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
             // P+00FU
             // P-00AL
             // +
             (
-                Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WFU, WKI, BFU, BKI, EMP, EMP, EMP, EMP,
-                    EMP, EMP, BHI, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                ], [
-                    [ 1, 0, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 4, 4, 2, 2, 1, 0],
-                ], Color::Black, 1),
-                Square::SQ_1D, true,
+                Position::new(
+                    PartialPosition::from_usi("sfen 9/7pp/6Rgk/9/7G1/9/9/9/9 b Pr2b2g4s4n4l15p 1")
+                        .expect("failed to parse"),
+                ),
+                Square::SQ_1D,
+                true,
             ),
             // 桂で歩を取れる
-            // P1 *  *  *  *  *  *  *  *  * 
+            // P1 *  *  *  *  *  *  *  *  *
             // P2 *  *  *  *  *  *  * -KE-FU
             // P3 *  *  *  *  *  *  *  * -OU
-            // P4 *  *  *  *  *  *  * +FU * 
-            // P5 *  *  *  *  *  *  * +KI * 
-            // P6 *  *  *  *  *  *  *  *  * 
-            // P7 *  *  *  *  *  *  *  *  * 
-            // P8 *  *  *  *  *  *  *  *  * 
-            // P9 *  *  *  *  *  *  *  *  * 
+            // P4 *  *  *  *  *  *  * +FU *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
             // P+00FU
             // P-00AL
             // +
             (
-                Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WKE, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                ], [
-                    [ 1, 0, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 2, 2, 0],
-                ], Color::Black, 1),
-                Square::SQ_1D, false,
+                Position::new(
+                    PartialPosition::from_usi("sfen 9/7np/8k/7P1/7G1/9/9/9/9 b P2r2b3g4s3n4l15p 1")
+                        .expect("failed to parse"),
+                ),
+                Square::SQ_1D,
+                false,
             ),
             // 角がいるので桂が動けない
-            // P1 *  *  *  *  *  * +KA *  * 
+            // P1 *  *  *  *  *  * +KA *  *
             // P2 *  *  *  *  *  *  * -KE-FU
             // P3 *  *  *  *  *  *  *  * -OU
-            // P4 *  *  *  *  *  *  * +FU * 
-            // P5 *  *  *  *  *  *  * +KI * 
-            // P6 *  *  *  *  *  *  *  *  * 
-            // P7 *  *  *  *  *  *  *  *  * 
-            // P8 *  *  *  *  *  *  *  *  * 
-            // P9 *  *  *  *  *  *  *  *  * 
+            // P4 *  *  *  *  *  *  * +FU *
+            // P5 *  *  *  *  *  *  * +KI *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
             // P+00FU
             // P-00AL
             // +
             (
-                Position::new([
-                    EMP, WFU, WOU, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, WKE, EMP, BFU, BKI, EMP, EMP, EMP, EMP,
-                    BKA, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                ], [
-                    [ 1, 0, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 1, 2, 0],
-                ], Color::Black, 1),
-                Square::SQ_1D, true,
+                Position::new(
+                    PartialPosition::from_usi(
+                        "sfen 6B2/7np/8k/7P1/7G1/9/9/9/9 b P2rb3g4s3n4l15p 1",
+                    )
+                    .expect("failed to parse"),
+                ),
+                Square::SQ_1D,
+                true,
             ),
             // https://github.com/nozaq/shogi-rs/pull/41
             // 打った歩によって△1一玉の逃げ場ができる
-            // P1 *  *  *  *  *  *  * -OU * 
+            // P1 *  *  *  *  *  *  * -OU *
             // P2 *  *  *  *  * +KI *  * -KY
-            // P3 *  *  *  *  *  * +KA *  * 
-            // P4 *  *  *  *  *  *  *  *  * 
-            // P5 *  *  *  *  *  *  *  *  * 
-            // P6 *  *  *  *  *  *  *  *  * 
-            // P7 *  *  *  *  *  *  *  *  * 
-            // P8 *  *  *  *  *  *  *  *  * 
-            // P9 *  *  *  *  *  *  *  *  * 
+            // P3 *  *  *  *  *  * +KA *  *
+            // P4 *  *  *  *  *  *  *  *  *
+            // P5 *  *  *  *  *  *  *  *  *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
             // P+00FU
             // P-00AL
             // +
             (
-                Position::new([
-                    EMP, WKY, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    WOU, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, BKA, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, BKI, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                    EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP, EMP,
-                ], [
-                    [ 1, 0, 0, 0, 0, 0, 0, 0],
-                    [15, 4, 3, 4, 3, 1, 2, 0],
-                ], Color::Black, 1),
-                Square::SQ_2B, false,
+                Position::new(
+                    PartialPosition::from_usi("sfen 7k1/5G2l/6B2/9/9/9/9/9/9 b P2rb3g4s4n3l17p 1")
+                        .expect("failed to parse"),
+                ),
+                Square::SQ_2B,
+                false,
             ),
         ];
         for (pos, sq, expected) in test_cases {

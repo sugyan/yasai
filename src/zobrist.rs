@@ -91,15 +91,15 @@ pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
 
 #[cfg(test)]
 mod tests {
-    use shogi_core::Move;
-
     use super::*;
     use crate::Position;
+    use shogi_core::{Move, PartialPosition};
+    use shogi_usi_parser::FromUsi;
     use std::collections::HashSet;
 
     #[test]
     fn empty() {
-        let pos = Position::new([None; Square::NUM], [[0; 8]; 2], Color::Black, 1);
+        let pos = Position::new(PartialPosition::empty());
         assert_eq!(0, pos.key());
     }
 
@@ -112,10 +112,8 @@ mod tests {
     #[test]
     fn full_hands() {
         let pos = Position::new(
-            [None; Square::NUM],
-            [[18, 4, 4, 4, 4, 2, 2, 2], [0; 8]],
-            Color::Black,
-            1,
+            PartialPosition::from_usi("sfen 9/9/9/9/9/9/9/9/9 b 2R2B4G4S4N4L18P 1")
+                .expect("failed to parse"),
         );
         assert_ne!(0, pos.key());
     }
