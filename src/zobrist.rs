@@ -125,7 +125,7 @@ mod tests {
         for i in 0..100 {
             let moves = pos.legal_moves().into_iter().collect::<Vec<_>>();
             let choice = moves[(i * 100) % moves.len()];
-            pos.do_move(choice);
+            pos.do_move(choice).expect("illegal move");
             let key = pos.key();
             assert_eq!(key % 2 == 0, i % 2 == 1);
             hs.insert(key);
@@ -167,7 +167,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves
+                .iter()
+                .for_each(|&m| pos.do_move(m).expect("illegal move"));
             pos.key()
         };
         let key1 = {
@@ -190,7 +192,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves
+                .iter()
+                .for_each(|&m| pos.do_move(m).expect("illegal move"));
             pos.key()
         };
         assert_eq!(key0, key1);
@@ -243,7 +247,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves
+                .iter()
+                .for_each(|&m| pos.do_move(m).expect("illegal move"));
             pos.keys()
         };
         let keys1 = {
@@ -282,7 +288,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves
+                .iter()
+                .for_each(|&m| pos.do_move(m).expect("illegal move"));
             pos.keys()
         };
         assert_ne!(keys0, keys1);
