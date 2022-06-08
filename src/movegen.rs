@@ -466,6 +466,19 @@ mod tests {
 
     #[test]
     fn maximum_moves() {
+        // http://lfics81.techblog.jp/archives/2041940.html
+        // P1+HI *  *  *  *  *  *  *  *
+        // P2 *  * +OU * +GI * +GI+GI-OU
+        // P3 *  *  *  * +KA *  *  *  *
+        // P4 *  *  *  *  *  *  *  *  *
+        // P5 *  *  *  *  *  *  *  *  *
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 * +KY * +KY * +KY *  *  *
+        // P+00FU00KY00KE00GI00KI00KA00HI
+        // P-00AL
+        // +
         let pos = Position::new(
             PartialPosition::from_usi("sfen R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1")
                 .expect("failed to parse"),

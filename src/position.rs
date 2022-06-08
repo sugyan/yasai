@@ -484,6 +484,19 @@ mod tests {
             assert_eq!(719731, perft(&mut pos, 4));
         }
         // from maximum moves
+        // https://qiita.com/ak11/items/8bd5f2bb0f5b014143c8#%E5%88%9D%E6%9C%9F%E5%B1%80%E9%9D%A2%E3%81%98%E3%82%83%E3%81%AA%E3%81%84%E5%B1%80%E9%9D%A2
+        // P1+HI *  *  *  *  *  *  *  *
+        // P2 *  * +OU * +GI * +GI+GI-OU
+        // P3 *  *  *  * +KA *  *  *  *
+        // P4 *  *  *  *  *  *  *  *  *
+        // P5 *  *  *  *  *  *  *  *  *
+        // P6 *  *  *  *  *  *  *  *  *
+        // P7 *  *  *  *  *  *  *  *  *
+        // P8 *  *  *  *  *  *  *  *  *
+        // P9 * +KY * +KY * +KY *  *  *
+        // P+00FU00KY00KE00GI00KI00KA00HI
+        // P-00AL
+        // +
         {
             let mut pos = Position::new(
                 PartialPosition::from_usi(
