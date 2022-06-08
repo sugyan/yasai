@@ -1,73 +1,66 @@
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RANKS, RELATIVE_RANKS};
 use crate::Position;
-use arrayvec::{ArrayVec, IntoIter};
-use shogi_core::{Bitboard, Color, Move, Piece, PieceKind, Square};
+use arrayvec::ArrayVec;
+use shogi_core::{Bitboard, Color, Hand, Move, Piece, PieceKind, Square};
 
-pub struct MoveList(ArrayVec<Move, { MoveList::MAX_LEGAL_MOVES }>);
+const MAX_LEGAL_MOVES: usize = 593;
 
-impl MoveList {
-    const MAX_LEGAL_MOVES: usize = 593;
-
-    pub fn generate_legals(&mut self, pos: &Position) {
-        if pos.in_check() {
-            self.generate_evasions(pos);
+impl Position {
+    pub fn legal_moves(&self) -> ArrayVec<Move, MAX_LEGAL_MOVES> {
+        let mut av = ArrayVec::new();
+        if self.in_check() {
+            self.generate_evasions(&mut av);
         } else {
-            self.generate_all(pos);
+            self.generate_all(&mut av);
         }
 
-        let (mut i, mut size) = (0, self.0.len());
-        while i != size {
-            if Self::is_legal(pos, self.0[i]) {
+        let mut i = 0;
+        while i != av.len() {
+            if self.is_legal(av[i]) {
                 i += 1;
             } else {
-                size -= 1;
-                self.0.swap_remove(i);
+                av.swap_remove(i);
             }
         }
+        av
     }
-    pub fn len(&self) -> usize {
-        self.0.len()
+    fn generate_all(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>) {
+        let target = !self.player_bitboard(self.side_to_move());
+        self.generate_for_fu(av, &target);
+        self.generate_for_ky(av, &target);
+        self.generate_for_ke(av, &target);
+        self.generate_for_gi(av, &target);
+        self.generate_for_ka(av, &target);
+        self.generate_for_hi(av, &target);
+        self.generate_for_ki(av, &target);
+        self.generate_for_ou(av, &target);
+        self.generate_for_um(av, &target);
+        self.generate_for_ry(av, &target);
+        self.generate_drop(av, &(!self.occupied() & !Bitboard::empty()));
     }
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-    fn generate_all(&mut self, pos: &Position) {
-        let target = !pos.player_bitboard(pos.side_to_move());
-        self.generate_for_fu(pos, &target);
-        self.generate_for_ky(pos, &target);
-        self.generate_for_ke(pos, &target);
-        self.generate_for_gi(pos, &target);
-        self.generate_for_ka(pos, &target);
-        self.generate_for_hi(pos, &target);
-        self.generate_for_ki(pos, &target);
-        self.generate_for_ou(pos, &target);
-        self.generate_for_um(pos, &target);
-        self.generate_for_ry(pos, &target);
-        self.generate_drop(pos, &(!pos.occupied() & !Bitboard::empty()));
-    }
-    fn generate_evasions(&mut self, pos: &Position) {
-        let c = pos.side_to_move();
-        if let Some(king) = pos.king_position(c) {
+    fn generate_evasions(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>) {
+        let c = self.side_to_move();
+        if let Some(king) = self.king_position(c) {
             let mut checkers_attacks = Bitboard::empty();
             let mut checkers_count = 0;
-            for ch in pos.checkers() {
-                if let Some(p) = pos.piece_at(ch) {
+            for ch in self.checkers() {
+                if let Some(p) = self.piece_at(ch) {
                     let pk = p.piece_kind();
                     // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
                     if pk == PieceKind::ProRook
                         && ch.file() != king.file()
                         && ch.rank() != king.rank()
                     {
-                        checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &pos.occupied());
+                        checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &self.occupied());
                     } else {
                         checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
                     }
                 }
                 checkers_count += 1;
             }
-            for to in ATTACK_TABLE.ou.attack(king, c) & !pos.player_bitboard(c) & !checkers_attacks
+            for to in ATTACK_TABLE.ou.attack(king, c) & !self.player_bitboard(c) & !checkers_attacks
             {
-                self.push(Move::Normal {
+                av.push(Move::Normal {
                     from: king,
                     to,
                     promote: false,
@@ -77,48 +70,45 @@ impl MoveList {
             if checkers_count > 1 {
                 return;
             }
-            if let Some(ch) = pos.checkers().pop() {
+            if let Some(ch) = self.checkers().pop() {
                 let target_drop = BETWEEN_TABLE[ch.array_index()][king.array_index()];
-                let target_move = target_drop | pos.checkers();
-                self.generate_for_fu(pos, &target_move);
-                self.generate_for_ky(pos, &target_move);
-                self.generate_for_ke(pos, &target_move);
-                self.generate_for_gi(pos, &target_move);
-                self.generate_for_ka(pos, &target_move);
-                self.generate_for_hi(pos, &target_move);
-                self.generate_for_ki(pos, &target_move);
-                self.generate_for_um(pos, &target_move);
-                self.generate_for_ry(pos, &target_move);
-                self.generate_drop(pos, &target_drop);
+                let target_move = target_drop | self.checkers();
+                self.generate_for_fu(av, &target_move);
+                self.generate_for_ky(av, &target_move);
+                self.generate_for_ke(av, &target_move);
+                self.generate_for_gi(av, &target_move);
+                self.generate_for_ka(av, &target_move);
+                self.generate_for_hi(av, &target_move);
+                self.generate_for_ki(av, &target_move);
+                self.generate_for_um(av, &target_move);
+                self.generate_for_ry(av, &target_move);
+                self.generate_drop(av, &target_drop);
             }
         }
     }
-    fn push(&mut self, m: Move) {
-        unsafe { self.0.push_unchecked(m) };
-    }
-    fn generate_for_fu(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        let (to_bb, delta) = match c {
-            Color::Black => (unsafe { pos.piece_bitboard(Piece::B_P).shift_up(1) }, 1),
-            Color::White => (unsafe { pos.piece_bitboard(Piece::W_P).shift_down(1) }, !0),
-        };
+    fn generate_for_fu(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        let (to_bb, delta) = [
+            (unsafe { self.piece_bitboard(Piece::B_P).shift_up(1) }, 1),
+            (unsafe { self.piece_bitboard(Piece::W_P).shift_down(1) }, !0),
+        ][c.array_index()];
         for to in to_bb & *target {
             let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
             if PROMOTABLE[to.array_index()][c.array_index()] {
-                self.push(Move::Normal {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: true,
                 });
                 if RELATIVE_RANKS[to.array_index()][c.array_index()] > 1 {
-                    self.push(Move::Normal {
+                    av.push(Move::Normal {
                         from,
                         to,
                         promote: false,
                     });
                 }
             } else {
-                self.push(Move::Normal {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: false,
@@ -126,25 +116,25 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_ky(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.player_bitboard(c) & pos.piece_kind_bitboard(PieceKind::Lance) {
-            for to in ATTACK_TABLE.ky.attack(from, c, &pos.occupied()) & *target {
+    fn generate_for_ky(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Lance) {
+            for to in ATTACK_TABLE.ky.attack(from, c, &self.occupied()) & *target {
                 if PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::Normal {
+                    av.push(Move::Normal {
                         from,
                         to,
                         promote: true,
                     });
                     if RELATIVE_RANKS[to.array_index()][c.array_index()] > 1 {
-                        self.push(Move::Normal {
+                        av.push(Move::Normal {
                             from,
                             to,
                             promote: false,
                         });
                     }
                 } else {
-                    self.push(Move::Normal {
+                    av.push(Move::Normal {
                         from,
                         to,
                         promote: false,
@@ -153,25 +143,25 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_ke(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.player_bitboard(c) & pos.piece_kind_bitboard(PieceKind::Knight) {
+    fn generate_for_ke(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Knight) {
             for to in ATTACK_TABLE.ke.attack(from, c) & *target {
                 if PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::Normal {
+                    av.push(Move::Normal {
                         from,
                         to,
                         promote: true,
                     });
                     if RELATIVE_RANKS[to.array_index()][c.array_index()] > 2 {
-                        self.push(Move::Normal {
+                        av.push(Move::Normal {
                             from,
                             to,
                             promote: false,
                         });
                     }
                 } else {
-                    self.push(Move::Normal {
+                    av.push(Move::Normal {
                         from,
                         to,
                         promote: false,
@@ -180,18 +170,18 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_gi(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.player_bitboard(c) & pos.piece_kind_bitboard(PieceKind::Silver) {
+    fn generate_for_gi(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Silver) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
             for to in ATTACK_TABLE.gi.attack(from, c) & *target {
-                self.push(Move::Normal {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: false,
                 });
                 if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::Normal {
+                    av.push(Move::Normal {
                         from,
                         to,
                         promote: true,
@@ -200,18 +190,18 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_ka(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.player_bitboard(c) & pos.piece_kind_bitboard(PieceKind::Bishop) {
+    fn generate_for_ka(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Bishop) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
-            for to in ATTACK_TABLE.ka.attack(from, &pos.occupied()) & *target {
-                self.push(Move::Normal {
+            for to in ATTACK_TABLE.ka.attack(from, &self.occupied()) & *target {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: false,
                 });
                 if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::Normal {
+                    av.push(Move::Normal {
                         from,
                         to,
                         promote: true,
@@ -220,18 +210,18 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_hi(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.player_bitboard(c) & pos.piece_kind_bitboard(PieceKind::Rook) {
+    fn generate_for_hi(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Rook) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
-            for to in ATTACK_TABLE.hi.attack(from, &pos.occupied()) & *target {
-                self.push(Move::Normal {
+            for to in ATTACK_TABLE.hi.attack(from, &self.occupied()) & *target {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: false,
                 });
                 if from_is_opponent_field || PROMOTABLE[to.array_index()][c.array_index()] {
-                    self.push(Move::Normal {
+                    av.push(Move::Normal {
                         from,
                         to,
                         promote: true,
@@ -240,17 +230,17 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_ki(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in (pos.piece_kind_bitboard(PieceKind::Gold)
-            | pos.piece_kind_bitboard(PieceKind::ProPawn)
-            | pos.piece_kind_bitboard(PieceKind::ProLance)
-            | pos.piece_kind_bitboard(PieceKind::ProKnight)
-            | pos.piece_kind_bitboard(PieceKind::ProSilver))
-            & pos.player_bitboard(c)
+    fn generate_for_ki(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in (self.piece_kind_bitboard(PieceKind::Gold)
+            | self.piece_kind_bitboard(PieceKind::ProPawn)
+            | self.piece_kind_bitboard(PieceKind::ProLance)
+            | self.piece_kind_bitboard(PieceKind::ProKnight)
+            | self.piece_kind_bitboard(PieceKind::ProSilver))
+            & self.player_bitboard(c)
         {
             for to in ATTACK_TABLE.ki.attack(from, c) & *target {
-                self.push(Move::Normal {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: false,
@@ -258,11 +248,11 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_ou(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.player_bitboard(c) & pos.piece_kind_bitboard(PieceKind::King) {
+    fn generate_for_ou(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::King) {
             for to in ATTACK_TABLE.ou.attack(from, c) & *target {
-                self.push(Move::Normal {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: false,
@@ -270,14 +260,14 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_um(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.player_bitboard(c) & pos.piece_kind_bitboard(PieceKind::ProBishop) {
-            for to in (ATTACK_TABLE.ka.attack(from, &pos.occupied())
+    fn generate_for_um(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::ProBishop) {
+            for to in (ATTACK_TABLE.ka.attack(from, &self.occupied())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
             {
-                self.push(Move::Normal {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: false,
@@ -285,14 +275,14 @@ impl MoveList {
             }
         }
     }
-    fn generate_for_ry(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        for from in pos.player_bitboard(c) & pos.piece_kind_bitboard(PieceKind::ProRook) {
-            for to in (ATTACK_TABLE.hi.attack(from, &pos.occupied())
+    fn generate_for_ry(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::ProRook) {
+            for to in (ATTACK_TABLE.hi.attack(from, &self.occupied())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
             {
-                self.push(Move::Normal {
+                av.push(Move::Normal {
                     from,
                     to,
                     promote: false,
@@ -300,23 +290,20 @@ impl MoveList {
             }
         }
     }
-    fn generate_drop(&mut self, pos: &Position, target: &Bitboard) {
-        let c = pos.side_to_move();
-        let hand = pos.hand(pos.side_to_move());
-        for pk in PieceKind::all() {
-            if hand.count(pk).unwrap_or_default() == 0 {
-                continue;
-            }
+    fn generate_drop(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
+        let c = self.side_to_move();
+        let hand = self.hand(self.side_to_move());
+        for pk in Hand::all_hand_pieces().filter(|&pk| hand.count(pk).unwrap_or_default() > 0) {
             let mut exclude = Bitboard::empty();
             if pk == PieceKind::Pawn {
                 // 二歩
-                for sq in pos.player_bitboard(c) & pos.piece_kind_bitboard(pk) {
+                for sq in self.player_bitboard(c) & self.piece_kind_bitboard(pk) {
                     exclude |= FILES[sq.file() as usize];
                 }
                 // 打ち歩詰めチェック
-                if let Some(sq) = pos.king_position(c.flip()) {
+                if let Some(sq) = self.king_position(c.flip()) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
-                        if target.contains(to) && Self::is_uchifuzume(pos, to) {
+                        if target.contains(to) && self.is_pawn_drop_mate(to) {
                             exclude |= to;
                         }
                     }
@@ -326,6 +313,7 @@ impl MoveList {
                     Color::White => RANKS[9],
                 };
             }
+            let piece = Piece::new(pk, c);
             for to in *target & !exclude {
                 if match pk {
                     PieceKind::Pawn | PieceKind::Lance => {
@@ -334,32 +322,26 @@ impl MoveList {
                     PieceKind::Knight => RELATIVE_RANKS[to.array_index()][c.array_index()] > 2,
                     _ => true,
                 } {
-                    self.push(Move::Drop {
-                        to,
-                        piece: Piece::new(pk, c),
-                    });
+                    av.push(Move::Drop { to, piece });
                 }
             }
         }
     }
-    fn is_legal(pos: &Position, m: Move) -> bool {
+    fn is_legal(&self, m: Move) -> bool {
         if let Some(from) = m.from() {
-            let c = pos.side_to_move();
-            let king = match c {
-                Color::Black => Piece::B_K,
-                Color::White => Piece::W_K,
-            };
+            let c = self.side_to_move();
+            let king = [Piece::B_K, Piece::W_K][c.array_index()];
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
-            if pos.piece_at(from) == Some(king)
-                && !pos
-                    .attackers_to(c.flip(), m.to(), &pos.occupied())
+            if self.piece_at(from) == Some(king)
+                && !self
+                    .attackers_to(c.flip(), m.to(), &self.occupied())
                     .is_empty()
             {
                 return false;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if pos.pinned(c).contains(from) {
-                if let Some(sq) = pos.king_position(c) {
+            if self.pinned(c).contains(from) {
+                if let Some(sq) = self.king_position(c) {
                     if !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(m.to())
                         || BETWEEN_TABLE[sq.array_index()][m.to().array_index()].contains(from))
                     {
@@ -370,56 +352,65 @@ impl MoveList {
         }
         true
     }
-    fn is_uchifuzume(pos: &Position, sq: Square) -> bool {
-        let c = pos.side_to_move();
+    fn is_pawn_drop_mate(&self, sq: Square) -> bool {
+        let c = self.side_to_move();
         // 玉自身が歩を取れる
-        if pos.attackers_to(c, sq, &pos.occupied()).is_empty() {
+        if self.attackers_to(c, sq, &self.occupied()).is_empty() {
             return false;
         }
         // 他の駒が歩を取れる
-        let capture_candidates = Self::attackers_to_except_klp(pos, c.flip(), sq);
-        if !(capture_candidates & !pos.pinned(c.flip())).is_empty() {
+        let capture_candidates = self.attackers_to_except_klp(c.flip(), sq);
+        if !(capture_candidates & !self.pinned(c.flip())).is_empty() {
             return false;
         }
         // 玉が逃げられる
-        if let Some(king) = pos.king_position(c.flip()) {
+        if let Some(king) = self.king_position(c.flip()) {
             let escape = ATTACK_TABLE.ou.attack(king, c.flip())
-                & !pos.player_bitboard(c.flip())
+                & !self.player_bitboard(c.flip())
                 & !Bitboard::single(sq);
-            let occupied = pos.occupied() | Bitboard::single(sq);
+            let occupied = self.occupied() | Bitboard::single(sq);
             for to in escape ^ Bitboard::single(sq) {
-                if pos.attackers_to(c, to, &occupied).is_empty() {
+                if self.attackers_to(c, to, &occupied).is_empty() {
                     return false;
                 }
             }
         }
         true
     }
+    fn player_bitboard(&self, c: Color) -> Bitboard {
+        self.inner.player_bitboard(c)
+    }
+    fn piece_kind_bitboard(&self, pk: PieceKind) -> Bitboard {
+        self.inner.piece_kind_bitboard(pk)
+    }
+    fn piece_bitboard(&self, p: Piece) -> Bitboard {
+        self.inner.piece_bitboard(p)
+    }
+    fn occupied(&self) -> Bitboard {
+        !self.inner.vacant_bitboard()
+    }
     #[rustfmt::skip]
-    fn attackers_to_except_klp(pos: &Position, c: Color, to: Square) -> Bitboard {
+    fn attackers_to(&self, c: Color, to: Square, occ: &Bitboard) -> Bitboard {
         let opp = c.flip();
-        let occ = &pos.occupied();
-        (     (ATTACK_TABLE.ke.attack(to, opp) & pos.piece_kind_bitboard(PieceKind::Knight))
-            | (ATTACK_TABLE.gi.attack(to, opp) & (pos.piece_kind_bitboard(PieceKind::Silver) | pos.piece_kind_bitboard(PieceKind::ProRook)))
-            | (ATTACK_TABLE.ka.attack(to, occ) & (pos.piece_kind_bitboard(PieceKind::Bishop) | pos.piece_kind_bitboard(PieceKind::ProBishop)))
-            | (ATTACK_TABLE.hi.attack(to, occ) & (pos.piece_kind_bitboard(PieceKind::Rook) | pos.piece_kind_bitboard(PieceKind::ProRook)))
-            | (ATTACK_TABLE.ki.attack(to, opp) & (pos.piece_kind_bitboard(PieceKind::Gold) | pos.piece_kind_bitboard(PieceKind::ProPawn) | pos.piece_kind_bitboard(PieceKind::ProLance) | pos.piece_kind_bitboard(PieceKind::ProKnight) | pos.piece_kind_bitboard(PieceKind::ProSilver) | pos.piece_kind_bitboard(PieceKind::ProBishop)))
-        ) & pos.player_bitboard(c)
+        (     (ATTACK_TABLE.fu.attack(to, opp)      & self.piece_kind_bitboard(PieceKind::Pawn))
+            | (ATTACK_TABLE.ky.attack(to, opp, occ) & self.piece_kind_bitboard(PieceKind::Lance))
+            | (ATTACK_TABLE.ke.attack(to, opp)      & self.piece_kind_bitboard(PieceKind::Knight))
+            | (ATTACK_TABLE.gi.attack(to, opp)      & (self.piece_kind_bitboard(PieceKind::Silver) | self.piece_kind_bitboard(PieceKind::ProRook) | self.piece_kind_bitboard(PieceKind::King)))
+            | (ATTACK_TABLE.ka.attack(to, occ)      & (self.piece_kind_bitboard(PieceKind::Bishop) | self.piece_kind_bitboard(PieceKind::ProBishop)))
+            | (ATTACK_TABLE.hi.attack(to, occ)      & (self.piece_kind_bitboard(PieceKind::Rook) | self.piece_kind_bitboard(PieceKind::ProRook)))
+            | (ATTACK_TABLE.ki.attack(to, opp)      & (self.piece_kind_bitboard(PieceKind::Gold) | self.piece_kind_bitboard(PieceKind::ProPawn) | self.piece_kind_bitboard(PieceKind::ProLance) | self.piece_kind_bitboard(PieceKind::ProKnight) | self.piece_kind_bitboard(PieceKind::ProSilver) | self.piece_kind_bitboard(PieceKind::ProBishop) | self.piece_kind_bitboard(PieceKind::King)))
+        ) & self.player_bitboard(c)
     }
-}
-
-impl Default for MoveList {
-    fn default() -> Self {
-        Self(ArrayVec::new())
-    }
-}
-
-impl IntoIterator for MoveList {
-    type Item = Move;
-    type IntoIter = IntoIter<Move, { MoveList::MAX_LEGAL_MOVES }>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+    #[rustfmt::skip]
+    fn attackers_to_except_klp(&self, c: Color, to: Square) -> Bitboard {
+        let opp = c.flip();
+        let occ = &self.occupied();
+        (     (ATTACK_TABLE.ke.attack(to, opp) & self.piece_kind_bitboard(PieceKind::Knight))
+            | (ATTACK_TABLE.gi.attack(to, opp) & (self.piece_kind_bitboard(PieceKind::Silver) | self.piece_kind_bitboard(PieceKind::ProRook)))
+            | (ATTACK_TABLE.ka.attack(to, occ) & (self.piece_kind_bitboard(PieceKind::Bishop) | self.piece_kind_bitboard(PieceKind::ProBishop)))
+            | (ATTACK_TABLE.hi.attack(to, occ) & (self.piece_kind_bitboard(PieceKind::Rook) | self.piece_kind_bitboard(PieceKind::ProRook)))
+            | (ATTACK_TABLE.ki.attack(to, opp) & (self.piece_kind_bitboard(PieceKind::Gold) | self.piece_kind_bitboard(PieceKind::ProPawn) | self.piece_kind_bitboard(PieceKind::ProLance) | self.piece_kind_bitboard(PieceKind::ProKnight) | self.piece_kind_bitboard(PieceKind::ProSilver) | self.piece_kind_bitboard(PieceKind::ProBishop)))
+        ) & self.player_bitboard(c)
     }
 }
 
@@ -488,7 +479,7 @@ mod tests {
 
     #[allow(clippy::bool_assert_comparison)]
     #[test]
-    fn is_uchifuzume() {
+    fn is_pawn_drop_mate() {
         let test_cases = [
             // 打ち歩詰め
             // P1 *  *  *  *  *  *  *  *  *
@@ -621,7 +612,7 @@ mod tests {
             ),
         ];
         for (pos, sq, expected) in test_cases {
-            assert_eq!(expected, MoveList::is_uchifuzume(&pos, sq));
+            assert_eq!(expected, pos.is_pawn_drop_mate(sq));
         }
     }
 }
