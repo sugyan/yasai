@@ -91,15 +91,15 @@ pub static ZOBRIST_TABLE: Lazy<ZobristTable> = Lazy::new(|| {
 
 #[cfg(test)]
 mod tests {
-    use shogi_core::Move;
-
     use super::*;
     use crate::Position;
+    use shogi_core::{Move, PartialPosition};
+    use shogi_usi_parser::FromUsi;
     use std::collections::HashSet;
 
     #[test]
     fn empty() {
-        let pos = Position::new([None; Square::NUM], [[0; 8]; 2], Color::Black, 1);
+        let pos = Position::new(PartialPosition::empty());
         assert_eq!(0, pos.key());
     }
 
@@ -112,10 +112,8 @@ mod tests {
     #[test]
     fn full_hands() {
         let pos = Position::new(
-            [None; Square::NUM],
-            [[18, 4, 4, 4, 4, 2, 2, 2], [0; 8]],
-            Color::Black,
-            1,
+            PartialPosition::from_usi("sfen 9/9/9/9/9/9/9/9/9 b 2R2B4G4S4N4L18P 1")
+                .expect("failed to parse"),
         );
         assert_ne!(0, pos.key());
     }
@@ -127,7 +125,7 @@ mod tests {
         for i in 0..100 {
             let moves = pos.legal_moves().into_iter().collect::<Vec<_>>();
             let choice = moves[(i * 100) % moves.len()];
-            pos.do_move(choice);
+            pos.do_move(choice).expect("illegal move");
             let key = pos.key();
             assert_eq!(key % 2 == 0, i % 2 == 1);
             hs.insert(key);
@@ -169,7 +167,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves
+                .iter()
+                .for_each(|&m| pos.do_move(m).expect("illegal move"));
             pos.key()
         };
         let key1 = {
@@ -192,7 +192,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves
+                .iter()
+                .for_each(|&m| pos.do_move(m).expect("illegal move"));
             pos.key()
         };
         assert_eq!(key0, key1);
@@ -245,7 +247,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves
+                .iter()
+                .for_each(|&m| pos.do_move(m).expect("illegal move"));
             pos.keys()
         };
         let keys1 = {
@@ -284,7 +288,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves
+                .iter()
+                .for_each(|&m| pos.do_move(m).expect("illegal move"));
             pos.keys()
         };
         assert_ne!(keys0, keys1);

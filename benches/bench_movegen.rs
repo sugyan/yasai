@@ -3,7 +3,8 @@ extern crate test;
 
 #[cfg(test)]
 mod movegen {
-    use shogi_core::{Color, Piece};
+    use shogi_core::PartialPosition;
+    use shogi_usi_parser::FromUsi;
     use test::Bencher;
     use yasai::Position;
 
@@ -18,21 +19,12 @@ mod movegen {
     #[bench]
     fn bench_legal_moves_maximum(b: &mut Bencher) {
         b.iter(|| {
-            #[rustfmt::skip]
-            let pos = Position::new([
-                None, Some(Piece::W_K), None, None, None, None, None, None, None,
-                None, Some(Piece::B_S), None, None, None, None, None, None, None,
-                None, Some(Piece::B_S), None, None, None, None, None, None, None,
-                None, None, None, None, None, None, None, None, Some(Piece::B_L),
-                None, Some(Piece::B_S), Some(Piece::B_B), None, None, None, None, None, None,
-                None, None, None, None, None, None, None, None, Some(Piece::B_L),
-                None, Some(Piece::B_K), None, None, None, None, None, None, None,
-                None, None, None, None, None, None, None, None, Some(Piece::B_L),
-                Some(Piece::B_R), None, None, None, None, None, None, None, None,
-            ], [
-                [ 1, 1, 1, 1, 1, 1, 1, 0],
-                [17, 0, 3, 0, 3, 0, 0, 0],
-            ], Color::Black, 1);
+            let pos = Position::new(
+                PartialPosition::from_usi(
+                    "sfen R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1",
+                )
+                .expect("failed to parse"),
+            );
             assert_eq!(593, pos.legal_moves().len());
         });
     }

@@ -1,8 +1,8 @@
 mod board_piece;
+mod state;
 mod movegen;
 mod position;
 mod tables;
-pub mod utils;
 mod zobrist;
 
 pub use position::Position;

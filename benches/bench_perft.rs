@@ -3,7 +3,8 @@ extern crate test;
 
 #[cfg(test)]
 mod perft {
-    use shogi_core::{Color, Piece};
+    use shogi_core::PartialPosition;
+    use shogi_usi_parser::FromUsi;
     use test::Bencher;
     use yasai::Position;
 
@@ -38,21 +39,12 @@ mod perft {
     #[bench]
     fn bench_perft_3_from_maximum_moves(b: &mut Bencher) {
         b.iter(|| {
-            #[rustfmt::skip]
-            let mut pos = Position::new([
-                None, Some(Piece::W_K), None, None, None, None, None, None, None,
-                None, Some(Piece::B_S), None, None, None, None, None, None, None,
-                None, Some(Piece::B_S), None, None, None, None, None, None, None,
-                None, None, None, None, None, None, None, None, Some(Piece::B_L),
-                None, Some(Piece::B_S), Some(Piece::B_B), None, None, None, None, None, None,
-                None, None, None, None, None, None, None, None, Some(Piece::B_L),
-                None, Some(Piece::B_K), None, None, None, None, None, None, None,
-                None, None, None, None, None, None, None, None, Some(Piece::B_L),
-                Some(Piece::B_R), None, None, None, None, None, None, None, None,
-            ], [
-                [ 1, 1, 1, 1, 1, 1, 1, 0],
-                [17, 0, 3, 0, 3, 0, 0, 0],
-            ], Color::Black, 1);
+            let mut pos = Position::new(
+                PartialPosition::from_usi(
+                    "sfen R8/2K1S1SSk/4B4/9/9/9/9/9/1L1L1L3 b RBGSNLP3g3n17p 1",
+                )
+                .expect("failed to parse"),
+            );
             assert_eq!(53_393_368, perft(&mut pos, 3));
         });
     }

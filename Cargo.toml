@@ -13,7 +13,7 @@ rand = "0.8.5"
 shogi_core = "0.1.3"
 
 [dev-dependencies]
-itertools = "0.10.3"
+shogi_usi_parser = "0.1.0"
 
 [profile.release]
 lto = true
