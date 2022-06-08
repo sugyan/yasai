@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654526599470,
+  "lastUpdate": 1654679736008,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -163,6 +163,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 387958356,
             "range": "± 50452229",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "18b80ac357f56816f4a4763119f06a18fb22fc31",
+          "message": "Use `shogi_core::PartialPosition` (#8)\n\n* Remove utils::kifu_strings\r\n\r\n* Use shogi_core::PartialPosision for Position::new\r\n\r\n* Use PartialPosition as inner of yasai::Position\r\n\r\n* Fix benches\r\n\r\n* Move State and AttackInfo",
+          "timestamp": "2022-06-08T18:11:09+09:00",
+          "tree_id": "271dfd3529ca019d1539ec5d15294ce0d0ddd00d",
+          "url": "https://github.com/sugyan/yasai/commit/18b80ac357f56816f4a4763119f06a18fb22fc31"
+        },
+        "date": 1654679734557,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 478919350,
+            "range": "± 10709566",
             "unit": "ns/iter"
           }
         ]
