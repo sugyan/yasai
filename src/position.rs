@@ -1,13 +1,12 @@
-use crate::movegen::MoveList;
 use crate::state::{AttackInfo, State};
-use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
+use crate::tables::BETWEEN_TABLE;
 use crate::zobrist::{Key, ZOBRIST_TABLE};
 use shogi_core::{Bitboard, Color, Hand, Move, PartialPosition, Piece, PieceKind, Square};
 
 /// Represents a state of the game.
 #[derive(Debug, Clone)]
 pub struct Position {
-    inner: PartialPosition,
+    pub(crate) inner: PartialPosition,
     states: Vec<State>,
 }
 
@@ -45,18 +44,6 @@ impl Position {
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
         self.inner.piece_at(sq)
     }
-    pub(crate) fn player_bitboard(&self, c: Color) -> Bitboard {
-        self.inner.player_bitboard(c)
-    }
-    pub(crate) fn piece_kind_bitboard(&self, pk: PieceKind) -> Bitboard {
-        self.inner.piece_kind_bitboard(pk)
-    }
-    pub(crate) fn piece_bitboard(&self, p: Piece) -> Bitboard {
-        self.inner.piece_bitboard(p)
-    }
-    pub(crate) fn occupied(&self) -> Bitboard {
-        !self.inner.vacant_bitboard()
-    }
     pub fn key(&self) -> u64 {
         self.state().key().value()
     }
@@ -66,28 +53,34 @@ impl Position {
     pub fn in_check(&self) -> bool {
         !self.checkers().is_empty()
     }
-    pub(crate) fn captured(&self) -> Option<Piece> {
-        self.state().captured()
-    }
-    pub(crate) fn last_moved(&self) -> Option<Piece> {
-        self.state().last_moved()
-    }
-    pub(crate) fn checkers(&self) -> Bitboard {
-        self.state().attack_info().checkers()
-    }
-    pub(crate) fn pinned(&self, c: Color) -> Bitboard {
-        self.state().attack_info().pinned(c)
-    }
-    pub(crate) fn king_position(&self, c: Color) -> Option<Square> {
-        self.inner.king_position(c)
-    }
-    fn checkable(&self, pk: PieceKind, sq: Square) -> bool {
-        self.state().attack_info().checkable(pk, sq)
-    }
-    pub fn legal_moves(&self) -> MoveList {
-        let mut ml = MoveList::default();
-        ml.generate_legals(self);
-        ml
+    pub fn is_check_move(&self, m: Move) -> bool {
+        match m {
+            Move::Normal { from, to, promote } => {
+                let piece = self.inner.piece_at(from).expect("piece does not exist");
+                let p = if promote {
+                    if let Some(p) = piece.promote() {
+                        p
+                    } else {
+                        piece
+                    }
+                } else {
+                    piece
+                };
+                if self.checkable(p.piece_kind(), to) {
+                    return true;
+                }
+                // 開き王手
+                let c = self.inner.side_to_move();
+                if self.pinned(c.flip()).contains(from) {
+                    if let Some(sq) = self.inner.king_position(c.flip()) {
+                        return !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(to)
+                            || BETWEEN_TABLE[sq.array_index()][to.array_index()].contains(from));
+                    }
+                }
+                false
+            }
+            Move::Drop { to, piece } => self.checkable(piece.piece_kind(), to),
+        }
     }
     pub fn do_move(&mut self, m: Move) -> Option<()> {
         let is_check = self.is_check_move(m);
@@ -190,49 +183,26 @@ impl Position {
         self.states.pop();
         Some(())
     }
+    pub(crate) fn captured(&self) -> Option<Piece> {
+        self.state().captured()
+    }
+    pub(crate) fn last_moved(&self) -> Option<Piece> {
+        self.state().last_moved()
+    }
+    pub(crate) fn checkers(&self) -> Bitboard {
+        self.state().attack_info().checkers()
+    }
+    pub(crate) fn pinned(&self, c: Color) -> Bitboard {
+        self.state().attack_info().pinned(c)
+    }
+    pub(crate) fn king_position(&self, c: Color) -> Option<Square> {
+        self.inner.king_position(c)
+    }
     fn state(&self) -> &State {
         self.states.last().expect("empty states")
     }
-    #[rustfmt::skip]
-    pub fn attackers_to(&self, c: Color, to: Square, occ: &Bitboard) -> Bitboard {
-        let opp = c.flip();
-        (     (ATTACK_TABLE.fu.attack(to, opp)      & self.piece_kind_bitboard(PieceKind::Pawn))
-            | (ATTACK_TABLE.ky.attack(to, opp, occ) & self.piece_kind_bitboard(PieceKind::Lance))
-            | (ATTACK_TABLE.ke.attack(to, opp)      & self.piece_kind_bitboard(PieceKind::Knight))
-            | (ATTACK_TABLE.gi.attack(to, opp)      & (self.piece_kind_bitboard(PieceKind::Silver) | self.piece_kind_bitboard(PieceKind::ProRook) | self.piece_kind_bitboard(PieceKind::King)))
-            | (ATTACK_TABLE.ka.attack(to, occ)      & (self.piece_kind_bitboard(PieceKind::Bishop) | self.piece_kind_bitboard(PieceKind::ProBishop)))
-            | (ATTACK_TABLE.hi.attack(to, occ)      & (self.piece_kind_bitboard(PieceKind::Rook) | self.piece_kind_bitboard(PieceKind::ProRook)))
-            | (ATTACK_TABLE.ki.attack(to, opp)      & (self.piece_kind_bitboard(PieceKind::Gold) | self.piece_kind_bitboard(PieceKind::ProPawn) | self.piece_kind_bitboard(PieceKind::ProLance) | self.piece_kind_bitboard(PieceKind::ProKnight) | self.piece_kind_bitboard(PieceKind::ProSilver) | self.piece_kind_bitboard(PieceKind::ProBishop) | self.piece_kind_bitboard(PieceKind::King)))
-        ) & self.player_bitboard(c)
-    }
-    pub fn is_check_move(&self, m: Move) -> bool {
-        match m {
-            Move::Normal { from, to, promote } => {
-                let piece = self.inner.piece_at(from).expect("piece does not exist");
-                let p = if promote {
-                    if let Some(p) = piece.promote() {
-                        p
-                    } else {
-                        piece
-                    }
-                } else {
-                    piece
-                };
-                if self.checkable(p.piece_kind(), to) {
-                    return true;
-                }
-                // 開き王手
-                let c = self.inner.side_to_move();
-                if self.pinned(c.flip()).contains(from) {
-                    if let Some(sq) = self.inner.king_position(c.flip()) {
-                        return !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(to)
-                            || BETWEEN_TABLE[sq.array_index()][to.array_index()].contains(from));
-                    }
-                }
-                false
-            }
-            Move::Drop { to, piece } => self.checkable(piece.piece_kind(), to),
-        }
+    fn checkable(&self, pk: PieceKind, sq: Square) -> bool {
+        self.state().attack_info().checkable(pk, sq)
     }
 }
 
