@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654679736008,
+  "lastUpdate": 1654702251503,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -193,6 +193,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 478919350,
             "range": "± 10709566",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2dc4c891d90cf720e319750f65590f41a8590209",
+          "message": "Update movegen (#9)\n\n* Remove MoveList\r\n\r\n* Update: micro-optimizations",
+          "timestamp": "2022-06-09T00:27:11+09:00",
+          "tree_id": "f4c419ccc918ab7ee95bdba43d9753e9ee4e7f20",
+          "url": "https://github.com/sugyan/yasai/commit/2dc4c891d90cf720e319750f65590f41a8590209"
+        },
+        "date": 1654702250828,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 362857855,
+            "range": "± 401410",
             "unit": "ns/iter"
           }
         ]
