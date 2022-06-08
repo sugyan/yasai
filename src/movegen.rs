@@ -358,7 +358,7 @@ impl MoveList {
                 return false;
             }
             // 飛び駒から守っている駒が直線上から外れてしまう指し手は除外
-            if pos.pinned()[c.array_index()].contains(from) {
+            if pos.pinned(c).contains(from) {
                 if let Some(sq) = pos.king_position(c) {
                     if !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(m.to())
                         || BETWEEN_TABLE[sq.array_index()][m.to().array_index()].contains(from))
@@ -378,7 +378,7 @@ impl MoveList {
         }
         // 他の駒が歩を取れる
         let capture_candidates = Self::attackers_to_except_klp(pos, c.flip(), sq);
-        if !(capture_candidates & !pos.pinned()[c.flip().array_index()]).is_empty() {
+        if !(capture_candidates & !pos.pinned(c.flip())).is_empty() {
             return false;
         }
         // 玉が逃げられる
