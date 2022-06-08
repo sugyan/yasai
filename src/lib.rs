@@ -1,7 +1,7 @@
 mod board_piece;
-mod state;
 mod movegen;
 mod position;
+mod state;
 mod tables;
 mod zobrist;
 

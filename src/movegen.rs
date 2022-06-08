@@ -1,7 +1,7 @@
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RANKS, RELATIVE_RANKS};
 use crate::Position;
 use arrayvec::ArrayVec;
-use shogi_core::{Bitboard, Color, Move, Piece, PieceKind, Square};
+use shogi_core::{Bitboard, Color, Hand, Move, Piece, PieceKind, Square};
 
 const MAX_LEGAL_MOVES: usize = 593;
 
@@ -14,12 +14,11 @@ impl Position {
             self.generate_all(&mut av);
         }
 
-        let (mut i, mut size) = (0, av.len());
-        while i != size {
+        let mut i = 0;
+        while i != av.len() {
             if self.is_legal(av[i]) {
                 i += 1;
             } else {
-                size -= 1;
                 av.swap_remove(i);
             }
         }
@@ -89,10 +88,10 @@ impl Position {
     }
     fn generate_for_fu(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
-        let (to_bb, delta) = match c {
-            Color::Black => (unsafe { self.piece_bitboard(Piece::B_P).shift_up(1) }, 1),
-            Color::White => (unsafe { self.piece_bitboard(Piece::W_P).shift_down(1) }, !0),
-        };
+        let (to_bb, delta) = [
+            (unsafe { self.piece_bitboard(Piece::B_P).shift_up(1) }, 1),
+            (unsafe { self.piece_bitboard(Piece::W_P).shift_down(1) }, !0),
+        ][c.array_index()];
         for to in to_bb & *target {
             let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
             if PROMOTABLE[to.array_index()][c.array_index()] {
@@ -294,10 +293,7 @@ impl Position {
     fn generate_drop(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         let hand = self.hand(self.side_to_move());
-        for pk in PieceKind::all() {
-            if hand.count(pk).unwrap_or_default() == 0 {
-                continue;
-            }
+        for pk in Hand::all_hand_pieces().filter(|&pk| hand.count(pk).unwrap_or_default() > 0) {
             let mut exclude = Bitboard::empty();
             if pk == PieceKind::Pawn {
                 // 二歩
@@ -317,6 +313,7 @@ impl Position {
                     Color::White => RANKS[9],
                 };
             }
+            let piece = Piece::new(pk, c);
             for to in *target & !exclude {
                 if match pk {
                     PieceKind::Pawn | PieceKind::Lance => {
@@ -325,10 +322,7 @@ impl Position {
                     PieceKind::Knight => RELATIVE_RANKS[to.array_index()][c.array_index()] > 2,
                     _ => true,
                 } {
-                    av.push(Move::Drop {
-                        to,
-                        piece: Piece::new(pk, c),
-                    });
+                    av.push(Move::Drop { to, piece });
                 }
             }
         }
@@ -336,10 +330,7 @@ impl Position {
     fn is_legal(&self, m: Move) -> bool {
         if let Some(from) = m.from() {
             let c = self.side_to_move();
-            let king = match c {
-                Color::Black => Piece::B_K,
-                Color::White => Piece::W_K,
-            };
+            let king = [Piece::B_K, Piece::W_K][c.array_index()];
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
             if self.piece_at(from) == Some(king)
                 && !self
