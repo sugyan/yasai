@@ -36,7 +36,7 @@ impl Position {
         self.generate_for_ou(av, &target);
         self.generate_for_um(av, &target);
         self.generate_for_ry(av, &target);
-        self.generate_drop(av, &(!self.occupied() & !Bitboard::empty()));
+        self.generate_drop(av, &(!self.occupied_bitboard() & !Bitboard::empty()));
     }
     fn generate_evasions(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>) {
         let c = self.side_to_move();
@@ -51,7 +51,7 @@ impl Position {
                         && ch.file() != king.file()
                         && ch.rank() != king.rank()
                     {
-                        checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &self.occupied());
+                        checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &self.occupied_bitboard());
                     } else {
                         checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
                     }
@@ -119,7 +119,7 @@ impl Position {
     fn generate_for_ky(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Lance) {
-            for to in ATTACK_TABLE.ky.attack(from, c, &self.occupied()) & *target {
+            for to in ATTACK_TABLE.ky.attack(from, c, &self.occupied_bitboard()) & *target {
                 if PROMOTABLE[to.array_index()][c.array_index()] {
                     av.push(Move::Normal {
                         from,
@@ -194,7 +194,7 @@ impl Position {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Bishop) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
-            for to in ATTACK_TABLE.ka.attack(from, &self.occupied()) & *target {
+            for to in ATTACK_TABLE.ka.attack(from, &self.occupied_bitboard()) & *target {
                 av.push(Move::Normal {
                     from,
                     to,
@@ -214,7 +214,7 @@ impl Position {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Rook) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
-            for to in ATTACK_TABLE.hi.attack(from, &self.occupied()) & *target {
+            for to in ATTACK_TABLE.hi.attack(from, &self.occupied_bitboard()) & *target {
                 av.push(Move::Normal {
                     from,
                     to,
@@ -263,7 +263,7 @@ impl Position {
     fn generate_for_um(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::ProBishop) {
-            for to in (ATTACK_TABLE.ka.attack(from, &self.occupied())
+            for to in (ATTACK_TABLE.ka.attack(from, &self.occupied_bitboard())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
             {
@@ -278,7 +278,7 @@ impl Position {
     fn generate_for_ry(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::ProRook) {
-            for to in (ATTACK_TABLE.hi.attack(from, &self.occupied())
+            for to in (ATTACK_TABLE.hi.attack(from, &self.occupied_bitboard())
                 | ATTACK_TABLE.ou.attack(from, c))
                 & *target
             {
@@ -334,7 +334,7 @@ impl Position {
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
             if self.piece_at(from) == Some(king)
                 && !self
-                    .attackers_to(c.flip(), m.to(), &self.occupied())
+                    .attackers_to(c.flip(), m.to(), &self.occupied_bitboard())
                     .is_empty()
             {
                 return false;
@@ -355,7 +355,10 @@ impl Position {
     fn is_pawn_drop_mate(&self, sq: Square) -> bool {
         let c = self.side_to_move();
         // 玉自身が歩を取れる
-        if self.attackers_to(c, sq, &self.occupied()).is_empty() {
+        if self
+            .attackers_to(c, sq, &self.occupied_bitboard())
+            .is_empty()
+        {
             return false;
         }
         // 他の駒が歩を取れる
@@ -365,29 +368,17 @@ impl Position {
         }
         // 玉が逃げられる
         if let Some(king) = self.king_position(c.flip()) {
-            let escape = ATTACK_TABLE.ou.attack(king, c.flip())
-                & !self.player_bitboard(c.flip())
-                & !Bitboard::single(sq);
-            let occupied = self.occupied() | Bitboard::single(sq);
-            for to in escape ^ Bitboard::single(sq) {
+            let single = Bitboard::single(sq);
+            let escape =
+                ATTACK_TABLE.ou.attack(king, c.flip()) & !self.player_bitboard(c.flip()) & !single;
+            let occupied = self.occupied_bitboard() | single;
+            for to in escape ^ single {
                 if self.attackers_to(c, to, &occupied).is_empty() {
                     return false;
                 }
             }
         }
         true
-    }
-    fn player_bitboard(&self, c: Color) -> Bitboard {
-        self.inner.player_bitboard(c)
-    }
-    fn piece_kind_bitboard(&self, pk: PieceKind) -> Bitboard {
-        self.inner.piece_kind_bitboard(pk)
-    }
-    fn piece_bitboard(&self, p: Piece) -> Bitboard {
-        self.inner.piece_bitboard(p)
-    }
-    fn occupied(&self) -> Bitboard {
-        !self.inner.vacant_bitboard()
     }
     #[rustfmt::skip]
     fn attackers_to(&self, c: Color, to: Square, occ: &Bitboard) -> Bitboard {
@@ -404,7 +395,7 @@ impl Position {
     #[rustfmt::skip]
     fn attackers_to_except_klp(&self, c: Color, to: Square) -> Bitboard {
         let opp = c.flip();
-        let occ = &self.occupied();
+        let occ = &self.occupied_bitboard();
         (     (ATTACK_TABLE.ke.attack(to, opp) & self.piece_kind_bitboard(PieceKind::Knight))
             | (ATTACK_TABLE.gi.attack(to, opp) & (self.piece_kind_bitboard(PieceKind::Silver) | self.piece_kind_bitboard(PieceKind::ProRook)))
             | (ATTACK_TABLE.ka.attack(to, occ) & (self.piece_kind_bitboard(PieceKind::Bishop) | self.piece_kind_bitboard(PieceKind::ProBishop)))
