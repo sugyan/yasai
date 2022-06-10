@@ -1,4 +1,4 @@
-use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
+use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, SINGLES};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
 use shogi_core::{Bitboard, Color, Hand, Move, Piece, PieceKind, Square};
 
@@ -158,7 +158,7 @@ impl Position {
                 );
                 keys.0 ^= ZOBRIST_TABLE.board(to, piece);
                 if is_check {
-                    Bitboard::single(to)
+                    SINGLES[to.array_index()]
                 } else {
                     Bitboard::empty()
                 }
@@ -221,9 +221,6 @@ impl Position {
         let (pk, c) = p.to_parts();
         self.inner.piece_bb[pk.array_index()] & self.inner.player_bb[c.array_index()]
     }
-    pub(crate) fn occupied_bitboard(&self) -> Bitboard {
-        self.inner.occupied_bitboard()
-    }
     pub(crate) fn captured(&self) -> Option<Piece> {
         self.state().captured
     }
@@ -236,8 +233,11 @@ impl Position {
     pub(crate) fn pinned(&self, c: Color) -> Bitboard {
         self.state().attack_info.pinned(c)
     }
+    pub(crate) fn occupied_bitboard(&self) -> Bitboard {
+        self.state().attack_info.occupied
+    }
     pub(crate) fn king_position(&self, c: Color) -> Option<Square> {
-        self.inner.king_position(c)
+        self.state().attack_info.king_squares[c.array_index()]
     }
     fn state(&self) -> &State {
         self.states.last().expect("empty states")
@@ -266,8 +266,8 @@ pub(crate) struct PartialPosition {
 impl PartialPosition {
     fn xor_piece(&mut self, sq: Square, p: Piece) {
         let (pk, c) = p.to_parts();
-        self.player_bb[c.array_index()] ^= Bitboard::single(sq);
-        self.piece_bb[pk.array_index()] ^= Bitboard::single(sq);
+        self.player_bb[c.array_index()] ^= SINGLES[sq.array_index()];
+        self.piece_bb[pk.array_index()] ^= SINGLES[sq.array_index()];
     }
     pub(crate) fn occupied_bitboard(&self) -> Bitboard {
         self.player_bb[Color::Black.array_index()] | self.player_bb[Color::White.array_index()]
@@ -290,8 +290,8 @@ impl From<shogi_core::PartialPosition> for PartialPosition {
             let piece_at = pp.piece_at(sq);
             board[sq.array_index()] = piece_at;
             if let Some(p) = piece_at {
-                player_bb[p.color().array_index()] |= Bitboard::single(sq);
-                piece_bb[p.piece_kind().array_index()] |= Bitboard::single(sq);
+                player_bb[p.color().array_index()] |= SINGLES[sq.array_index()];
+                piece_bb[p.piece_kind().array_index()] |= SINGLES[sq.array_index()];
             }
         }
         Self {
@@ -317,16 +317,20 @@ struct State {
 struct AttackInfo {
     checkers: Bitboard,                     // 王手をかけている駒の位置
     checkables: [Bitboard; PieceKind::NUM], // 各駒種が王手になり得る位置
-    pinned: [Bitboard; 2],                  // 飛び駒から玉を守っている駒の位置
+    pinned: [Bitboard; Color::NUM],         // 飛び駒から玉を守っている駒の位置
+    occupied: Bitboard,
+    king_squares: [Option<Square>; Color::NUM],
 }
 
 impl AttackInfo {
     pub fn new(checkers: Bitboard, pos: &PartialPosition) -> Self {
         let opp = pos.side.flip();
-        let occ = pos.occupied_bitboard();
+        let occupied = pos.occupied_bitboard();
         let mut pinned = [Bitboard::empty(), Bitboard::empty()];
+        let mut king_squares = [None, None];
         for c in Color::all() {
-            if let Some(sq) = pos.king_position(c) {
+            king_squares[c.array_index()] = pos.king_position(c);
+            if let Some(sq) = king_squares[c.array_index()] {
                 #[rustfmt::skip]
                 let snipers = (
                       (ATTACK_TABLE.pseudo_attack(PieceKind::Lance, sq, c) & pos.piece_bb[PieceKind::Lance.array_index()])
@@ -334,23 +338,23 @@ impl AttackInfo {
                     | (ATTACK_TABLE.pseudo_attack(PieceKind::Rook, sq, c) & (pos.piece_bb[PieceKind::Rook.array_index()] | pos.piece_bb[PieceKind::ProRook.array_index()]))
                 ) & pos.player_bb[c.flip().array_index()];
                 for sniper in snipers {
-                    let blockers = BETWEEN_TABLE[sq.array_index()][sniper.array_index()] & occ;
+                    let blockers = BETWEEN_TABLE[sq.array_index()][sniper.array_index()] & occupied;
                     if blockers.count() == 1 {
                         pinned[c.array_index()] |= blockers;
                     }
                 }
             }
         }
-        if let Some(sq) = pos.king_position(opp) {
-            let ka = ATTACK_TABLE.ka.attack(sq, &occ);
-            let hi = ATTACK_TABLE.hi.attack(sq, &occ);
+        if let Some(sq) = king_squares[opp.array_index()] {
+            let ka = ATTACK_TABLE.ka.attack(sq, &occupied);
+            let hi = ATTACK_TABLE.hi.attack(sq, &occupied);
             let ki = ATTACK_TABLE.ki.attack(sq, opp);
             let ou = ATTACK_TABLE.ou.attack(sq, opp);
             Self {
                 checkers,
                 checkables: [
                     ATTACK_TABLE.fu.attack(sq, opp),
-                    ATTACK_TABLE.ky.attack(sq, opp, &occ),
+                    ATTACK_TABLE.ky.attack(sq, opp, &occupied),
                     ATTACK_TABLE.ke.attack(sq, opp),
                     ATTACK_TABLE.gi.attack(sq, opp),
                     ki,
@@ -365,12 +369,16 @@ impl AttackInfo {
                     hi | ou,
                 ],
                 pinned,
+                occupied,
+                king_squares,
             }
         } else {
             Self {
                 checkers,
                 checkables: [Bitboard::empty(); PieceKind::NUM],
                 pinned,
+                occupied,
+                king_squares,
             }
         }
     }
