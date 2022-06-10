@@ -1,6 +1,4 @@
-use crate::tables::{
-    ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RANKS, RELATIVE_RANKS, SINGLES,
-};
+use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RANKS, RELATIVE_RANKS};
 use crate::Position;
 use arrayvec::ArrayVec;
 use shogi_core::{Bitboard, Color, Hand, Move, Piece, PieceKind, Square};
@@ -370,11 +368,11 @@ impl Position {
         }
         // 玉が逃げられる
         if let Some(king) = self.king_position(c.flip()) {
-            let escape = ATTACK_TABLE.ou.attack(king, c.flip())
-                & !self.player_bitboard(c.flip())
-                & !SINGLES[sq.array_index()];
-            let occupied = self.occupied_bitboard() | SINGLES[sq.array_index()];
-            for to in escape ^ SINGLES[sq.array_index()] {
+            let single = Bitboard::single(sq);
+            let escape =
+                ATTACK_TABLE.ou.attack(king, c.flip()) & !self.player_bitboard(c.flip()) & !single;
+            let occupied = self.occupied_bitboard() | single;
+            for to in escape ^ single {
                 if self.attackers_to(c, to, &occupied).is_empty() {
                     return false;
                 }

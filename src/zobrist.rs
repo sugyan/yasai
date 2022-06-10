@@ -163,7 +163,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves.iter().for_each(|&m| {
+                pos.do_move(m);
+            });
             pos.key()
         };
         let key1 = {
@@ -186,7 +188,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves.iter().for_each(|&m| {
+                pos.do_move(m);
+            });
             pos.key()
         };
         assert_eq!(key0, key1);
@@ -239,7 +243,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves.iter().for_each(|&m| {
+                pos.do_move(m);
+            });
             pos.keys()
         };
         let keys1 = {
@@ -278,7 +284,9 @@ mod tests {
                     promote: false,
                 },
             ];
-            moves.iter().for_each(|&m| pos.do_move(m));
+            moves.iter().for_each(|&m| {
+                pos.do_move(m);
+            });
             pos.keys()
         };
         assert_ne!(keys0, keys1);

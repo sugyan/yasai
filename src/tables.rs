@@ -304,14 +304,6 @@ pub(crate) static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = 
     bbs
 });
 
-pub(crate) static SINGLES: Lazy<[Bitboard; Square::NUM]> = Lazy::new(|| {
-    let mut bbs = [Bitboard::empty(); Square::NUM];
-    for sq in Square::all() {
-        bbs[sq.array_index()] = Bitboard::single(sq);
-    }
-    bbs
-});
-
 pub(crate) static FILES: Lazy<[Bitboard; 10]> = Lazy::new(|| {
     let mut bbs = [Bitboard::empty(); 10];
     for sq in Square::all() {
