@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654702251503,
+  "lastUpdate": 1654873243774,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -223,6 +223,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 362857855,
             "range": "± 401410",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "548adb53ba91517964a520de90d4fb8647963925",
+          "message": "Implement PartialPosition myself (#10)\n\n* Implement simple PartialPosition\r\n\r\n* Update: micro-optimizations\r\n\r\n* Update PartialPosition",
+          "timestamp": "2022-06-10T23:56:05+09:00",
+          "tree_id": "bc0dcb8fbfcea0305519af0b67b23e80f5d21fe2",
+          "url": "https://github.com/sugyan/yasai/commit/548adb53ba91517964a520de90d4fb8647963925"
+        },
+        "date": 1654873242998,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 467840238,
+            "range": "± 19615975",
             "unit": "ns/iter"
           }
         ]
