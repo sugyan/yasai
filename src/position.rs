@@ -115,9 +115,7 @@ impl Position {
                     keys.1 ^= ZOBRIST_TABLE.hand(
                         c,
                         pk_unpromoted,
-                        self.inner.hands[c.array_index()]
-                            .count(pk_unpromoted)
-                            .unwrap(),
+                        self.inner.hand_of_a_player(c).count(pk_unpromoted).unwrap(),
                     );
                 }
                 let target_piece = if promote {
@@ -152,7 +150,8 @@ impl Position {
                 keys.1 ^= ZOBRIST_TABLE.hand(
                     c,
                     piece.piece_kind(),
-                    self.inner.hands[c.array_index()]
+                    self.inner
+                        .hand_of_a_player(c)
                         .count(piece.piece_kind())
                         .unwrap(),
                 );
@@ -277,8 +276,11 @@ impl PartialPosition {
         let index = sq.index() - 1;
         unsafe { self.board.get_unchecked_mut(index as usize) }
     }
-    fn hand_of_a_player_mut(&mut self, color: Color) -> &mut Hand {
-        unsafe { self.hands.get_unchecked_mut((color as u8 - 1) as usize) }
+    fn hand_of_a_player(&self, c: Color) -> Hand {
+        *unsafe { self.hands.get_unchecked((c as u8 - 1) as usize) }
+    }
+    fn hand_of_a_player_mut(&mut self, c: Color) -> &mut Hand {
+        unsafe { self.hands.get_unchecked_mut((c as u8 - 1) as usize) }
     }
     fn occupied_bitboard(&self) -> Bitboard {
         self.player_bb[0] | self.player_bb[1]
