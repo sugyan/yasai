@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654873243774,
+  "lastUpdate": 1654955118535,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -253,6 +253,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 467840238,
             "range": "± 19615975",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "62a1fed70312db90d60fa1452ec6c71829a97d4a",
+          "message": "Merge pull request #11 from sugyan/update/shogi-core-0.1.4\n\nUpdate shogi_core to `0.1.4`",
+          "timestamp": "2022-06-11T22:41:35+09:00",
+          "tree_id": "1afd4d037502b613398a860e5917db88141e306b",
+          "url": "https://github.com/sugyan/yasai/commit/62a1fed70312db90d60fa1452ec6c71829a97d4a"
+        },
+        "date": 1654955118209,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 389141483,
+            "range": "± 126852",
             "unit": "ns/iter"
           }
         ]
