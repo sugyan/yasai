@@ -1,3 +1,4 @@
+use shogi_core::ToUsi;
 use std::process;
 use std::time::Instant;
 use yasai::Position;
@@ -39,7 +40,7 @@ fn perft(pos: &mut Position, depth: usize, is_root: bool) -> usize {
         };
         ret += count;
         if is_root {
-            println!("{m:?}: {count}");
+            println!("{}: {count}", m.to_usi_owned());
         }
     }
     ret
