@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654955118535,
+  "lastUpdate": 1654957040588,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -283,6 +283,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 389141483,
             "range": "± 126852",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c55b07055be2aae5e995cfb87069b86418c49468",
+          "message": "Merge pull request #12 from sugyan/update/remove-board-piece\n\nRemove board_piece.rs",
+          "timestamp": "2022-06-11T23:13:36+09:00",
+          "tree_id": "c5b12e91f9596b11d3ba8157208e7b8b11c81f54",
+          "url": "https://github.com/sugyan/yasai/commit/c55b07055be2aae5e995cfb87069b86418c49468"
+        },
+        "date": 1654957039856,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 392028415,
+            "range": "± 95267",
             "unit": "ns/iter"
           }
         ]
