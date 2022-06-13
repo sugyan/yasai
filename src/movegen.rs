@@ -1,5 +1,5 @@
 use crate::bitboard::{Bitboard, BitboardTrait};
-use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RANKS, RELATIVE_RANKS};
+use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, PROMOTABLE, RANKS, RELATIVE_RANKS};
 use crate::Position;
 use arrayvec::ArrayVec;
 use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
@@ -295,12 +295,13 @@ impl Position {
         let c = self.side_to_move();
         let hand = self.hand(self.side_to_move());
         for pk in Hand::all_hand_pieces().filter(|&pk| hand.count(pk).unwrap_or_default() > 0) {
-            let mut exclude = Bitboard::empty();
+            let mut target = *target;
             if pk == PieceKind::Pawn {
-                // 二歩
-                for sq in self.player_bitboard(c) & self.piece_kind_bitboard(pk) {
-                    exclude |= FILES[sq.file() as usize];
-                }
+                // 0001 _ 1111 1110 1111 1111 _ 0011 1111 1101 1111 _ 1110 1111 1111 0111 _ 1111 1011 1111 1101 _ 1111 1110 1111 1111
+                let mask =
+                    unsafe { Bitboard::from_u128_unchecked(0x0001_feff_3fdf_eff7_fbfd_feff) };
+                let pieces = self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Pawn);
+                let mut exclude = (((pieces + mask) >> 8) + mask) ^ mask;
                 // 打ち歩詰めチェック
                 if let Some(sq) = self.king_position(c.flip()) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
@@ -313,9 +314,10 @@ impl Position {
                     Color::Black => RANKS[1],
                     Color::White => RANKS[9],
                 };
+                target &= !exclude;
             }
             let piece = Piece::new(pk, c);
-            for to in *target & !exclude {
+            for to in target {
                 if match pk {
                     PieceKind::Pawn | PieceKind::Lance => {
                         RELATIVE_RANKS[to.array_index()][c.array_index()] > 1
@@ -467,6 +469,76 @@ mod tests {
                 .expect("failed to parse"),
         );
         assert_eq!(593, pos.legal_moves().len());
+    }
+
+    #[test]
+    fn pawn_drop() {
+        {
+            // P1-KY-KE-GI-KI-OU-KI-GI-KE-KY
+            // P2 * -HI *  *  *  *  * -KA *
+            // P3-FU-FU-FU-FU-FU-FU-FU-FU *
+            // P4 *  *  *  *  *  *  *  *  *
+            // P5 *  *  *  *  *  *  *  * +KY
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7+FU+FU+FU+FU+FU+FU+FU+FU *
+            // P8 * +KA *  *  *  *  * +HI *
+            // P9+KY+KE+GI+KI+OU+KI+GI+KE *
+            // P+00FU
+            // P-00FU
+            // -
+            let pos = Position::new(
+                PartialPosition::from_usi(
+                    "sfen lnsgkgsnl/1r5s1/pppppppp1/9/8L/9/PPPPPPPP1/1B5S1/LNSGKGSN1 w Pp 1",
+                )
+                .expect("failed to parse"),
+            );
+            let drop_moves = pos
+                .legal_moves()
+                .iter()
+                .filter_map(|&m| {
+                    if let Move::Drop { piece, to } = m {
+                        Some((piece, to))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(6, drop_moves.len());
+            assert!(drop_moves.iter().all(|m| m.0 == Piece::W_P));
+        }
+        {
+            // P1-KY-KE-GI-KI-OU-KI-GI-KE *
+            // P2 * -HI *  *  *  *  * -KA *
+            // P3-FU-FU-FU-FU-FU-FU-FU-FU *
+            // P4 *  *  *  *  *  *  *  *  *
+            // P5 *  *  *  *  *  *  *  * -KY
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7+FU+FU+FU+FU+FU+FU+FU+FU *
+            // P8 * +KA *  *  *  *  * +HI *
+            // P9+KY+KE+GI+KI+OU+KI+GI+KE *
+            // P+00FU
+            // P-00FU00KY
+            // +
+            let pos = Position::new(
+                PartialPosition::from_usi(
+                    "sfen lnsgkgsn1/1r5s1/pppppppp1/9/8l/9/PPPPPPPP1/1B5S1/LNSGKGSN1 b Ppl 1",
+                )
+                .expect("failed to parse"),
+            );
+            let drop_moves = pos
+                .legal_moves()
+                .iter()
+                .filter_map(|&m| {
+                    if let Move::Drop { piece, to } = m {
+                        Some((piece, to))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(7, drop_moves.len());
+            assert!(drop_moves.iter().all(|m| m.0 == Piece::B_P));
+        }
     }
 
     #[allow(clippy::bool_assert_comparison)]

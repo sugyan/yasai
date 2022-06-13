@@ -1,5 +1,7 @@
 use shogi_core::Square;
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr};
+use std::ops::{
+    Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub,
+};
 
 pub trait BitboardTrait:
     Sized
@@ -12,6 +14,8 @@ pub trait BitboardTrait:
     + Not
     + Shl<u8>
     + Shr<u8>
+    + Add
+    + Sub
     + Iterator
 {
     fn empty() -> Self;
