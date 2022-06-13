@@ -1,7 +1,8 @@
+use crate::bitboard::{Bitboard, BitboardTrait};
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RANKS, RELATIVE_RANKS};
 use crate::Position;
 use arrayvec::ArrayVec;
-use shogi_core::{Bitboard, Color, Hand, Move, Piece, PieceKind, Square};
+use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 
 const MAX_LEGAL_MOVES: usize = 593;
 
@@ -89,8 +90,8 @@ impl Position {
     fn generate_for_fu(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         let (to_bb, delta) = [
-            (unsafe { self.piece_bitboard(Piece::B_P).shift_up(1) }, 1),
-            (unsafe { self.piece_bitboard(Piece::W_P).shift_down(1) }, !0),
+            (self.piece_bitboard(Piece::B_P) >> 1, 1),
+            (self.piece_bitboard(Piece::W_P) << 1, !0),
         ][c.array_index()];
         for to in to_bb & *target {
             let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
@@ -304,7 +305,7 @@ impl Position {
                 if let Some(sq) = self.king_position(c.flip()) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
                         if target.contains(to) && self.is_pawn_drop_mate(to) {
-                            exclude |= to;
+                            exclude |= Bitboard::single(to);
                         }
                     }
                 }

@@ -1,6 +1,7 @@
+use crate::bitboard::{Bitboard, BitboardTrait};
 use bitintr::Pext;
 use once_cell::sync::Lazy;
-use shogi_core::{Bitboard, Color, PieceKind, Square};
+use shogi_core::{Color, PieceKind, Square};
 use std::cmp::Ordering;
 
 fn bb_values(bb: &Bitboard) -> (u64, u64) {
@@ -50,14 +51,14 @@ impl PieceAttackTable {
             for color in Color::all() {
                 for &delta in deltas[color.array_index()] {
                     if let Some(to) = sq.shift(delta.file, delta.rank) {
-                        table[sq.array_index()][color.array_index()] |= to;
+                        table[sq.array_index()][color.array_index()] |= Bitboard::single(to);
                     }
                 }
             }
         }
         Self(table)
     }
-    pub fn attack(&self, sq: Square, c: Color) -> Bitboard {
+    pub(crate) fn attack(&self, sq: Square, c: Color) -> Bitboard {
         self.0[sq.array_index()][c.array_index()]
     }
 }
@@ -67,7 +68,7 @@ fn sliding_attacks(sq: Square, occ: Bitboard, deltas: &[Delta]) -> Bitboard {
     for &delta in deltas {
         let mut curr = sq.shift(delta.file, delta.rank);
         while let Some(to) = curr {
-            bb |= to;
+            bb |= Bitboard::single(to);
             if occ.contains(to) {
                 break;
             }
@@ -105,7 +106,7 @@ impl LanceAttackTable {
         let mut bb = Bitboard::empty();
         for (i, sq) in mask.enumerate() {
             if (index & (1 << i)) != 0 {
-                bb |= sq;
+                bb |= Bitboard::single(sq);
             }
         }
         bb
@@ -135,7 +136,7 @@ impl LanceAttackTable {
     fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
         self.table[self.offsets[sq.array_index()][c.array_index()]]
     }
-    pub fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
+    pub(crate) fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let index = ((if sq.index() >= 64 {
             bb_values(occ).1
         } else {
@@ -173,7 +174,7 @@ impl SlidingAttackTable {
         let mut bb = Bitboard::empty();
         for (i, sq) in mask.enumerate() {
             if (index & (1 << i)) != 0 {
-                bb |= sq;
+                bb |= Bitboard::single(sq);
             }
         }
         bb
@@ -190,7 +191,7 @@ impl SlidingAttackTable {
         let mut offset = 0;
         for sq in Square::all() {
             let mask = SlidingAttackTable::attack_mask(sq, deltas);
-            let ones = mask.count();
+            let ones = BitboardTrait::count(mask);
             masks[sq.array_index()] = mask;
             offsets[sq.array_index()] = offset;
             for index in 0..1 << ones {
@@ -209,7 +210,7 @@ impl SlidingAttackTable {
     fn pseudo_attack(&self, sq: Square) -> Bitboard {
         self.table[self.offsets[sq.array_index()]]
     }
-    pub fn attack(&self, sq: Square, occ: &Bitboard) -> Bitboard {
+    pub(crate) fn attack(&self, sq: Square, occ: &Bitboard) -> Bitboard {
         self.table[self.offsets[sq.array_index()]
             + Self::occupied_to_index(*occ, self.masks[sq.array_index()])]
     }
@@ -227,7 +228,7 @@ pub struct AttackTable {
 }
 
 impl AttackTable {
-    pub fn attack(&self, pk: PieceKind, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
+    pub(crate) fn attack(&self, pk: PieceKind, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         match pk {
             PieceKind::Pawn => self.fu.attack(sq, c),
             PieceKind::Lance => self.ky.attack(sq, c, occ),
@@ -245,7 +246,7 @@ impl AttackTable {
             PieceKind::ProRook => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
         }
     }
-    pub fn pseudo_attack(&self, pk: PieceKind, sq: Square, c: Color) -> Bitboard {
+    pub(crate) fn pseudo_attack(&self, pk: PieceKind, sq: Square, c: Color) -> Bitboard {
         match pk {
             PieceKind::Lance => self.ky.pseudo_attack(sq, c),
             PieceKind::Bishop | PieceKind::ProBishop => self.ka.pseudo_attack(sq),
