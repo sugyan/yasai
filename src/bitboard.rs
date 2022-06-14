@@ -30,4 +30,4 @@ pub trait BitboardTrait:
 }
 
 mod extended_core;
-pub(crate) type Bitboard = extended_core::ExtendedCoreBitboard;
+pub(crate) use extended_core::Bitboard;

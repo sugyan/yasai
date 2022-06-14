@@ -5,14 +5,14 @@ use std::ops::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ExtendedCoreBitboard(shogi_core::Bitboard);
+pub(crate) struct Bitboard(shogi_core::Bitboard);
 
-impl ExtendedCoreBitboard {
+impl Bitboard {
     const MASK0: u64 = (1 << 63) - 1;
     const MASK1: u64 = (1 << 18) - 1;
 }
 
-impl BitboardTrait for ExtendedCoreBitboard {
+impl BitboardTrait for Bitboard {
     fn empty() -> Self {
         Self(shogi_core::Bitboard::empty())
     }
@@ -42,7 +42,7 @@ impl BitboardTrait for ExtendedCoreBitboard {
     }
 }
 
-impl BitAnd for ExtendedCoreBitboard {
+impl BitAnd for Bitboard {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
@@ -50,7 +50,7 @@ impl BitAnd for ExtendedCoreBitboard {
     }
 }
 
-impl BitOr for ExtendedCoreBitboard {
+impl BitOr for Bitboard {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
@@ -58,7 +58,7 @@ impl BitOr for ExtendedCoreBitboard {
     }
 }
 
-impl BitXor for ExtendedCoreBitboard {
+impl BitXor for Bitboard {
     type Output = Self;
 
     fn bitxor(self, rhs: Self) -> Self::Output {
@@ -66,25 +66,25 @@ impl BitXor for ExtendedCoreBitboard {
     }
 }
 
-impl BitAndAssign for ExtendedCoreBitboard {
+impl BitAndAssign for Bitboard {
     fn bitand_assign(&mut self, rhs: Self) {
         self.0 &= rhs.0;
     }
 }
 
-impl BitOrAssign for ExtendedCoreBitboard {
+impl BitOrAssign for Bitboard {
     fn bitor_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0;
     }
 }
 
-impl BitXorAssign for ExtendedCoreBitboard {
+impl BitXorAssign for Bitboard {
     fn bitxor_assign(&mut self, rhs: Self) {
         self.0 ^= rhs.0
     }
 }
 
-impl Not for ExtendedCoreBitboard {
+impl Not for Bitboard {
     type Output = Self;
 
     fn not(self) -> Self::Output {
@@ -92,7 +92,7 @@ impl Not for ExtendedCoreBitboard {
     }
 }
 
-impl Shl<u8> for ExtendedCoreBitboard {
+impl Shl<u8> for Bitboard {
     type Output = Self;
 
     fn shl(self, rhs: u8) -> Self::Output {
@@ -100,7 +100,7 @@ impl Shl<u8> for ExtendedCoreBitboard {
     }
 }
 
-impl Shr<u8> for ExtendedCoreBitboard {
+impl Shr<u8> for Bitboard {
     type Output = Self;
 
     fn shr(self, rhs: u8) -> Self::Output {
@@ -108,7 +108,7 @@ impl Shr<u8> for ExtendedCoreBitboard {
     }
 }
 
-impl Add for ExtendedCoreBitboard {
+impl Add for Bitboard {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -118,7 +118,7 @@ impl Add for ExtendedCoreBitboard {
     }
 }
 
-impl Sub for ExtendedCoreBitboard {
+impl Sub for Bitboard {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -131,7 +131,7 @@ impl Sub for ExtendedCoreBitboard {
     }
 }
 
-impl Iterator for ExtendedCoreBitboard {
+impl Iterator for Bitboard {
     type Item = Square;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -150,92 +150,91 @@ mod tests {
 
     #[test]
     fn add() {
-        let bb =
-            unsafe { ExtendedCoreBitboard::from_u128_unchecked(0x0002_0100_4020_1008_0402_0100) };
+        let bb = unsafe { Bitboard::from_u128_unchecked(0x0002_0100_4020_1008_0402_0100) };
         assert_eq!(
             vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
             bb.collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_2A, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + ExtendedCoreBitboard::single(SQ_1I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_1I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1I, SQ_3A, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + ExtendedCoreBitboard::single(SQ_2I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_2I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1I, SQ_2I, SQ_4A, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + ExtendedCoreBitboard::single(SQ_3I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_3I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1I, SQ_2I, SQ_3I, SQ_5A, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + ExtendedCoreBitboard::single(SQ_4I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_4I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_6A, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + ExtendedCoreBitboard::single(SQ_5I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_5I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_7A, SQ_7I, SQ_8I, SQ_9I],
-            (bb + ExtendedCoreBitboard::single(SQ_6I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_6I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_8A, SQ_8I, SQ_9I],
-            (bb + ExtendedCoreBitboard::single(SQ_7I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_7I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_9A, SQ_9I],
-            (bb + ExtendedCoreBitboard::single(SQ_8I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_8I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I],
-            (bb + ExtendedCoreBitboard::single(SQ_9I)).collect::<Vec<_>>()
+            (bb + Bitboard::single(SQ_9I)).collect::<Vec<_>>()
         );
     }
 
     #[test]
     fn sub() {
-        let bb = unsafe { ExtendedCoreBitboard::from_u128_unchecked(0x0201_0040_2010_0804_0201) };
+        let bb = unsafe { Bitboard::from_u128_unchecked(0x0201_0040_2010_0804_0201) };
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
             bb.collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_1I, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            (bb - ExtendedCoreBitboard::single(SQ_1I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_1I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_2I, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            (bb - ExtendedCoreBitboard::single(SQ_2I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_2I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_3A, SQ_3I, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            (bb - ExtendedCoreBitboard::single(SQ_3I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_3I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_4I, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            (bb - ExtendedCoreBitboard::single(SQ_4I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_4I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_5I, SQ_7A, SQ_8A, SQ_9A],
-            (bb - ExtendedCoreBitboard::single(SQ_5I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_5I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_6I, SQ_8A, SQ_9A],
-            (bb - ExtendedCoreBitboard::single(SQ_6I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_6I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_7I, SQ_9A],
-            (bb - ExtendedCoreBitboard::single(SQ_7I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_7I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_8I],
-            (bb - ExtendedCoreBitboard::single(SQ_8I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_8I)).collect::<Vec<_>>()
         );
         assert_eq!(
             vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A, SQ_9I],
-            (bb - ExtendedCoreBitboard::single(SQ_9I)).collect::<Vec<_>>()
+            (bb - Bitboard::single(SQ_9I)).collect::<Vec<_>>()
         );
     }
 }
