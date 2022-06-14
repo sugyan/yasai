@@ -5,6 +5,8 @@ use arrayvec::ArrayVec;
 use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 
 const MAX_LEGAL_MOVES: usize = 593;
+// 0001 _ 1111 1110 1111 1111,  0011 1111 1101 1111 _ 1110 1111 1111 0111 _ 1111 1011 1111 1101 _ 1111 1110 1111 1111
+const PAWN_DROP_MASK_VALUE: u128 = 0x0001_feff_3fdf_eff7_fbfd_feff;
 
 impl Position {
     pub fn legal_moves(&self) -> ArrayVec<Move, MAX_LEGAL_MOVES> {
@@ -295,11 +297,9 @@ impl Position {
         let c = self.side_to_move();
         let hand = self.hand(self.side_to_move());
         for pk in Hand::all_hand_pieces().filter(|&pk| hand.count(pk).unwrap_or_default() > 0) {
+            let mask = unsafe { Bitboard::from_u128_unchecked(PAWN_DROP_MASK_VALUE) };
             let mut target = *target;
             if pk == PieceKind::Pawn {
-                // 0001 _ 1111 1110 1111 1111 _ 0011 1111 1101 1111 _ 1110 1111 1111 0111 _ 1111 1011 1111 1101 _ 1111 1110 1111 1111
-                let mask =
-                    unsafe { Bitboard::from_u128_unchecked(0x0001_feff_3fdf_eff7_fbfd_feff) };
                 let pieces = self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Pawn);
                 let mut exclude = (((pieces + mask) >> 8) + mask) ^ mask;
                 // 打ち歩詰めチェック

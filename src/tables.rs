@@ -79,71 +79,45 @@ fn sliding_attacks(sq: Square, occ: Bitboard, deltas: &[Delta]) -> Bitboard {
 }
 
 pub struct LanceAttackTable {
-    table: Vec<Bitboard>,
-    offsets: [[usize; Color::NUM]; Square::NUM],
+    masks: [[Bitboard; Color::NUM]; Square::NUM],
 }
 
 impl LanceAttackTable {
-    const MASK_BITS: u32 = 7;
-    const MASK_TABLE_NUM: usize = 1 << LanceAttackTable::MASK_BITS;
-    #[rustfmt::skip]
-    const OFFSET_BITS: [u32; Square::NUM] = [
-         1,  1,  1,  1,  1,  1,  1,  1,  1,
-        10, 10, 10, 10, 10, 10, 10, 10, 10,
-        19, 19, 19, 19, 19, 19, 19, 19, 19,
-        28, 28, 28, 28, 28, 28, 28, 28, 28,
-        37, 37, 37, 37, 37, 37, 37, 37, 37,
-        46, 46, 46, 46, 46, 46, 46, 46, 46,
-        55, 55, 55, 55, 55, 55, 55, 55, 55,
-         1,  1,  1,  1,  1,  1,  1,  1,  1,
-        10, 10, 10, 10, 10, 10, 10, 10, 10,
-    ];
-
-    fn attack_mask(sq: Square) -> Bitboard {
-        FILES[sq.file() as usize] & !(RANKS[1] | RANKS[9])
-    }
-    fn index_to_occupied(index: usize, mask: Bitboard) -> Bitboard {
-        let mut bb = Bitboard::empty();
-        for (i, sq) in mask.enumerate() {
-            if (index & (1 << i)) != 0 {
-                bb |= Bitboard::single(sq);
-            }
-        }
-        bb
-    }
     fn new() -> Self {
-        let mut table =
-            vec![Bitboard::empty(); Square::NUM * Color::NUM * LanceAttackTable::MASK_TABLE_NUM];
-        let mut offsets = [[0; Color::NUM]; Square::NUM];
-        let mut offset = 0;
+        let mut masks = [[Bitboard::empty(); Color::NUM]; Square::NUM];
         for sq in Square::all() {
-            let mask = Self::attack_mask(sq);
             for c in Color::all() {
                 let deltas = match c {
                     Color::Black => vec![Delta::N],
                     Color::White => vec![Delta::S],
                 };
-                offsets[sq.array_index()][c.array_index()] = offset;
-                for index in 0..LanceAttackTable::MASK_TABLE_NUM {
-                    let occ = Self::index_to_occupied(index, mask);
-                    table[offset + index] = sliding_attacks(sq, occ, &deltas);
-                }
-                offset += LanceAttackTable::MASK_TABLE_NUM;
+                masks[sq.array_index()][c.array_index()] =
+                    sliding_attacks(sq, Bitboard::empty(), &deltas);
             }
         }
-        Self { table, offsets }
+        Self { masks }
     }
     fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
-        self.table[self.offsets[sq.array_index()][c.array_index()]]
+        self.masks[sq.array_index()][c.array_index()]
     }
     pub(crate) fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
-        let index = ((if sq.index() >= 64 {
-            bb_values(occ).1
-        } else {
-            bb_values(occ).0
-        } >> LanceAttackTable::OFFSET_BITS[sq.array_index()]) as usize)
-            & (Self::MASK_TABLE_NUM - 1);
-        self.table[self.offsets[sq.array_index()][c.array_index()] + index]
+        let mask = self.masks[sq.array_index()][c.array_index()];
+        match c {
+            Color::Black => {
+                let bb = *occ & mask;
+                if bb.is_empty() {
+                    mask
+                } else {
+                    mask & !(unsafe {
+                        Bitboard::from_u128_unchecked(1 << (127 - bb.to_u128().leading_zeros()))
+                    } + !Bitboard::empty())
+                }
+            }
+            Color::White => {
+                let bb = !(*occ & mask);
+                ((bb + Bitboard::single(sq)) ^ bb) & mask
+            }
+        }
     }
 }
 
@@ -342,3 +316,91 @@ pub(crate) static PROMOTABLE: Lazy<[[bool; Color::NUM]; Square::NUM]> = Lazy::ne
     }
     table
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Position;
+    use shogi_core::consts::square::*;
+    use shogi_core::PartialPosition;
+    use shogi_usi_parser::FromUsi;
+
+    #[test]
+    fn lance_attack() {
+        {
+            let pos = Position::new(PartialPosition::startpos());
+            let test_cases = [
+                (SQ_1I, Color::Black, vec![SQ_1G, SQ_1H]),
+                (SQ_9I, Color::Black, vec![SQ_9G, SQ_9H]),
+                (SQ_1A, Color::White, vec![SQ_1B, SQ_1C]),
+                (SQ_9A, Color::White, vec![SQ_9B, SQ_9C]),
+            ];
+            for (sq, c, expected) in test_cases {
+                let bb = ATTACK_TABLE.ky.attack(sq, c, &pos.occupied_bitboard());
+                assert_eq!(expected, bb.collect::<Vec<_>>());
+            }
+        }
+        {
+            // P1-FU *  *  *  *  *  *  *  *
+            // P2 * -FU *  *  *  *  *  *  *
+            // P3 *  * -FU *  *  *  *  *  *
+            // P4 *  *  * -FU *  *  *  *  *
+            // P5 *  *  *  *  *  *  *  *  *
+            // P6 *  *  * +KY *  *  *  *  *
+            // P7 *  * +KY *  *  *  *  *  *
+            // P8 * +KY *  *  *  *  *  *  *
+            // P9+KY *  *  *  *  *  *  *  *
+            // +
+            let pos = Position::new(
+                PartialPosition::from_usi("sfen p8/1p7/2p6/3p5/9/3L5/2L6/1L7/L8 b - 1")
+                    .expect("failed to parse"),
+            );
+            let test_cases = [
+                (
+                    SQ_9I,
+                    vec![SQ_9A, SQ_9B, SQ_9C, SQ_9D, SQ_9E, SQ_9F, SQ_9G, SQ_9H],
+                ),
+                (SQ_8H, vec![SQ_8B, SQ_8C, SQ_8D, SQ_8E, SQ_8F, SQ_8G]),
+                (SQ_7G, vec![SQ_7C, SQ_7D, SQ_7E, SQ_7F]),
+                (SQ_6F, vec![SQ_6D, SQ_6E]),
+            ];
+            for (sq, expected) in test_cases {
+                let bb = ATTACK_TABLE
+                    .ky
+                    .attack(sq, Color::Black, &pos.occupied_bitboard());
+                assert_eq!(expected, bb.collect::<Vec<_>>());
+            }
+        }
+        {
+            // P1-KY *  *  *  *  *  *  *  *
+            // P2 * -KY *  *  *  *  *  *  *
+            // P3 *  * -KY *  *  *  *  *  *
+            // P4 *  *  * -KY *  *  *  *  *
+            // P5 *  *  *  *  *  *  *  *  *
+            // P6 *  *  * +FU *  *  *  *  *
+            // P7 *  * +FU *  *  *  *  *  *
+            // P8 * +FU *  *  *  *  *  *  *
+            // P9+FU *  *  *  *  *  *  *  *
+            // +
+            let pos = Position::new(
+                PartialPosition::from_usi("sfen l8/1l7/2l6/3l5/9/3P5/2P6/1P7/P8 w - 1")
+                    .expect("failed to parse"),
+            );
+            let test_cases = [
+                (
+                    SQ_9A,
+                    vec![SQ_9B, SQ_9C, SQ_9D, SQ_9E, SQ_9F, SQ_9G, SQ_9H, SQ_9I],
+                ),
+                (SQ_8B, vec![SQ_8C, SQ_8D, SQ_8E, SQ_8F, SQ_8G, SQ_8H]),
+                (SQ_7C, vec![SQ_7D, SQ_7E, SQ_7F, SQ_7G]),
+                (SQ_6D, vec![SQ_6E, SQ_6F]),
+            ];
+            for (sq, expected) in test_cases {
+                let bb = ATTACK_TABLE
+                    .ky
+                    .attack(sq, Color::White, &pos.occupied_bitboard());
+                assert_eq!(expected, bb.collect::<Vec<_>>());
+            }
+        }
+    }
+}
