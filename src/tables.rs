@@ -1,4 +1,4 @@
-use crate::bitboard::{Bitboard, BitboardTrait};
+use crate::bitboard::{Bitboard, BitboardTrait, Occupied};
 use once_cell::sync::Lazy;
 use shogi_core::{Color, PieceKind, Square};
 use std::cmp::Ordering;
@@ -95,61 +95,45 @@ impl LanceAttackTable {
     pub(crate) fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let mask = self.masks[sq.array_index()][c.array_index()];
         match c {
-            Color::Black => {
-                let bb = *occ & mask;
-                if bb.is_empty() {
-                    mask
-                } else {
-                    mask & !(unsafe {
-                        Bitboard::from_u128_unchecked(1 << (127 - bb.to_u128().leading_zeros()))
-                    } + !Bitboard::empty())
-                }
-            }
-            Color::White => {
-                let bb = !(*occ & mask);
-                ((bb + Bitboard::single(sq)) ^ bb) & mask
-            }
+            Color::Black => occ.sliding_right_up(&mask),
+            Color::White => occ.sliding_left_down(&mask),
         }
     }
 }
 
 pub struct SlidingAttackTable {
     masks: [[[Bitboard; 2]; 2]; Square::NUM],
+    merged_masks: [Bitboard; Square::NUM],
 }
 
 impl SlidingAttackTable {
     fn new(deltas: [[Delta; 2]; 2]) -> Self {
         let mut masks = [[[Bitboard::empty(); 2]; 2]; Square::NUM];
+        let mut merged_masks = [Bitboard::empty(); Square::NUM];
         for sq in Square::all() {
+            let mut merged_mask = Bitboard::empty();
             for (i, ds) in deltas.iter().enumerate() {
                 for (j, &d) in ds.iter().enumerate() {
                     masks[sq.array_index()][i][j] = sliding_attack(sq, Bitboard::empty(), d);
+                    merged_mask |= masks[sq.array_index()][i][j];
                 }
             }
+            merged_masks[sq.array_index()] = merged_mask;
         }
-        Self { masks }
+        Self {
+            masks,
+            merged_masks,
+        }
     }
     fn pseudo_attack(&self, sq: Square) -> Bitboard {
-        let masks = self.masks[sq.array_index()];
-        masks[0][0] | masks[0][1] | masks[1][0] | masks[1][1]
+        self.merged_masks[sq.array_index()]
     }
     pub(crate) fn attack(&self, sq: Square, occ: &Bitboard) -> Bitboard {
-        let mut ret = Bitboard::empty();
-        for mask in self.masks[sq.array_index()][0] {
-            let bb = *occ & mask;
-            ret |= if bb.is_empty() {
-                mask
-            } else {
-                mask & !(unsafe {
-                    Bitboard::from_u128_unchecked(1 << (127 - bb.to_u128().leading_zeros()))
-                } + !Bitboard::empty())
-            }
-        }
-        for mask in self.masks[sq.array_index()][1] {
-            let bb = !(*occ & mask);
-            ret |= ((bb + Bitboard::single(sq)) ^ bb) & mask
-        }
-        ret
+        let masks = self.masks[sq.array_index()];
+        occ.sliding_right_up(&masks[0][0])
+            | occ.sliding_right_up(&masks[0][1])
+            | occ.sliding_left_down(&masks[1][0])
+            | occ.sliding_left_down(&masks[1][1])
     }
 }
 

@@ -1,9 +1,13 @@
 use shogi_core::Square;
-use std::ops::{
-    Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub,
-};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr};
 
-pub trait BitboardTrait:
+pub(crate) trait Occupied {
+    fn sliding_left_down(&self, mask: &Self) -> Self;
+    fn sliding_right_up(&self, mask: &Self) -> Self;
+    fn filled_files(&self) -> Self;
+}
+
+pub(crate) trait BitboardTrait:
     Sized
     + BitOr
     + BitAnd
@@ -14,8 +18,7 @@ pub trait BitboardTrait:
     + Not
     + Shl<u8>
     + Shr<u8>
-    + Add
-    + Sub
+    + Occupied
     + Iterator
 {
     fn empty() -> Self;
@@ -23,10 +26,7 @@ pub trait BitboardTrait:
     fn count(self) -> u8;
     fn is_empty(&self) -> bool;
     fn contains(self, square: Square) -> bool;
-    fn flip(self) -> Self;
     fn pop(&mut self) -> Option<Square>;
-    fn to_u128(self) -> u128;
-    unsafe fn from_u128_unchecked(a: u128) -> Self;
 }
 
 mod extended_core;

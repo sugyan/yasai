@@ -1,16 +1,9 @@
-use super::BitboardTrait;
+use super::{BitboardTrait, Occupied};
 use shogi_core::Square;
-use std::ops::{
-    Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr, Sub,
-};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Bitboard(shogi_core::Bitboard);
-
-impl Bitboard {
-    const MASK0: u64 = (1 << 63) - 1;
-    const MASK1: u64 = (1 << 18) - 1;
-}
 
 impl BitboardTrait for Bitboard {
     fn empty() -> Self {
@@ -28,17 +21,8 @@ impl BitboardTrait for Bitboard {
     fn contains(self, square: Square) -> bool {
         self.0.contains(square)
     }
-    fn flip(self) -> Self {
-        Self(self.0.flip())
-    }
     fn pop(&mut self) -> Option<Square> {
         self.0.pop()
-    }
-    fn to_u128(self) -> u128 {
-        self.0.to_u128()
-    }
-    unsafe fn from_u128_unchecked(a: u128) -> Self {
-        Self(shogi_core::Bitboard::from_u128_unchecked(a))
     }
 }
 
@@ -108,26 +92,37 @@ impl Shr<u8> for Bitboard {
     }
 }
 
-impl Add for Bitboard {
-    type Output = Self;
+//                                                            0001 _ 1111 1110 1111 1111
+// 0011 1111 1101 1111 _ 1110 1111 1111 0111 _ 1111 1011 1111 1101 _ 1111 1110 1111 1111
+const FILL_MASK_VALUE: u128 = 0x0001_feff_3fdf_eff7_fbfd_feff;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        let repr = self.to_u128() + rhs.to_u128() + (1 << 63);
-        let values = (repr as u64 & Self::MASK0, (repr >> 64) as u64 & Self::MASK1);
-        unsafe { Self::from_u128_unchecked(values.0 as u128 | (values.1 as u128) << 64) }
-    }
-}
-
-impl Sub for Bitboard {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        let repr = (self.to_u128() | 0x0004_0000_8000_0000_0000_0000) - rhs.to_u128();
-        let mut values = (repr as u64 & Self::MASK0, (repr >> 64) as u64 & Self::MASK1);
-        if repr & (1 << 63) == 0 {
-            values.1 -= 1;
+impl Occupied for Bitboard {
+    fn sliding_left_down(&self, mask: &Self) -> Self {
+        let bb = *self & *mask;
+        if bb.is_empty() {
+            return *mask;
         }
-        unsafe { Self::from_u128_unchecked(values.0 as u128 | (values.1 as u128) << 64) }
+        let tz = bb.0.to_u128().trailing_zeros() as u8;
+        *mask & Self(unsafe { shogi_core::Bitboard::from_u128_unchecked((1 << (tz + 1)) - 1) })
+    }
+    fn sliding_right_up(&self, mask: &Self) -> Self {
+        let bb = *self & *mask;
+        if bb.is_empty() {
+            return *mask;
+        }
+        let lz = bb.0.to_u128().leading_zeros() as u8;
+        *mask & Self(unsafe { shogi_core::Bitboard::from_u128_unchecked(!((1 << (127 - lz)) - 1)) })
+    }
+    fn filled_files(&self) -> Self {
+        let mask = Self(unsafe { shogi_core::Bitboard::from_u128_unchecked(FILL_MASK_VALUE) });
+        let bb = Self(unsafe {
+            shogi_core::Bitboard::from_u128_unchecked(
+                self.0.to_u128() + FILL_MASK_VALUE + (1 << 63),
+            )
+        });
+        mask ^ Self(unsafe {
+            shogi_core::Bitboard::from_u128_unchecked((bb >> 8).0.to_u128() + FILL_MASK_VALUE)
+        })
     }
 }
 
@@ -140,101 +135,5 @@ impl Iterator for Bitboard {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.0.size_hint()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use shogi_core::consts::square::*;
-
-    #[test]
-    fn add() {
-        let bb = unsafe { Bitboard::from_u128_unchecked(0x0002_0100_4020_1008_0402_0100) };
-        assert_eq!(
-            vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            bb.collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_2A, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + Bitboard::single(SQ_1I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1I, SQ_3A, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + Bitboard::single(SQ_2I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1I, SQ_2I, SQ_4A, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + Bitboard::single(SQ_3I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1I, SQ_2I, SQ_3I, SQ_5A, SQ_5I, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + Bitboard::single(SQ_4I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_6A, SQ_6I, SQ_7I, SQ_8I, SQ_9I],
-            (bb + Bitboard::single(SQ_5I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_7A, SQ_7I, SQ_8I, SQ_9I],
-            (bb + Bitboard::single(SQ_6I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_8A, SQ_8I, SQ_9I],
-            (bb + Bitboard::single(SQ_7I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_9A, SQ_9I],
-            (bb + Bitboard::single(SQ_8I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1I, SQ_2I, SQ_3I, SQ_4I, SQ_5I, SQ_6I, SQ_7I, SQ_8I],
-            (bb + Bitboard::single(SQ_9I)).collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn sub() {
-        let bb = unsafe { Bitboard::from_u128_unchecked(0x0201_0040_2010_0804_0201) };
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            bb.collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_1I, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            (bb - Bitboard::single(SQ_1I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_2I, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            (bb - Bitboard::single(SQ_2I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_3A, SQ_3I, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            (bb - Bitboard::single(SQ_3I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_4I, SQ_6A, SQ_7A, SQ_8A, SQ_9A],
-            (bb - Bitboard::single(SQ_4I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_5I, SQ_7A, SQ_8A, SQ_9A],
-            (bb - Bitboard::single(SQ_5I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_6I, SQ_8A, SQ_9A],
-            (bb - Bitboard::single(SQ_6I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_7I, SQ_9A],
-            (bb - Bitboard::single(SQ_7I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_8I],
-            (bb - Bitboard::single(SQ_8I)).collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![SQ_1A, SQ_2A, SQ_3A, SQ_4A, SQ_5A, SQ_6A, SQ_7A, SQ_8A, SQ_9A, SQ_9I],
-            (bb - Bitboard::single(SQ_9I)).collect::<Vec<_>>()
-        );
     }
 }
