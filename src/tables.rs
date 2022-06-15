@@ -1,4 +1,4 @@
-use crate::bitboard::{Bitboard, BitboardTrait, Occupied};
+use crate::bitboard::{Bitboard, Occupied};
 use once_cell::sync::Lazy;
 use shogi_core::{Color, PieceKind, Square};
 use std::cmp::Ordering;
@@ -95,8 +95,8 @@ impl LanceAttackTable {
     pub(crate) fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let mask = self.masks[sq.array_index()][c.array_index()];
         match c {
-            Color::Black => occ.sliding_right_up(&mask),
-            Color::White => occ.sliding_left_down(&mask),
+            Color::Black => occ.sliding_negative(&mask),
+            Color::White => occ.sliding_positive(&mask),
         }
     }
 }
@@ -130,10 +130,10 @@ impl SlidingAttackTable {
     }
     pub(crate) fn attack(&self, sq: Square, occ: &Bitboard) -> Bitboard {
         let masks = self.masks[sq.array_index()];
-        occ.sliding_right_up(&masks[0][0])
-            | occ.sliding_right_up(&masks[0][1])
-            | occ.sliding_left_down(&masks[1][0])
-            | occ.sliding_left_down(&masks[1][1])
+        occ.sliding_negative(&masks[0][0])
+            | occ.sliding_negative(&masks[0][1])
+            | occ.sliding_positive(&masks[1][0])
+            | occ.sliding_positive(&masks[1][1])
     }
 }
 
@@ -214,14 +214,6 @@ pub(crate) static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = 
             bbs[sq0.array_index()][sq1.array_index()] =
                 sliding_attack(sq0, Bitboard::single(sq1), delta) & !Bitboard::single(sq1);
         }
-    }
-    bbs
-});
-
-pub(crate) static RANKS: Lazy<[Bitboard; 10]> = Lazy::new(|| {
-    let mut bbs = [Bitboard::empty(); 10];
-    for sq in Square::all() {
-        bbs[sq.rank() as usize] |= Bitboard::single(sq);
     }
     bbs
 });

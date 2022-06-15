@@ -1,4 +1,4 @@
-use crate::bitboard::{Bitboard, BitboardTrait};
+use crate::bitboard::Bitboard;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
 use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
@@ -349,7 +349,7 @@ impl AttackInfo {
                 ) & pos.player_bb[c.flip().array_index()];
                 for sniper in snipers {
                     let blockers = BETWEEN_TABLE[sq.array_index()][sniper.array_index()] & occ;
-                    if BitboardTrait::count(blockers) == 1 {
+                    if blockers.count() == 1 {
                         pinned[c.array_index()] |= blockers;
                     }
                 }

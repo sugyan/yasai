@@ -1,5 +1,5 @@
-use crate::bitboard::{Bitboard, BitboardTrait, Occupied};
-use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, PROMOTABLE, RANKS, RELATIVE_RANKS};
+use crate::bitboard::{Bitboard, Occupied};
+use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, PROMOTABLE, RELATIVE_RANKS};
 use crate::Position;
 use arrayvec::ArrayVec;
 use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
@@ -90,8 +90,8 @@ impl Position {
     fn generate_for_fu(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         let (to_bb, delta) = [
-            (self.piece_bitboard(Piece::B_P) >> 1, 1),
-            (self.piece_bitboard(Piece::W_P) << 1, !0),
+            (unsafe { self.piece_bitboard(Piece::B_P).shift_up(1) }, 1),
+            (unsafe { self.piece_bitboard(Piece::W_P).shift_down(1) }, !0),
         ][c.array_index()];
         for to in to_bb & *target {
             let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
@@ -297,22 +297,16 @@ impl Position {
         for pk in Hand::all_hand_pieces().filter(|&pk| hand.count(pk).unwrap_or_default() > 0) {
             let mut target = *target;
             if pk == PieceKind::Pawn {
-                let mut exclude = (self.player_bitboard(c)
-                    & self.piece_kind_bitboard(PieceKind::Pawn))
-                .filled_files();
+                target &= !(self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Pawn))
+                    .filled_files();
                 // 打ち歩詰めチェック
                 if let Some(sq) = self.king_position(c.flip()) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
                         if target.contains(to) && self.is_pawn_drop_mate(to) {
-                            exclude |= Bitboard::single(to);
+                            target |= Bitboard::single(to);
                         }
                     }
                 }
-                exclude |= match c {
-                    Color::Black => RANKS[1],
-                    Color::White => RANKS[9],
-                };
-                target &= !exclude;
             }
             let piece = Piece::new(pk, c);
             for to in target {
