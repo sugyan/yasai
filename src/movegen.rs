@@ -303,7 +303,7 @@ impl Position {
                 if let Some(sq) = self.king_position(c.flip()) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
                         if target.contains(to) && self.is_pawn_drop_mate(to) {
-                            target |= Bitboard::single(to);
+                            target &= !Bitboard::single(to);
                         }
                     }
                 }
