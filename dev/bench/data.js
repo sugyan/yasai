@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655433113588,
+  "lastUpdate": 1655433788021,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -343,6 +343,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 534230119,
             "range": "± 19133028",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a7011ec7c1216bb2cf07d929c2c9722f062154f0",
+          "message": "Merge pull request #14 from sugyan/release/0.4.0\n\nBump version to 0.4.0",
+          "timestamp": "2022-06-17T11:38:13+09:00",
+          "tree_id": "9765f330136eef7fe0eee9fbb09e323847dc5dbe",
+          "url": "https://github.com/sugyan/yasai/commit/a7011ec7c1216bb2cf07d929c2c9722f062154f0"
+        },
+        "date": 1655433787274,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 550778235,
+            "range": "± 642668",
             "unit": "ns/iter"
           }
         ]
