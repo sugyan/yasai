@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1654957040588,
+  "lastUpdate": 1655433113588,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -313,6 +313,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 392028415,
             "range": "± 95267",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f38edec3a22a94f98943089c930a3a8e2790893f",
+          "message": "Merge pull request #13 from sugyan/feature/bit-manipulation-attacktable\n\nBit manipulation attacktable",
+          "timestamp": "2022-06-17T11:27:00+09:00",
+          "tree_id": "9bb9d8cd91635abf752d21bd406cde2ed83fe7ea",
+          "url": "https://github.com/sugyan/yasai/commit/f38edec3a22a94f98943089c930a3a8e2790893f"
+        },
+        "date": 1655433113093,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 534230119,
+            "range": "± 19133028",
             "unit": "ns/iter"
           }
         ]
