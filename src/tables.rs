@@ -130,10 +130,7 @@ impl SlidingAttackTable {
     }
     pub(crate) fn attack(&self, sq: Square, occ: &Bitboard) -> Bitboard {
         let masks = self.masks[sq.array_index()];
-        occ.sliding_negative(&masks[0][0])
-            | occ.sliding_negative(&masks[0][1])
-            | occ.sliding_positive(&masks[1][0])
-            | occ.sliding_positive(&masks[1][1])
+        occ.sliding_negatives(&masks[0]) | occ.sliding_positives(&masks[1])
     }
 }
 

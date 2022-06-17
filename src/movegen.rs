@@ -297,8 +297,8 @@ impl Position {
         for pk in Hand::all_hand_pieces().filter(|&pk| hand.count(pk).unwrap_or_default() > 0) {
             let mut target = *target;
             if pk == PieceKind::Pawn {
-                target &= !(self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Pawn))
-                    .filled_files();
+                target &= (self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Pawn))
+                    .vacant_files();
                 // 打ち歩詰めチェック
                 if let Some(sq) = self.king_position(c.flip()) {
                     if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {

@@ -1,7 +1,12 @@
-pub(crate) trait Occupied {
+pub(crate) trait Occupied
+where
+    Self: Sized,
+{
     fn sliding_positive(&self, mask: &Self) -> Self;
     fn sliding_negative(&self, mask: &Self) -> Self;
-    fn filled_files(&self) -> Self;
+    fn sliding_positives(&self, masks: &[Self; 2]) -> Self;
+    fn sliding_negatives(&self, masks: &[Self; 2]) -> Self;
+    fn vacant_files(&self) -> Self;
 }
 
 mod core;
