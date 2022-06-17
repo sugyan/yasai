@@ -1,6 +1,7 @@
+use crate::bitboard::Bitboard;
 use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
-use shogi_core::{Bitboard, Color, Hand, Move, Piece, PieceKind, Square};
+use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 
 /// Represents a state of the game.
 #[derive(Debug, Clone)]
