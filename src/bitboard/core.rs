@@ -94,6 +94,12 @@ const MASKED_BBS: [Bitboard; Square::NUM + 2] = [
 ];
 
 impl Occupied for Bitboard {
+    fn shl(&self, rhs: u8) -> Self {
+        unsafe { self.shift_down(rhs) }
+    }
+    fn shr(&self, rhs: u8) -> Self {
+        unsafe { self.shift_up(rhs) }
+    }
     fn sliding_positive(&self, mask: &Self) -> Self {
         let tz = (*self & *mask | BB_9I).to_u128().trailing_zeros();
         *mask & MASKED_BBS[tz as usize + 1]

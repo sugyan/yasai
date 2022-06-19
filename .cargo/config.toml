@@ -1,5 +1,2 @@
 [build]
 rustflags = ["-C", "target-cpu=native"]
-
-[target.'cfg(all(target_arch = "x86_64", target_feature = "lzcnt"))']
-rustflags = ["-C", "target-cpu=native", "-C", "target-feature=+lzcnt"]

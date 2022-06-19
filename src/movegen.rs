@@ -90,8 +90,8 @@ impl Position {
     fn generate_for_fu(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         let (to_bb, delta) = [
-            (unsafe { self.piece_bitboard(Piece::B_P).shift_up(1) }, 1),
-            (unsafe { self.piece_bitboard(Piece::W_P).shift_down(1) }, !0),
+            (self.piece_bitboard(Piece::B_P).shr(1), 1),
+            (self.piece_bitboard(Piece::W_P).shl(1), !0),
         ][c.array_index()];
         for to in to_bb & *target {
             let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
