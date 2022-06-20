@@ -93,7 +93,7 @@ impl Position {
             (self.piece_bitboard(Piece::B_P).shr(1), 1),
             (self.piece_bitboard(Piece::W_P).shl(1), !0),
         ][c.array_index()];
-        for to in to_bb & *target {
+        for to in to_bb & target {
             let from = unsafe { Square::from_u8_unchecked(to.index().wrapping_add(delta)) };
             if PROMOTABLE[to.array_index()][c.array_index()] {
                 av.push(Move::Normal {
@@ -120,7 +120,7 @@ impl Position {
     fn generate_for_ky(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Lance) {
-            for to in ATTACK_TABLE.ky.attack(from, c, &self.occupied_bitboard()) & *target {
+            for to in ATTACK_TABLE.ky.attack(from, c, &self.occupied_bitboard()) & target {
                 if PROMOTABLE[to.array_index()][c.array_index()] {
                     av.push(Move::Normal {
                         from,
@@ -147,7 +147,7 @@ impl Position {
     fn generate_for_ke(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Knight) {
-            for to in ATTACK_TABLE.ke.attack(from, c) & *target {
+            for to in ATTACK_TABLE.ke.attack(from, c) & target {
                 if PROMOTABLE[to.array_index()][c.array_index()] {
                     av.push(Move::Normal {
                         from,
@@ -175,7 +175,7 @@ impl Position {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Silver) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
-            for to in ATTACK_TABLE.gi.attack(from, c) & *target {
+            for to in ATTACK_TABLE.gi.attack(from, c) & target {
                 av.push(Move::Normal {
                     from,
                     to,
@@ -195,7 +195,7 @@ impl Position {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Bishop) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
-            for to in ATTACK_TABLE.ka.attack(from, &self.occupied_bitboard()) & *target {
+            for to in ATTACK_TABLE.ka.attack(from, &self.occupied_bitboard()) & target {
                 av.push(Move::Normal {
                     from,
                     to,
@@ -215,7 +215,7 @@ impl Position {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::Rook) {
             let from_is_opponent_field = PROMOTABLE[from.array_index()][c.array_index()];
-            for to in ATTACK_TABLE.hi.attack(from, &self.occupied_bitboard()) & *target {
+            for to in ATTACK_TABLE.hi.attack(from, &self.occupied_bitboard()) & target {
                 av.push(Move::Normal {
                     from,
                     to,
@@ -240,7 +240,7 @@ impl Position {
             | self.piece_kind_bitboard(PieceKind::ProSilver))
             & self.player_bitboard(c)
         {
-            for to in ATTACK_TABLE.ki.attack(from, c) & *target {
+            for to in ATTACK_TABLE.ki.attack(from, c) & target {
                 av.push(Move::Normal {
                     from,
                     to,
@@ -252,7 +252,7 @@ impl Position {
     fn generate_for_ou(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::King) {
-            for to in ATTACK_TABLE.ou.attack(from, c) & *target {
+            for to in ATTACK_TABLE.ou.attack(from, c) & target {
                 av.push(Move::Normal {
                     from,
                     to,
@@ -266,7 +266,7 @@ impl Position {
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::ProBishop) {
             for to in (ATTACK_TABLE.ka.attack(from, &self.occupied_bitboard())
                 | ATTACK_TABLE.ou.attack(from, c))
-                & *target
+                & target
             {
                 av.push(Move::Normal {
                     from,
@@ -281,7 +281,7 @@ impl Position {
         for from in self.player_bitboard(c) & self.piece_kind_bitboard(PieceKind::ProRook) {
             for to in (ATTACK_TABLE.hi.attack(from, &self.occupied_bitboard())
                 | ATTACK_TABLE.ou.attack(from, c))
-                & *target
+                & target
             {
                 av.push(Move::Normal {
                     from,

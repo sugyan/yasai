@@ -94,26 +94,33 @@ const MASKED_BBS: [Bitboard; Square::NUM + 2] = [
 ];
 
 impl Occupied for Bitboard {
+    #[inline(always)]
     fn shl(&self, rhs: u8) -> Self {
         unsafe { self.shift_down(rhs) }
     }
+    #[inline(always)]
     fn shr(&self, rhs: u8) -> Self {
         unsafe { self.shift_up(rhs) }
     }
+    #[inline(always)]
     fn sliding_positive(&self, mask: &Self) -> Self {
         let tz = (*self & *mask | BB_9I).to_u128().trailing_zeros();
         *mask & MASKED_BBS[tz as usize + 1]
     }
+    #[inline(always)]
     fn sliding_negative(&self, mask: &Self) -> Self {
         let lz = (*self & *mask | BB_1A).to_u128().leading_zeros();
         *mask & !MASKED_BBS[127 - lz as usize]
     }
+    #[inline(always)]
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
     }
+    #[inline(always)]
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
     }
+    #[inline(always)]
     fn vacant_files(&self) -> Self {
         let bb = unsafe { Self::from_u128_unchecked(VACANT_MASK_VALUE - self.to_u128()) };
         VACANT_MASK

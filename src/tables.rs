@@ -52,6 +52,7 @@ impl PieceAttackTable {
         }
         Self(table)
     }
+    #[inline(always)]
     pub(crate) fn attack(&self, sq: Square, c: Color) -> Bitboard {
         self.0[sq.array_index()][c.array_index()]
     }
@@ -89,9 +90,11 @@ impl LanceAttackTable {
         }
         Self { masks }
     }
+    #[inline(always)]
     fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
         self.masks[sq.array_index()][c.array_index()]
     }
+    #[inline(always)]
     pub(crate) fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let mask = self.masks[sq.array_index()][c.array_index()];
         match c {
@@ -125,9 +128,11 @@ impl SlidingAttackTable {
             merged_masks,
         }
     }
+    #[inline(always)]
     fn pseudo_attack(&self, sq: Square) -> Bitboard {
         self.merged_masks[sq.array_index()]
     }
+    #[inline(always)]
     pub(crate) fn attack(&self, sq: Square, occ: &Bitboard) -> Bitboard {
         let masks = self.masks[sq.array_index()];
         occ.sliding_negatives(&masks[0]) | occ.sliding_positives(&masks[1])
