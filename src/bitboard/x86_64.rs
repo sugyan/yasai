@@ -1,10 +1,19 @@
 use super::Occupied;
+use once_cell::sync::Lazy;
 use shogi_core::Square;
 use std::arch::x86_64;
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Shl, Shr};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Bitboard(x86_64::__m128i);
+
+static SINGLES: Lazy<[Bitboard; Square::NUM]> = Lazy::new(|| {
+    let mut bbs = [Bitboard::empty(); Square::NUM];
+    for sq in Square::all() {
+        bbs[sq.array_index()] = Bitboard::from_square(sq);
+    }
+    bbs
+});
 
 impl Bitboard {
     #[inline(always)]
@@ -12,24 +21,33 @@ impl Bitboard {
         Self(unsafe { x86_64::_mm_setzero_si128() })
     }
     #[inline(always)]
-    pub const fn single(square: Square) -> Self {
-        todo!()
+    pub fn single(square: Square) -> Self {
+        SINGLES[square.array_index()]
     }
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         unsafe { x86_64::_mm_test_all_zeros(self.0, self.0) == 1 }
     }
-    pub fn contains(self, square: Square) -> bool {
+    pub fn contains(&self, square: Square) -> bool {
         todo!()
     }
-    pub const unsafe fn shift_down(self, delta: u8) -> Self {
+    pub const unsafe fn shift_down(&self, delta: u8) -> Self {
         todo!()
     }
-    pub const unsafe fn shift_up(self, delta: u8) -> Self {
+    pub const unsafe fn shift_up(&self, delta: u8) -> Self {
         todo!()
     }
     pub fn pop(&mut self) -> Option<Square> {
         todo!()
+    }
+    fn from_square(sq: Square) -> Self {
+        let index = sq.index() - 1;
+        let inner = if index < 63 {
+            [1 << index, 0]
+        } else {
+            [0, 1 << (index - 63)]
+        };
+        Self(unsafe { x86_64::_mm_set_epi64x(inner[1], inner[0]) })
     }
 }
 
@@ -43,71 +61,104 @@ impl Occupied for Bitboard {
     fn sliding_positive(&self, mask: &Self) -> Self {
         todo!()
     }
-
     fn sliding_negative(&self, mask: &Self) -> Self {
         todo!()
     }
-
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
         todo!()
     }
-
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         todo!()
     }
-
     fn vacant_files(&self) -> Self {
         todo!()
     }
 }
 
-impl BitAnd for Bitboard {
-    type Output = Self;
+macro_rules! define_bit_trait {
+    (
+        target_trait => $trait:ident, assign_trait => $assign_trait:ident,
+        target_func  => $func:ident,  assign_func  => $assign_func:ident,
+        intrinsic    => $intrinsic:ident
+    ) => {
+        impl $trait for Bitboard {
+            type Output = Bitboard;
 
-    fn bitand(self, rhs: Self) -> Self {
-        todo!()
-    }
+            #[inline(always)]
+            fn $func(self, rhs: Self) -> Self::Output {
+                Self(unsafe { x86_64::$intrinsic(self.0, rhs.0) })
+            }
+        }
+        impl $trait<&Bitboard> for Bitboard {
+            type Output = Bitboard;
+
+            #[inline(always)]
+            fn $func(self, rhs: &Self) -> Self::Output {
+                Self(unsafe { x86_64::$intrinsic(self.0, rhs.0) })
+            }
+        }
+        impl $assign_trait for Bitboard {
+            #[inline(always)]
+            fn $assign_func(&mut self, rhs: Self) {
+                self.0 = unsafe { x86_64::$intrinsic(self.0, rhs.0) }
+            }
+        }
+    };
 }
 
-impl BitAndAssign for Bitboard {
-    fn bitand_assign(&mut self, rhs: Self) {
-        todo!()
-    }
-}
+define_bit_trait!(
+    target_trait => BitAnd, assign_trait => BitAndAssign,
+    target_func => bitand, assign_func => bitand_assign,
+    intrinsic => _mm_and_si128
+);
 
-impl BitOr for Bitboard {
-    type Output = Self;
+define_bit_trait!(
+    target_trait => BitOr, assign_trait => BitOrAssign,
+    target_func => bitor, assign_func => bitor_assign,
+    intrinsic => _mm_or_si128
+);
 
-    fn bitor(self, rhs: Self) -> Self {
-        todo!()
-    }
-}
-
-impl BitOrAssign for Bitboard {
-    fn bitor_assign(&mut self, rhs: Self) {
-        todo!()
-    }
-}
-
-impl BitXor for Bitboard {
-    type Output = Self;
-
-    fn bitxor(self, rhs: Self) -> Self {
-        todo!()
-    }
-}
-
-impl BitXorAssign for Bitboard {
-    fn bitxor_assign(&mut self, rhs: Self) {
-        todo!()
-    }
-}
+define_bit_trait!(
+    target_trait => BitXor, assign_trait => BitXorAssign,
+    target_func => bitxor, assign_func => bitxor_assign,
+    intrinsic => _mm_xor_si128
+);
 
 impl Not for Bitboard {
-    type Output = Self;
+    type Output = Bitboard;
 
-    fn not(self) -> Self {
-        todo!()
+    #[inline(always)]
+    fn not(self) -> Self::Output {
+        Bitboard(unsafe {
+            x86_64::_mm_andnot_si128(
+                self.0,
+                x86_64::_mm_set_epi64x(0x0003_ffff, 0x7fff_ffff_ffff_ffff),
+            )
+        })
+    }
+}
+
+impl Not for &Bitboard {
+    type Output = Bitboard;
+
+    #[inline(always)]
+    fn not(self) -> Self::Output {
+        Bitboard(unsafe {
+            x86_64::_mm_andnot_si128(
+                self.0,
+                x86_64::_mm_set_epi64x(0x0003_ffff, 0x7fff_ffff_ffff_ffff),
+            )
+        })
+    }
+}
+
+impl PartialEq for Bitboard {
+    fn eq(&self, other: &Self) -> bool {
+        // https://stackoverflow.com/a/26883316
+        unsafe {
+            let xor = x86_64::_mm_xor_si128(self.0, other.0);
+            x86_64::_mm_test_all_zeros(xor, xor) == 1
+        }
     }
 }
 
