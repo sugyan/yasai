@@ -40,24 +40,31 @@ impl Position {
             states: vec![state],
         }
     }
+    #[inline(always)]
     pub fn side_to_move(&self) -> Color {
         self.inner.side
     }
+    #[inline(always)]
     pub fn ply(&self) -> u16 {
         self.inner.ply
     }
+    #[inline(always)]
     pub fn hand(&self, color: Color) -> Hand {
         self.inner.hands[color.array_index()]
     }
+    #[inline(always)]
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
         self.inner.piece_at(sq)
     }
+    #[inline(always)]
     pub fn key(&self) -> u64 {
         (self.state().keys.0 ^ self.state().keys.1).value()
     }
+    #[inline(always)]
     pub fn keys(&self) -> (u64, u64) {
         (self.state().keys.0.value(), self.state().keys.1.value())
     }
+    #[inline(always)]
     pub fn in_check(&self) -> bool {
         !self.checkers().is_empty()
     }
@@ -210,37 +217,48 @@ impl Position {
         self.inner.ply -= 1;
         self.states.pop();
     }
+    #[inline(always)]
     pub(crate) fn player_bitboard(&self, c: Color) -> Bitboard {
         self.inner.player_bb[c.array_index()]
     }
+    #[inline(always)]
     pub(crate) fn piece_kind_bitboard(&self, pk: PieceKind) -> Bitboard {
         self.inner.piece_bb[pk.array_index()]
     }
+    #[inline(always)]
     pub(crate) fn piece_bitboard(&self, p: Piece) -> Bitboard {
         let (pk, c) = p.to_parts();
         self.inner.piece_bb[pk.array_index()] & self.inner.player_bb[c.array_index()]
     }
+    #[inline(always)]
     pub(crate) fn occupied_bitboard(&self) -> Bitboard {
         self.inner.occupied_bitboard()
     }
+    #[inline(always)]
     pub(crate) fn king_position(&self, c: Color) -> Option<Square> {
         self.inner.king_position(c)
     }
+    #[inline(always)]
     pub(crate) fn captured(&self) -> Option<Piece> {
         self.state().captured
     }
+    #[inline(always)]
     pub(crate) fn last_moved(&self) -> Option<Piece> {
         self.state().last_moved
     }
+    #[inline(always)]
     pub(crate) fn checkers(&self) -> Bitboard {
         self.state().attack_info.checkers()
     }
+    #[inline(always)]
     pub(crate) fn pinned(&self, c: Color) -> Bitboard {
         self.state().attack_info.pinned(c)
     }
+    #[inline(always)]
     fn state(&self) -> &State {
         self.states.last().expect("empty states")
     }
+    #[inline(always)]
     fn checkable(&self, pk: PieceKind, sq: Square) -> bool {
         self.state().attack_info.checkable(pk, sq)
     }
@@ -263,29 +281,34 @@ pub(crate) struct PartialPosition {
 }
 
 impl PartialPosition {
+    #[inline(always)]
     fn xor_piece(&mut self, sq: Square, p: Piece) {
         let single = Bitboard::single(sq);
         let (pk, c) = p.to_parts();
         self.player_bb[c.array_index()] ^= single;
         self.piece_bb[pk.array_index()] ^= single;
     }
+    #[inline(always)]
     fn piece_at(&self, sq: Square) -> Option<Piece> {
-        let index = sq.index() - 1;
-        *unsafe { self.board.get_unchecked(index as usize) }
+        self.board[sq.array_index()]
     }
+    #[inline(always)]
     fn piece_at_mut(&mut self, sq: Square) -> &mut Option<Piece> {
-        let index = sq.index() - 1;
-        unsafe { self.board.get_unchecked_mut(index as usize) }
+        &mut self.board[sq.array_index()]
     }
+    #[inline(always)]
     fn hand_of_a_player(&self, c: Color) -> Hand {
-        *unsafe { self.hands.get_unchecked((c as u8 - 1) as usize) }
+        self.hands[c.array_index()]
     }
+    #[inline(always)]
     fn hand_of_a_player_mut(&mut self, c: Color) -> &mut Hand {
-        unsafe { self.hands.get_unchecked_mut((c as u8 - 1) as usize) }
+        &mut self.hands[c.array_index()]
     }
+    #[inline(always)]
     fn occupied_bitboard(&self) -> Bitboard {
         self.player_bb[0] | self.player_bb[1]
     }
+    #[inline(always)]
     fn king_position(&self, c: Color) -> Option<Square> {
         (self.player_bb[c.array_index()] & self.piece_bb[PieceKind::King.array_index()]).pop()
     }
@@ -405,12 +428,15 @@ impl AttackInfo {
             Bitboard::empty()
         }
     }
+    #[inline(always)]
     pub fn checkers(&self) -> Bitboard {
         self.checkers
     }
+    #[inline(always)]
     pub fn pinned(&self, c: Color) -> Bitboard {
         self.pinned[c.array_index()]
     }
+    #[inline(always)]
     pub fn checkable(&self, pk: PieceKind, sq: Square) -> bool {
         self.checkables[pk.array_index()].contains(sq)
     }
