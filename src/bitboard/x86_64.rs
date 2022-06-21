@@ -1,5 +1,4 @@
 use super::Occupied;
-use once_cell::sync::Lazy;
 use shogi_core::Square;
 use std::arch::x86_64;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
@@ -7,23 +6,30 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, N
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Bitboard(x86_64::__m128i);
 
-static SINGLES: Lazy<[Bitboard; Square::NUM]> = Lazy::new(|| {
-    let mut bbs = [Bitboard::empty(); Square::NUM];
-    for sq in Square::all() {
-        bbs[sq.array_index()] = Bitboard::from_square(sq);
+const SINGLE_VALUES: [(i64, i64); Square::NUM] = {
+    let mut values = [(0, 0); Square::NUM];
+    let mut i = 0;
+    while i < Square::NUM {
+        values[i] = if i < 63 {
+            (1 << i, 0)
+        } else {
+            (0, 1 << (i - 63))
+        };
+        i += 1;
     }
-    bbs
-});
+    values
+};
 
-static MASKED_BBS: Lazy<[Bitboard; Square::NUM + 2]> = Lazy::new(|| {
-    let mut bbs = [Bitboard::empty(); Square::NUM + 2];
-    for (i, bb) in bbs.iter_mut().enumerate() {
+const MASKED_VALUES: [(i64, i64); Square::NUM + 2] = {
+    let mut values = [(0, 0); Square::NUM + 2];
+    let mut i = 0;
+    while i < Square::NUM + 2 {
         let value = (1_u128 << i) - 1;
-        let inner = [value as i64, (value >> 64) as i64];
-        *bb = Bitboard(unsafe { x86_64::_mm_set_epi64x(inner[1], inner[0]) })
+        values[i] = (value as i64, (value >> 64) as i64);
+        i += 1;
     }
-    bbs
-});
+    values
+};
 
 impl Bitboard {
     #[inline(always)]
@@ -32,7 +38,8 @@ impl Bitboard {
     }
     #[inline(always)]
     pub fn single(square: Square) -> Self {
-        SINGLES[square.array_index()]
+        let e = SINGLE_VALUES[square.array_index()];
+        Self(unsafe { x86_64::_mm_set_epi64x(e.1, e.0) })
     }
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
@@ -65,15 +72,6 @@ impl Bitboard {
         let ret = n.trailing_zeros() as u8;
         *n = *n & (*n - 1);
         ret
-    }
-    fn from_square(sq: Square) -> Self {
-        let index = sq.index() - 1;
-        let inner = if index < 63 {
-            [1 << index, 0]
-        } else {
-            [0, 1 << (index - 63)]
-        };
-        Self(unsafe { x86_64::_mm_set_epi64x(inner[1], inner[0]) })
     }
     // FIXME
     fn leading_zeros(&self) -> u32 {
@@ -108,11 +106,13 @@ impl Occupied for Bitboard {
     }
     fn sliding_positive(&self, mask: &Self) -> Self {
         let tz = (*self & *mask | Self::single(Square::SQ_9I)).trailing_zeros();
-        *mask & MASKED_BBS[tz as usize + 1]
+        let e = MASKED_VALUES[tz as usize + 1];
+        *mask & Self(unsafe { x86_64::_mm_set_epi64x(e.1, e.0) })
     }
     fn sliding_negative(&self, mask: &Self) -> Self {
         let lz = (*self & *mask | Self::single(Square::SQ_1A)).leading_zeros();
-        *mask & !MASKED_BBS[127 - lz as usize]
+        let e = MASKED_VALUES[127 - lz as usize];
+        *mask & !Self(unsafe { x86_64::_mm_set_epi64x(e.1, e.0) })
     }
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
