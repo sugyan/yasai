@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655734642082,
+  "lastUpdate": 1655825266432,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -403,6 +403,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 402864361,
             "range": "± 216880",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "271c0f5749d65a2a7ad312a839b8b647e8be6269",
+          "message": "Merge pull request #18 from sugyan/fix/16\n\nFix MASKED_BBS",
+          "timestamp": "2022-06-22T00:23:28+09:00",
+          "tree_id": "a0cfb1f0fd7685629d42727f089b52799d9cfaed",
+          "url": "https://github.com/sugyan/yasai/commit/271c0f5749d65a2a7ad312a839b8b647e8be6269"
+        },
+        "date": 1655825265658,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 445323333,
+            "range": "± 660293",
             "unit": "ns/iter"
           }
         ]
