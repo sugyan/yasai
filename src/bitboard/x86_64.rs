@@ -43,25 +43,24 @@ impl Bitboard {
         unsafe { x86_64::_mm_test_all_zeros(self.0, Self::single(square).0) == 0 }
     }
     pub fn pop(&mut self) -> Option<Square> {
-        if self.is_empty() {
-            None
-        } else {
-            let sq;
-            unsafe {
-                let mut i0 = x86_64::_mm_extract_epi64::<0>(self.0);
-                self.0 = if i0 != 0 {
-                    sq = Square::from_u8_unchecked(Self::pop_lsb(&mut i0) + 1);
-                    x86_64::_mm_insert_epi64::<0>(self.0, i0)
+        unsafe {
+            let mut i0 = x86_64::_mm_extract_epi64::<0>(self.0);
+            if i0 != 0 {
+                let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut i0) + 1));
+                self.0 = x86_64::_mm_insert_epi64::<0>(self.0, i0);
+                sq
+            } else {
+                let mut i1 = x86_64::_mm_extract_epi64::<1>(self.0);
+                if i1 != 0 {
+                    let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut i1) + 64));
+                    self.0 = x86_64::_mm_insert_epi64::<1>(self.0, i1);
+                    sq
                 } else {
-                    let mut i1 = x86_64::_mm_extract_epi64::<1>(self.0);
-                    sq = Square::from_u8_unchecked(Self::pop_lsb(&mut i1) + 64);
-                    x86_64::_mm_insert_epi64::<1>(self.0, i1)
+                    None
                 }
             }
-            Some(sq)
         }
     }
-    #[inline(always)]
     fn pop_lsb(n: &mut i64) -> u8 {
         let ret = n.trailing_zeros() as u8;
         *n = *n & (*n - 1);
@@ -115,16 +114,22 @@ impl Occupied for Bitboard {
         let lz = (*self & *mask | Self::single(Square::SQ_1A)).leading_zeros();
         *mask & !MASKED_BBS[127 - lz as usize]
     }
-    #[inline(always)]
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
     }
-    #[inline(always)]
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
     }
     fn vacant_files(&self) -> Self {
-        todo!()
+        unsafe {
+            let mask = x86_64::_mm_set_epi64x(0x0002_0100, 0x4020_1008_0402_0100);
+            let sub = x86_64::_mm_sub_epi64(mask, self.0);
+            let shr = x86_64::_mm_srli_epi64::<8>(x86_64::_mm_and_si128(mask, sub));
+            Self(x86_64::_mm_xor_si128(
+                mask,
+                x86_64::_mm_sub_epi64(mask, shr),
+            ))
+        }
     }
 }
 
