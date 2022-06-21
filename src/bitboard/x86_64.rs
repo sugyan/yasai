@@ -15,6 +15,16 @@ static SINGLES: Lazy<[Bitboard; Square::NUM]> = Lazy::new(|| {
     bbs
 });
 
+static MASKED_BBS: Lazy<[Bitboard; Square::NUM + 2]> = Lazy::new(|| {
+    let mut bbs = [Bitboard::empty(); Square::NUM + 2];
+    for (i, bb) in bbs.iter_mut().enumerate() {
+        let value = (1_u128 << i) - 1;
+        let inner = [value as i64, (value >> 64) as i64];
+        *bb = Bitboard(unsafe { x86_64::_mm_set_epi64x(inner[1], inner[0]) })
+    }
+    bbs
+});
+
 impl Bitboard {
     #[inline(always)]
     pub fn empty() -> Self {
@@ -28,17 +38,34 @@ impl Bitboard {
     pub fn is_empty(&self) -> bool {
         unsafe { x86_64::_mm_test_all_zeros(self.0, self.0) == 1 }
     }
+    #[inline(always)]
     pub fn contains(&self, square: Square) -> bool {
-        todo!()
-    }
-    pub const unsafe fn shift_down(&self, delta: u8) -> Self {
-        todo!()
-    }
-    pub const unsafe fn shift_up(&self, delta: u8) -> Self {
-        todo!()
+        unsafe { x86_64::_mm_test_all_zeros(self.0, Self::single(square).0) == 0 }
     }
     pub fn pop(&mut self) -> Option<Square> {
-        todo!()
+        if self.is_empty() {
+            None
+        } else {
+            let sq;
+            unsafe {
+                let mut i0 = x86_64::_mm_extract_epi64::<0>(self.0);
+                self.0 = if i0 != 0 {
+                    sq = Square::from_u8_unchecked(Self::pop_lsb(&mut i0) + 1);
+                    x86_64::_mm_insert_epi64::<0>(self.0, i0)
+                } else {
+                    let mut i1 = x86_64::_mm_extract_epi64::<1>(self.0);
+                    sq = Square::from_u8_unchecked(Self::pop_lsb(&mut i1) + 64);
+                    x86_64::_mm_insert_epi64::<1>(self.0, i1)
+                }
+            }
+            Some(sq)
+        }
+    }
+    #[inline(always)]
+    fn pop_lsb(n: &mut i64) -> u8 {
+        let ret = n.trailing_zeros() as u8;
+        *n = *n & (*n - 1);
+        ret
     }
     fn from_square(sq: Square) -> Self {
         let index = sq.index() - 1;
@@ -49,26 +76,52 @@ impl Bitboard {
         };
         Self(unsafe { x86_64::_mm_set_epi64x(inner[1], inner[0]) })
     }
+    // FIXME
+    fn leading_zeros(&self) -> u32 {
+        unsafe {
+            let i1 = x86_64::_mm_extract_epi64::<1>(self.0);
+            if i1 != 0 {
+                i1.leading_zeros()
+            } else {
+                64 + x86_64::_mm_extract_epi64::<0>(self.0).leading_zeros()
+            }
+        }
+    }
+    // FIXME
+    fn trailing_zeros(&self) -> u32 {
+        unsafe {
+            let i0 = x86_64::_mm_extract_epi64::<0>(self.0);
+            if i0 != 0 {
+                i0.trailing_zeros()
+            } else {
+                64 + x86_64::_mm_extract_epi64::<1>(self.0).trailing_zeros()
+            }
+        }
+    }
 }
 
 impl Occupied for Bitboard {
-    fn shl(&self, rhs: u8) -> Self {
-        todo!()
+    fn shl(&self) -> Self {
+        Self(unsafe { x86_64::_mm_slli_epi64::<1>(self.0) })
     }
-    fn shr(&self, rhs: u8) -> Self {
-        todo!()
+    fn shr(&self) -> Self {
+        Self(unsafe { x86_64::_mm_srli_epi64::<1>(self.0) })
     }
     fn sliding_positive(&self, mask: &Self) -> Self {
-        todo!()
+        let tz = (*self & *mask | Self::single(Square::SQ_9I)).trailing_zeros();
+        *mask & MASKED_BBS[tz as usize + 1]
     }
     fn sliding_negative(&self, mask: &Self) -> Self {
-        todo!()
+        let lz = (*self & *mask | Self::single(Square::SQ_1A)).leading_zeros();
+        *mask & !MASKED_BBS[127 - lz as usize]
     }
+    #[inline(always)]
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
-        todo!()
+        self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
     }
+    #[inline(always)]
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
-        todo!()
+        self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
     }
     fn vacant_files(&self) -> Self {
         todo!()
