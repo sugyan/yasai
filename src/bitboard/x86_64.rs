@@ -50,22 +50,21 @@ impl Bitboard {
         unsafe { x86_64::_mm_test_all_zeros(self.0, Self::single(square).0) == 0 }
     }
     pub fn pop(&mut self) -> Option<Square> {
-        unsafe {
-            let mut i0 = x86_64::_mm_extract_epi64::<0>(self.0);
-            if i0 != 0 {
-                let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut i0) + 1));
-                self.0 = x86_64::_mm_insert_epi64::<0>(self.0, i0);
+        let mut m = self.to_i64x2();
+        if m[0] != 0 {
+            unsafe {
+                let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut m[0]) + 1));
+                self.0 = x86_64::_mm_insert_epi64::<0>(self.0, m[0]);
                 sq
-            } else {
-                let mut i1 = x86_64::_mm_extract_epi64::<1>(self.0);
-                if i1 != 0 {
-                    let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut i1) + 64));
-                    self.0 = x86_64::_mm_insert_epi64::<1>(self.0, i1);
-                    sq
-                } else {
-                    None
-                }
             }
+        } else if m[1] != 0 {
+            unsafe {
+                let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut m[1]) + 64));
+                self.0 = x86_64::_mm_insert_epi64::<1>(self.0, m[1]);
+                sq
+            }
+        } else {
+            None
         }
     }
     fn pop_lsb(n: &mut i64) -> u8 {
@@ -73,26 +72,27 @@ impl Bitboard {
         *n = *n & (*n - 1);
         ret
     }
-    // FIXME
-    fn leading_zeros(&self) -> u32 {
+    fn to_i64x2(self) -> [i64; 2] {
         unsafe {
-            let i1 = x86_64::_mm_extract_epi64::<1>(self.0);
-            if i1 != 0 {
-                i1.leading_zeros()
-            } else {
-                64 + x86_64::_mm_extract_epi64::<0>(self.0).leading_zeros()
-            }
+            let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
+            x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
+            m.assume_init()
         }
     }
-    // FIXME
+    fn leading_zeros(&self) -> u32 {
+        let m = self.to_i64x2();
+        if m[1] == 0 {
+            m[0].leading_zeros() + 64
+        } else {
+            m[1].leading_zeros()
+        }
+    }
     fn trailing_zeros(&self) -> u32 {
-        unsafe {
-            let i0 = x86_64::_mm_extract_epi64::<0>(self.0);
-            if i0 != 0 {
-                i0.trailing_zeros()
-            } else {
-                64 + x86_64::_mm_extract_epi64::<1>(self.0).trailing_zeros()
-            }
+        let m = self.to_i64x2();
+        if m[0] == 0 {
+            m[1].trailing_zeros() + 64
+        } else {
+            m[0].trailing_zeros()
         }
     }
 }
