@@ -67,6 +67,20 @@ impl Bitboard {
             None
         }
     }
+    fn decrement(&self) -> Self {
+        unsafe {
+            //      self.0: ...00000000000010000000 0000000000000000000000000000000000000000000000000000000000000000
+            let sub = x86_64::_mm_sub_epi64(self.0, x86_64::_mm_set_epi64x(0, 1));
+            //  self.0 - 1: ...00000000000010000000 1111111111111111111111111111111111111111111111111111111111111111
+            let cmp = x86_64::_mm_cmpeq_epi64(self.0, x86_64::_mm_setzero_si128());
+            // self.0 == 0: ...00000000000000000000 1111111111111111111111111111111111111111111111111111111111111111
+            let shl = x86_64::_mm_slli_si128::<8>(cmp);
+            //   cmp << 64: ...11111111111111111111 0000000000000000000000000000000000000000000000000000000000000000
+            let add = x86_64::_mm_add_epi64(sub, shl);
+            //   sub + shl: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
+            Self(add)
+        }
+    }
     fn pop_lsb(n: &mut i64) -> u8 {
         let ret = n.trailing_zeros() as u8;
         *n = *n & (*n - 1);
@@ -87,14 +101,6 @@ impl Bitboard {
             m[1].leading_zeros()
         }
     }
-    fn trailing_zeros(&self) -> u32 {
-        let m = self.to_i64x2();
-        if m[0] == 0 {
-            m[1].trailing_zeros() + 64
-        } else {
-            m[0].trailing_zeros()
-        }
-    }
 }
 
 impl Occupied for Bitboard {
@@ -105,9 +111,8 @@ impl Occupied for Bitboard {
         Self(unsafe { x86_64::_mm_srli_epi64::<1>(self.0) })
     }
     fn sliding_positive(&self, mask: &Self) -> Self {
-        let tz = (*self & *mask | Self::single(Square::SQ_9I)).trailing_zeros();
-        let e = MASKED_VALUES[tz as usize + 1];
-        *mask & Self(unsafe { x86_64::_mm_set_epi64x(e.1, e.0) })
+        let masked = *self & mask;
+        (masked ^ masked.decrement()) & mask
     }
     fn sliding_negative(&self, mask: &Self) -> Self {
         let lz = (*self & *mask | Self::single(Square::SQ_1A)).leading_zeros();
@@ -229,5 +234,32 @@ impl Iterator for Bitboard {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, Some(81))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decrement() {
+        {
+            let bb = Bitboard::single(Square::SQ_1B);
+            assert_eq!(Bitboard::single(Square::SQ_1A), bb.decrement());
+        }
+        {
+            let bb = Bitboard::single(Square::SQ_1C);
+            assert_eq!(
+                Bitboard::single(Square::SQ_1A) | Bitboard::single(Square::SQ_1B),
+                bb.decrement()
+            );
+        }
+        {
+            let bb = Bitboard::single(Square::SQ_9I);
+            assert_eq!(
+                !Bitboard::single(Square::SQ_9I),
+                bb.decrement() & !Bitboard::empty()
+            );
+        }
     }
 }
