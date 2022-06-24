@@ -4,8 +4,8 @@ where
 {
     fn shl(&self) -> Self;
     fn shr(&self) -> Self;
-    fn sliding_positive(&self, mask: &Self) -> Self;
-    fn sliding_negative(&self, mask: &Self) -> Self;
+    fn sliding_positive_consecutive(&self, mask: &Self) -> Self;
+    fn sliding_negative_consecutive(&self, mask: &Self) -> Self;
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self;
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self;
     fn vacant_files(&self) -> Self;

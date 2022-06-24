@@ -83,16 +83,17 @@ impl Bitboard {
     }
     fn decrement(&self) -> Self {
         unsafe {
+            let all = x86_64::_mm_cmpeq_epi64(self.0, self.0);
             //      self.0: ...00000000000010000000 0000000000000000000000000000000000000000000000000000000000000000
-            let sub = x86_64::_mm_sub_epi64(self.0, x86_64::_mm_set_epi64x(0, 1));
-            //  self.0 - 1: ...00000000000010000000 1111111111111111111111111111111111111111111111111111111111111111
-            let cmp = x86_64::_mm_cmpeq_epi64(self.0, x86_64::_mm_setzero_si128());
+            let add = x86_64::_mm_add_epi64(self.0, all);
+            // self.0 + !0: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
+            let cmp = x86_64::_mm_cmpeq_epi64(add, all);
             // self.0 == 0: ...00000000000000000000 1111111111111111111111111111111111111111111111111111111111111111
-            let shl = x86_64::_mm_slli_si128::<8>(cmp);
-            //   cmp << 64: ...11111111111111111111 0000000000000000000000000000000000000000000000000000000000000000
-            let add = x86_64::_mm_add_epi64(sub, shl);
-            //   sub + shl: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
-            Self(add)
+            let shl = x86_64::_mm_slli_si128::<8>(x86_64::_mm_xor_si128(cmp, all));
+            //  !cmp << 64: ...00000000000000000000 0000000000000000000000000000000000000000000000000000000000000000
+            let sub = x86_64::_mm_sub_epi64(add, shl);
+            //   add + shl: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
+            Self(sub)
         }
     }
     fn pop_lsb(n: &mut i64) -> u8 {
@@ -100,15 +101,7 @@ impl Bitboard {
         *n = *n & (*n - 1);
         ret
     }
-}
-
-impl Occupied for Bitboard {
-    fn shl(&self) -> Self {
-        Self(unsafe { x86_64::_mm_slli_epi64::<1>(self.0) })
-    }
-    fn shr(&self) -> Self {
-        Self(unsafe { x86_64::_mm_srli_epi64::<1>(self.0) })
-    }
+    #[inline(always)]
     fn sliding_positive(&self, mask: &Self) -> Self {
         let masked = *self & mask;
         (masked ^ masked.decrement()) & mask
@@ -128,6 +121,32 @@ impl Occupied for Bitboard {
                 x86_64::_mm_srli_epi16::<1>(m),
                 x86_64::_mm_set_epi64x(e.1, e.0),
             );
+            Self(x86_64::_mm_andnot_si128(m, mask.0))
+        }
+    }
+}
+
+impl Occupied for Bitboard {
+    #[inline(always)]
+    fn shl(&self) -> Self {
+        Self(unsafe { x86_64::_mm_slli_epi64::<1>(self.0) })
+    }
+    #[inline(always)]
+    fn shr(&self) -> Self {
+        Self(unsafe { x86_64::_mm_srli_epi64::<1>(self.0) })
+    }
+    #[inline(always)]
+    fn sliding_positive_consecutive(&self, mask: &Self) -> Self {
+        self.sliding_positive(mask)
+    }
+    fn sliding_negative_consecutive(&self, mask: &Self) -> Self {
+        let masked = *self & mask;
+        unsafe {
+            let m = masked.0;
+            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<1>(m));
+            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<2>(m));
+            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<4>(m));
+            let m = x86_64::_mm_srli_epi64::<1>(m);
             Self(x86_64::_mm_andnot_si128(m, mask.0))
         }
     }
