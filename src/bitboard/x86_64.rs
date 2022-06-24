@@ -20,16 +20,24 @@ const SINGLE_VALUES: [(i64, i64); Square::NUM] = {
     values
 };
 
-const MASKED_VALUES: [(i64, i64); Square::NUM + 2] = {
-    let mut values = [(0, 0); Square::NUM + 2];
-    let mut i = 0;
-    while i < Square::NUM + 2 {
-        let value = (1_u128 << i) - 1;
-        values[i] = (value as i64, (value >> 64) as i64);
-        i += 1;
-    }
-    values
-};
+const MASKED_VALUES: [(i64, i64); 16] = [
+    (0, 0),
+    (0x0000_0000_0000_00ff, 0),
+    (0x0000_0000_0000_ffff, 0),
+    (0x0000_0000_00ff_ffff, 0),
+    (0x0000_0000_ffff_ffff, 0),
+    (0x0000_00ff_ffff_ffff, 0),
+    (0x0000_ffff_ffff_ffff, 0),
+    (0x00ff_ffff_ffff_ffff, 0),
+    (-1, 0),
+    (-1, 0x0000_0000_0000_00ff),
+    (-1, 0x0000_0000_0000_ffff),
+    (-1, 0x0000_0000_00ff_ffff),
+    (-1, 0x0000_0000_ffff_ffff),
+    (-1, 0x0000_00ff_ffff_ffff),
+    (-1, 0x0000_ffff_ffff_ffff),
+    (-1, 0x00ff_ffff_ffff_ffff),
+];
 
 impl Bitboard {
     #[inline(always)]
@@ -50,7 +58,13 @@ impl Bitboard {
         unsafe { x86_64::_mm_test_all_zeros(self.0, Self::single(square).0) == 0 }
     }
     pub fn pop(&mut self) -> Option<Square> {
-        let mut m = self.to_i64x2();
+        let mut m = {
+            unsafe {
+                let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
+                x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
+                m.assume_init()
+            }
+        };
         if m[0] != 0 {
             unsafe {
                 let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut m[0]) + 1));
@@ -86,21 +100,6 @@ impl Bitboard {
         *n = *n & (*n - 1);
         ret
     }
-    fn to_i64x2(self) -> [i64; 2] {
-        unsafe {
-            let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
-            x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
-            m.assume_init()
-        }
-    }
-    fn leading_zeros(&self) -> u32 {
-        let m = self.to_i64x2();
-        if m[1] == 0 {
-            m[0].leading_zeros() + 64
-        } else {
-            m[1].leading_zeros()
-        }
-    }
 }
 
 impl Occupied for Bitboard {
@@ -115,9 +114,22 @@ impl Occupied for Bitboard {
         (masked ^ masked.decrement()) & mask
     }
     fn sliding_negative(&self, mask: &Self) -> Self {
-        let lz = (*self & *mask | Self::single(Square::SQ_1A)).leading_zeros();
-        let e = MASKED_VALUES[127 - lz as usize];
-        *mask & !Self(unsafe { x86_64::_mm_set_epi64x(e.1, e.0) })
+        let masked = *self & mask;
+        unsafe {
+            let eq = x86_64::_mm_cmpeq_epi8(masked.0, x86_64::_mm_setzero_si128());
+            let lz = (x86_64::_mm_movemask_epi8(eq) ^ 0xffff | 0x0001).leading_zeros();
+            let e = MASKED_VALUES[31 - lz as usize];
+
+            let m = masked.0;
+            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi16::<1>(m));
+            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi16::<2>(m));
+            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi16::<4>(m));
+            let m = x86_64::_mm_or_si128(
+                x86_64::_mm_srli_epi16::<1>(m),
+                x86_64::_mm_set_epi64x(e.1, e.0),
+            );
+            Self(x86_64::_mm_andnot_si128(m, mask.0))
+        }
     }
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
@@ -243,23 +255,17 @@ mod tests {
 
     #[test]
     fn decrement() {
-        {
-            let bb = Bitboard::single(Square::SQ_1B);
-            assert_eq!(Bitboard::single(Square::SQ_1A), bb.decrement());
-        }
-        {
-            let bb = Bitboard::single(Square::SQ_1C);
-            assert_eq!(
-                Bitboard::single(Square::SQ_1A) | Bitboard::single(Square::SQ_1B),
-                bb.decrement()
-            );
-        }
-        {
-            let bb = Bitboard::single(Square::SQ_9I);
-            assert_eq!(
-                !Bitboard::single(Square::SQ_9I),
-                bb.decrement() & !Bitboard::empty()
-            );
-        }
+        assert_eq!(
+            Bitboard::single(Square::SQ_1A),
+            Bitboard::single(Square::SQ_1B).decrement()
+        );
+        assert_eq!(
+            Bitboard::single(Square::SQ_1A) | Bitboard::single(Square::SQ_1B),
+            Bitboard::single(Square::SQ_1C).decrement()
+        );
+        assert_eq!(
+            !Bitboard::single(Square::SQ_9I),
+            Bitboard::single(Square::SQ_9I).decrement() & !Bitboard::empty()
+        );
     }
 }

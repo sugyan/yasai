@@ -32,8 +32,7 @@ mod tests {
 
     #[test]
     fn empty() {
-        let bb = Bitboard::empty();
-        assert!(bb.is_empty());
+        assert!(Bitboard::empty().is_empty());
     }
 
     #[test]
@@ -80,10 +79,13 @@ mod tests {
 
     #[test]
     fn shift() {
-        let bb_1a = Bitboard::single(Square::SQ_1A);
-        assert_eq!(Bitboard::single(Square::SQ_1B), bb_1a.shl());
-
-        let bb_9i = Bitboard::single(Square::SQ_9I);
-        assert_eq!(Bitboard::single(Square::SQ_9H), bb_9i.shr());
+        assert_eq!(
+            Bitboard::single(Square::SQ_1B),
+            Bitboard::single(Square::SQ_1A).shl()
+        );
+        assert_eq!(
+            Bitboard::single(Square::SQ_9H),
+            Bitboard::single(Square::SQ_9I).shr()
+        );
     }
 }
