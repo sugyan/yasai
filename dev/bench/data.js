@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1655825266432,
+  "lastUpdate": 1656169911633,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -433,6 +433,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 445323333,
             "range": "± 660293",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f81ac0fa2a8d81ce064acf1c4eaf725b5d727e36",
+          "message": "SIMD Bitboard (#17)\n\n* [WIP] Add x86_64 bitboard\r\n\r\n* [WIP] Add bit ops\r\n\r\n* [WIP] Add pop, shift, slidings\r\n\r\n* Implement x86_64::Bitboard, all tests passed\r\n\r\n* Use const values instead of once_cell::sync::Lazy\r\n\r\n* Use _mm_storeu_si128 ...?\r\n\r\n* Use decrement and xor for sliding_positive\r\n\r\n* Update workflows\r\n\r\n* Update sliding_negative\r\n\r\n* Update interfaces\r\n\r\n* Add 256bit sliding_positives\r\n\r\n* Add 256bit sliding_negatives",
+          "timestamp": "2022-06-26T00:07:28+09:00",
+          "tree_id": "b47884165c76e255fe5f5c845b9c9c64794cd060",
+          "url": "https://github.com/sugyan/yasai/commit/f81ac0fa2a8d81ce064acf1c4eaf725b5d727e36"
+        },
+        "date": 1656169910861,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 406308097,
+            "range": "± 157251",
             "unit": "ns/iter"
           }
         ]
