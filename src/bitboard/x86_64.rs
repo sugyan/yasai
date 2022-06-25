@@ -151,7 +151,24 @@ impl Occupied for Bitboard {
         }
     }
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
-        self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
+        unsafe {
+            let self256 = x86_64::_mm256_set_m128i(self.0, self.0);
+            let mask256 = x86_64::_mm256_set_m128i(masks[0].0, masks[1].0);
+            let m = x86_64::_mm256_and_si256(self256, mask256);
+            // decrement masked 256
+            let all = x86_64::_mm256_cmpeq_epi64(m, m);
+            let add = x86_64::_mm256_add_epi64(m, all);
+            let cmp = x86_64::_mm256_cmpeq_epi64(add, all);
+            let shl = x86_64::_mm256_slli_si256::<8>(x86_64::_mm256_xor_si256(cmp, all));
+            let dec = x86_64::_mm256_sub_epi64(add, shl);
+            // (masked ^ masked.decrement()) & mask
+            let xor = x86_64::_mm256_xor_si256(m, dec);
+            let and = x86_64::_mm256_and_si256(xor, mask256);
+            Self(x86_64::_mm_or_si128(
+                x86_64::_mm256_castsi256_si128(and),
+                x86_64::_mm256_extracti128_si256::<1>(and),
+            ))
+        }
     }
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
@@ -271,6 +288,7 @@ impl Iterator for Bitboard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shogi_core::consts::square::*;
 
     #[test]
     fn decrement() {
@@ -285,6 +303,18 @@ mod tests {
         assert_eq!(
             !Bitboard::single(Square::SQ_9I),
             Bitboard::single(Square::SQ_9I).decrement() & !Bitboard::empty()
+        );
+    }
+
+    #[test]
+    fn sliding_positives() {
+        let bb = Bitboard::single(SQ_8C) | Bitboard::single(SQ_8G);
+        assert_eq!(
+            bb | Bitboard::single(SQ_7D) | Bitboard::single(SQ_7F),
+            bb.sliding_positives(&[
+                Bitboard::single(SQ_7D) | Bitboard::single(SQ_8C) | Bitboard::single(SQ_9B),
+                Bitboard::single(SQ_7F) | Bitboard::single(SQ_8G) | Bitboard::single(SQ_9H),
+            ])
         );
     }
 }
