@@ -81,48 +81,10 @@ impl Bitboard {
             None
         }
     }
-    fn decrement(&self) -> Self {
-        unsafe {
-            let all = x86_64::_mm_cmpeq_epi64(self.0, self.0);
-            //      self.0: ...00000000000010000000 0000000000000000000000000000000000000000000000000000000000000000
-            let add = x86_64::_mm_add_epi64(self.0, all);
-            // self.0 + !0: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
-            let cmp = x86_64::_mm_cmpeq_epi64(add, all);
-            // self.0 == 0: ...00000000000000000000 1111111111111111111111111111111111111111111111111111111111111111
-            let shl = x86_64::_mm_slli_si128::<8>(x86_64::_mm_xor_si128(cmp, all));
-            //  !cmp << 64: ...00000000000000000000 0000000000000000000000000000000000000000000000000000000000000000
-            let sub = x86_64::_mm_sub_epi64(add, shl);
-            //   add + shl: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
-            Self(sub)
-        }
-    }
     fn pop_lsb(n: &mut i64) -> u8 {
         let ret = n.trailing_zeros() as u8;
         *n = *n & (*n - 1);
         ret
-    }
-    #[inline(always)]
-    fn sliding_positive(&self, mask: &Self) -> Self {
-        let masked = *self & mask;
-        (masked ^ masked.decrement()) & mask
-    }
-    fn sliding_negative(&self, mask: &Self) -> Self {
-        let masked = *self & mask;
-        unsafe {
-            let eq = x86_64::_mm_cmpeq_epi8(masked.0, x86_64::_mm_setzero_si128());
-            let lz = (x86_64::_mm_movemask_epi8(eq) ^ 0xffff | 0x0001).leading_zeros();
-            let e = MASKED_VALUES[31 - lz as usize];
-
-            let m = masked.0;
-            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi16::<1>(m));
-            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi16::<2>(m));
-            let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi16::<4>(m));
-            let m = x86_64::_mm_or_si128(
-                x86_64::_mm_srli_epi16::<1>(m),
-                x86_64::_mm_set_epi64x(e.1, e.0),
-            );
-            Self(x86_64::_mm_andnot_si128(m, mask.0))
-        }
     }
 }
 
@@ -135,14 +97,30 @@ impl Occupied for Bitboard {
     fn shr(&self) -> Self {
         Self(unsafe { x86_64::_mm_srli_epi64::<1>(self.0) })
     }
-    #[inline(always)]
     fn sliding_positive_consecutive(&self, mask: &Self) -> Self {
-        self.sliding_positive(mask)
+        unsafe {
+            let masked = x86_64::_mm_and_si128(self.0, mask.0);
+            // calculate decremented masked
+            let all = x86_64::_mm_cmpeq_epi64(self.0, self.0);
+            //      self.0: ...00000000000010000000 0000000000000000000000000000000000000000000000000000000000000000
+            let add = x86_64::_mm_add_epi64(masked, all);
+            // self.0 + !0: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
+            let cmp = x86_64::_mm_cmpeq_epi64(add, all);
+            // self.0 == 0: ...00000000000000000000 1111111111111111111111111111111111111111111111111111111111111111
+            let shl = x86_64::_mm_slli_si128::<8>(x86_64::_mm_xor_si128(cmp, all));
+            //  !cmp << 64: ...00000000000000000000 0000000000000000000000000000000000000000000000000000000000000000
+            let dec = x86_64::_mm_sub_epi64(add, shl);
+            //   add + shl: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
+            Self(x86_64::_mm_and_si128(
+                x86_64::_mm_xor_si128(masked, dec),
+                mask.0,
+            ))
+        }
     }
     fn sliding_negative_consecutive(&self, mask: &Self) -> Self {
-        let masked = *self & mask;
         unsafe {
-            let m = masked.0;
+            let masked = x86_64::_mm_and_si128(self.0, mask.0);
+            let m = masked;
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<1>(m));
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<2>(m));
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<4>(m));
@@ -152,26 +130,49 @@ impl Occupied for Bitboard {
     }
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
         unsafe {
-            let self256 = x86_64::_mm256_set_m128i(self.0, self.0);
+            let self256 = x86_64::_mm256_broadcastsi128_si256(self.0);
             let mask256 = x86_64::_mm256_set_m128i(masks[0].0, masks[1].0);
-            let m = x86_64::_mm256_and_si256(self256, mask256);
+            let masked = x86_64::_mm256_and_si256(self256, mask256);
             // decrement masked 256
-            let all = x86_64::_mm256_cmpeq_epi64(m, m);
-            let add = x86_64::_mm256_add_epi64(m, all);
+            let all = x86_64::_mm256_cmpeq_epi64(self256, self256);
+            let add = x86_64::_mm256_add_epi64(masked, all);
             let cmp = x86_64::_mm256_cmpeq_epi64(add, all);
             let shl = x86_64::_mm256_slli_si256::<8>(x86_64::_mm256_xor_si256(cmp, all));
             let dec = x86_64::_mm256_sub_epi64(add, shl);
             // (masked ^ masked.decrement()) & mask
-            let xor = x86_64::_mm256_xor_si256(m, dec);
-            let and = x86_64::_mm256_and_si256(xor, mask256);
+            let xor = x86_64::_mm256_xor_si256(masked, dec);
+            let ret = x86_64::_mm256_and_si256(xor, mask256);
             Self(x86_64::_mm_or_si128(
-                x86_64::_mm256_castsi256_si128(and),
-                x86_64::_mm256_extracti128_si256::<1>(and),
+                x86_64::_mm256_castsi256_si128(ret),
+                x86_64::_mm256_extracti128_si256::<1>(ret),
             ))
         }
     }
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
-        self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
+        unsafe {
+            let self256 = x86_64::_mm256_broadcastsi128_si256(self.0);
+            let mask256 = x86_64::_mm256_set_m128i(masks[0].0, masks[1].0);
+            let masked = x86_64::_mm256_and_si256(self256, mask256);
+
+            let eq = x86_64::_mm256_cmpeq_epi8(masked, x86_64::_mm256_setzero_si256());
+            let mv = x86_64::_mm256_movemask_epi8(eq) as u32;
+            let e0 = MASKED_VALUES[15 - (mv ^ 0xffff_ffff | 0x0001_0000).leading_zeros() as usize];
+            let e1 = MASKED_VALUES[31 - (mv & 0xffff ^ 0xffff | 0x0001).leading_zeros() as usize];
+
+            let m = masked;
+            let m = x86_64::_mm256_or_si256(m, x86_64::_mm256_srli_epi16::<1>(m));
+            let m = x86_64::_mm256_or_si256(m, x86_64::_mm256_srli_epi16::<2>(m));
+            let m = x86_64::_mm256_or_si256(m, x86_64::_mm256_srli_epi16::<4>(m));
+            let m = x86_64::_mm256_or_si256(
+                x86_64::_mm256_srli_epi16::<1>(m),
+                x86_64::_mm256_set_epi64x(e0.1, e0.0, e1.1, e1.0),
+            );
+            let ret = x86_64::_mm256_andnot_si256(m, mask256);
+            Self(x86_64::_mm_or_si128(
+                x86_64::_mm256_castsi256_si128(ret),
+                x86_64::_mm256_extracti128_si256::<1>(ret),
+            ))
+        }
     }
     fn vacant_files(&self) -> Self {
         unsafe {
@@ -291,22 +292,6 @@ mod tests {
     use shogi_core::consts::square::*;
 
     #[test]
-    fn decrement() {
-        assert_eq!(
-            Bitboard::single(Square::SQ_1A),
-            Bitboard::single(Square::SQ_1B).decrement()
-        );
-        assert_eq!(
-            Bitboard::single(Square::SQ_1A) | Bitboard::single(Square::SQ_1B),
-            Bitboard::single(Square::SQ_1C).decrement()
-        );
-        assert_eq!(
-            !Bitboard::single(Square::SQ_9I),
-            Bitboard::single(Square::SQ_9I).decrement() & !Bitboard::empty()
-        );
-    }
-
-    #[test]
     fn sliding_positives() {
         let bb = Bitboard::single(SQ_8C) | Bitboard::single(SQ_8G);
         assert_eq!(
@@ -314,6 +299,18 @@ mod tests {
             bb.sliding_positives(&[
                 Bitboard::single(SQ_7D) | Bitboard::single(SQ_8C) | Bitboard::single(SQ_9B),
                 Bitboard::single(SQ_7F) | Bitboard::single(SQ_8G) | Bitboard::single(SQ_9H),
+            ])
+        );
+    }
+
+    #[test]
+    fn sliding_negatives() {
+        let bb = Bitboard::single(SQ_2C) | Bitboard::single(SQ_2G);
+        assert_eq!(
+            bb | Bitboard::single(SQ_3D) | Bitboard::single(SQ_3F),
+            bb.sliding_negatives(&[
+                Bitboard::single(SQ_3D) | Bitboard::single(SQ_2C) | Bitboard::single(SQ_1B),
+                Bitboard::single(SQ_3F) | Bitboard::single(SQ_2G) | Bitboard::single(SQ_1H),
             ])
         );
     }

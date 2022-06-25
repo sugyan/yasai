@@ -15,7 +15,7 @@ cfg_if::cfg_if! {
     if #[cfg(all(
         feature = "simd",
         target_arch = "x86_64",
-        target_feature = "sse4.1"
+        target_feature = "avx2"
     ))] {
         mod x86_64;
         pub(crate) use self::x86_64::Bitboard;
