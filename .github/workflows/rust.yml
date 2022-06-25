@@ -15,9 +15,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build
-      run: cargo build --verbose
+      run: |
+        cargo build --verbose
+        cargo build --verbose --features simd
     - name: Run tests
-      run: cargo test --verbose
+      run: |
+        cargo test --verbose
+        cargo test --verbose --features simd
 
   clippy_check:
     runs-on: ubuntu-latest
@@ -36,7 +40,7 @@ jobs:
     - name: Install nightly
       run: rustup toolchain install nightly
     - name: Benchmark
-      run: cargo +nightly bench perft::bench_perft_5 | tee bench-output.txt
+      run: cargo +nightly bench --features simd perft::bench_perft_5 | tee bench-output.txt
     - name: Store benchmark result
       uses: benchmark-action/github-action-benchmark@v1
       with:

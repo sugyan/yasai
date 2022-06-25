@@ -18,24 +18,42 @@ const MASKED_BBS: [Bitboard; Square::NUM + 2] = {
     bbs
 };
 
+#[inline(always)]
+fn sliding_positive(bb: &Bitboard, mask: &Bitboard) -> Bitboard {
+    let tz = (*bb & *mask | BB_9I).to_u128().trailing_zeros();
+    *mask & MASKED_BBS[tz as usize + 1]
+}
+
+#[inline(always)]
+fn sliding_negative(bb: &Bitboard, mask: &Bitboard) -> Bitboard {
+    let lz = (*bb & *mask | BB_1A).to_u128().leading_zeros();
+    *mask & !MASKED_BBS[127 - lz as usize]
+}
+
 impl Occupied for Bitboard {
     #[inline(always)]
-    fn sliding_positive(&self, mask: &Self) -> Self {
-        let tz = (*self & *mask | BB_9I).to_u128().trailing_zeros();
-        *mask & MASKED_BBS[tz as usize + 1]
+    fn shl(&self) -> Self {
+        unsafe { self.shift_down(1) }
     }
     #[inline(always)]
-    fn sliding_negative(&self, mask: &Self) -> Self {
-        let lz = (*self & *mask | BB_1A).to_u128().leading_zeros();
-        *mask & !MASKED_BBS[127 - lz as usize]
+    fn shr(&self) -> Self {
+        unsafe { self.shift_up(1) }
+    }
+    #[inline(always)]
+    fn sliding_positive_consecutive(&self, mask: &Self) -> Self {
+        sliding_positive(self, mask)
+    }
+    #[inline(always)]
+    fn sliding_negative_consecutive(&self, mask: &Self) -> Self {
+        sliding_negative(self, mask)
     }
     #[inline(always)]
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
-        self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
+        sliding_positive(self, &masks[0]) | sliding_positive(self, &masks[1])
     }
     #[inline(always)]
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
-        self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
+        sliding_negative(self, &masks[0]) | sliding_negative(self, &masks[1])
     }
     #[inline(always)]
     fn vacant_files(&self) -> Self {

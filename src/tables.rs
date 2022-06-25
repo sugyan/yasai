@@ -98,8 +98,8 @@ impl LanceAttackTable {
     pub(crate) fn attack(&self, sq: Square, c: Color, occ: &Bitboard) -> Bitboard {
         let mask = self.masks[sq.array_index()][c.array_index()];
         match c {
-            Color::Black => occ.sliding_negative(&mask),
-            Color::White => occ.sliding_positive(&mask),
+            Color::Black => occ.sliding_negative_consecutive(&mask),
+            Color::White => occ.sliding_positive_consecutive(&mask),
         }
     }
 }
