@@ -1,6 +1,7 @@
 use super::Occupied;
 use shogi_core::Square;
 use std::arch::x86_64;
+use std::mem::MaybeUninit;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 #[derive(Clone, Copy, Debug)]
@@ -60,7 +61,7 @@ impl Bitboard {
     pub fn pop(&mut self) -> Option<Square> {
         let mut m = {
             unsafe {
-                let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
+                let m = MaybeUninit::<[i64; 2]>::uninit();
                 x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
                 m.assume_init()
             }
@@ -265,6 +266,7 @@ impl Not for &Bitboard {
 }
 
 impl PartialEq for Bitboard {
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         // https://stackoverflow.com/a/26883316
         unsafe {

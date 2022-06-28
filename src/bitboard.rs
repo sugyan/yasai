@@ -19,6 +19,13 @@ cfg_if::cfg_if! {
     ))] {
         mod x86_64;
         pub(crate) use self::x86_64::Bitboard;
+    } else if #[cfg(all(
+        feature = "simd",
+        target_arch = "aarch64",
+        target_feature = "neon"
+    ))] {
+        mod aarch64;
+        pub(crate) use self::aarch64::Bitboard;
     } else {
         mod core;
         pub(crate) use self::core::Bitboard;
