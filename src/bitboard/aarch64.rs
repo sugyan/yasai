@@ -20,15 +20,15 @@ const SINGLE_VALUES: [[u64; 2]; Square::NUM] = {
     values
 };
 
-const MASKED_VALUES: [u128; Square::NUM + 2] = {
-    let mask = 0x0003_ffff_7fff_ffff_ffff_ffff;
-    let mut bbs = [0; Square::NUM + 2];
+const MASKED_VALUES: [[u64; 2]; Square::NUM + 2] = {
+    let mut values = [[0; 2]; Square::NUM + 2];
     let mut i = 0;
     while i < Square::NUM + 2 {
-        bbs[i] = mask & ((1 << i) - 1);
+        let u = (1_u128 << i) - 1;
+        values[i] = [u as u64, (u >> 64) as u64];
         i += 1;
     }
-    bbs
+    values
 };
 
 impl Bitboard {
@@ -58,11 +58,7 @@ impl Bitboard {
         }
     }
     pub fn pop(&mut self) -> Option<Square> {
-        let mut m = unsafe {
-            let mut m = std::mem::MaybeUninit::<[u64; 2]>::uninit();
-            aarch64::vst1q_u64(m.as_mut_ptr() as *mut _, self.0);
-            m.assume_init()
-        };
+        let mut m = self.to_u64x2();
         if m[0] != 0 {
             unsafe {
                 let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut m[0]) + 1));
@@ -84,24 +80,41 @@ impl Bitboard {
         *n = *n & (*n - 1);
         ret
     }
-
-    fn to_u128(self) -> u128 {
+    #[inline(always)]
+    fn to_u64x2(self) -> [u64; 2] {
         unsafe {
-            let mut m = std::mem::MaybeUninit::<[u64; 2]>::uninit();
-            aarch64::vst1q_u64(m.as_mut_ptr() as *mut _, self.0);
-            let m = m.assume_init();
-            (m[1] as u128) << 64 | m[0] as u128
+            let m = std::mem::MaybeUninit::<[u64; 2]>::uninit();
+            aarch64::vst1q_u64(m.as_ptr() as *mut _, self.0);
+            m.assume_init()
         }
     }
     fn sliding_positive(&self, mask: &Bitboard) -> Bitboard {
-        let tz = ((*self & *mask).to_u128() | 1 << 81).trailing_zeros();
-        let m = MASKED_VALUES[tz as usize + 1];
-        *mask & Self(unsafe { aarch64::vld1q_u64([m as u64, (m >> 64) as u64].as_ptr()) })
+        let m = (*self & mask).to_u64x2();
+        let tz = if m[0] == 0 {
+            (m[1] | 0x0002_0000).trailing_zeros() + 64
+        } else {
+            m[0].trailing_zeros()
+        };
+        Self(unsafe {
+            aarch64::vandq_u64(
+                mask.0,
+                aarch64::vld1q_u64(MASKED_VALUES[tz as usize + 1].as_ptr()),
+            )
+        })
     }
     fn sliding_negative(&self, mask: &Bitboard) -> Bitboard {
-        let lz = ((*self & *mask).to_u128() | 1).leading_zeros();
-        let m = MASKED_VALUES[127 - lz as usize];
-        *mask & !Self(unsafe { aarch64::vld1q_u64([m as u64, (m >> 64) as u64].as_ptr()) })
+        let m = (*self & mask).to_u64x2();
+        let lz = if m[1] == 0 {
+            (m[0] | 1).leading_zeros() + 64
+        } else {
+            m[1].leading_zeros()
+        };
+        Self(unsafe {
+            aarch64::vbicq_u64(
+                mask.0,
+                aarch64::vld1q_u64(MASKED_VALUES[127 - lz as usize].as_ptr()),
+            )
+        })
     }
 }
 
@@ -115,17 +128,33 @@ impl Occupied for Bitboard {
         Self(unsafe { aarch64::vshrq_n_u64::<1>(self.0) })
     }
     fn sliding_positive_consecutive(&self, mask: &Self) -> Self {
-        self.sliding_positive(mask)
+        unsafe {
+            let and = aarch64::vandq_u64(self.0, mask.0);
+            let all = aarch64::vceqq_u64(self.0, self.0);
+            let add = aarch64::vaddq_u64(and, all);
+            let xor = aarch64::veorq_u64(add, and);
+            Self(aarch64::vandq_u64(xor, mask.0))
+        }
     }
     fn sliding_negative_consecutive(&self, mask: &Self) -> Self {
-        self.sliding_negative(mask)
+        unsafe {
+            let m = aarch64::vandq_u64(self.0, mask.0);
+            let m = aarch64::vorrq_u64(m, aarch64::vshrq_n_u64::<1>(m));
+            let m = aarch64::vorrq_u64(m, aarch64::vshrq_n_u64::<2>(m));
+            let m = aarch64::vorrq_u64(m, aarch64::vshrq_n_u64::<4>(m));
+            let m = aarch64::vshrq_n_u64::<1>(m);
+            Self(aarch64::vbicq_u64(mask.0, m))
+        }
     }
+    #[inline(always)]
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
     }
+    #[inline(always)]
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
     }
+    #[inline(always)]
     fn vacant_files(&self) -> Self {
         unsafe {
             let mask = aarch64::vld1q_u64([0x4020_1008_0402_0100, 0x0002_0100].as_ptr());
@@ -191,11 +220,9 @@ impl Not for Bitboard {
     #[inline(always)]
     fn not(self) -> Self::Output {
         Bitboard(unsafe {
-            aarch64::vandq_u64(
-                aarch64::vreinterpretq_u64_u32(aarch64::vmvnq_u32(aarch64::vreinterpretq_u32_u64(
-                    self.0,
-                ))),
+            aarch64::vbicq_u64(
                 aarch64::vld1q_u64([0x7fff_ffff_ffff_ffff, 0x0003_ffff].as_ptr()),
+                self.0,
             )
         })
     }
@@ -207,11 +234,9 @@ impl Not for &Bitboard {
     #[inline(always)]
     fn not(self) -> Self::Output {
         Bitboard(unsafe {
-            aarch64::vandq_u64(
-                aarch64::vreinterpretq_u64_u32(aarch64::vmvnq_u32(aarch64::vreinterpretq_u32_u64(
-                    self.0,
-                ))),
+            aarch64::vbicq_u64(
                 aarch64::vld1q_u64([0x7fff_ffff_ffff_ffff, 0x0003_ffff].as_ptr()),
+                self.0,
             )
         })
     }
@@ -237,5 +262,35 @@ impl Iterator for Bitboard {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, Some(81))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shogi_core::consts::square::*;
+
+    #[test]
+    fn sliding_positives() {
+        let bb = Bitboard::single(SQ_8C) | Bitboard::single(SQ_8G);
+        assert_eq!(
+            bb | Bitboard::single(SQ_7D) | Bitboard::single(SQ_7F),
+            bb.sliding_positives(&[
+                Bitboard::single(SQ_7D) | Bitboard::single(SQ_8C) | Bitboard::single(SQ_9B),
+                Bitboard::single(SQ_7F) | Bitboard::single(SQ_8G) | Bitboard::single(SQ_9H),
+            ])
+        );
+    }
+
+    #[test]
+    fn sliding_negatives() {
+        let bb = Bitboard::single(SQ_2C) | Bitboard::single(SQ_2G);
+        assert_eq!(
+            bb | Bitboard::single(SQ_3D) | Bitboard::single(SQ_3F),
+            bb.sliding_negatives(&[
+                Bitboard::single(SQ_3D) | Bitboard::single(SQ_2C) | Bitboard::single(SQ_1B),
+                Bitboard::single(SQ_3F) | Bitboard::single(SQ_2G) | Bitboard::single(SQ_1H),
+            ])
+        );
     }
 }
