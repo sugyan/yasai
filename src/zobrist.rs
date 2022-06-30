@@ -175,9 +175,15 @@ mod tests {
             Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
             Move::Normal { from: Square::SQ_8H, to: Square::SQ_9I, promote: false },
         ];
-        for m in moves {
+        for (i, &m) in moves.iter().enumerate() {
             assert!(pos.legal_moves().contains(&m), "move {:?} is not legal", m);
             pos.do_move(m);
+            assert_eq!(
+                i as u8 / 2 + 1,
+                pos.hand(Color::Black)
+                    .count(PieceKind::Pawn)
+                    .unwrap_or_default()
+            );
         }
     }
 
