@@ -114,10 +114,6 @@ impl Position {
                     } else {
                         pk
                     };
-                    // Update inner state
-                    self.inner.xor_piece(to, p);
-                    let hand = self.inner.hand_of_a_player_mut(c);
-                    *hand = hand.added(pk_unpromoted).unwrap();
                     // Update keys
                     keys.0 ^= ZOBRIST_TABLE.board(to, p);
                     keys.1 ^= ZOBRIST_TABLE.hand(
@@ -125,6 +121,10 @@ impl Position {
                         pk_unpromoted,
                         self.inner.hand_of_a_player(c).count(pk_unpromoted).unwrap(),
                     );
+                    // Update inner state
+                    self.inner.xor_piece(to, p);
+                    let hand = self.inner.hand_of_a_player_mut(c);
+                    *hand = hand.added(pk_unpromoted).unwrap();
                 }
                 let target_piece = if promote {
                     piece.promote().unwrap()
