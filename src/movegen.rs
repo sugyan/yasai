@@ -71,7 +71,7 @@ impl Position {
             if checkers_count > 1 {
                 return;
             }
-            if let Some(ch) = self.checkers().pop() {
+            if let Some(ch) = self.checkers().into_iter().next() {
                 let target_drop = BETWEEN_TABLE[ch.array_index()][king.array_index()];
                 let target_move = target_drop | self.checkers();
                 self.generate_for_fu(av, &target_move);
@@ -301,7 +301,7 @@ impl Position {
                     .vacant_files();
                 // 打ち歩詰めチェック
                 if let Some(sq) = self.king_position(c.flip()) {
-                    if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).pop() {
+                    if let Some(to) = ATTACK_TABLE.fu.attack(sq, c.flip()).into_iter().next() {
                         if target.contains(to) && self.is_pawn_drop_mate(to) {
                             target &= !Bitboard::single(to);
                         }

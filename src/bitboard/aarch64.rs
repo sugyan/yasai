@@ -57,28 +57,10 @@ impl Bitboard {
             ))) != 0
         }
     }
-    pub fn pop(&mut self) -> Option<Square> {
-        let mut m = self.to_u64x2();
-        if m[0] != 0 {
-            unsafe {
-                let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut m[0]) + 1));
-                self.0 = aarch64::vsetq_lane_u64::<0>(m[0], self.0);
-                sq
-            }
-        } else if m[1] != 0 {
-            unsafe {
-                let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut m[1]) + 64));
-                self.0 = aarch64::vsetq_lane_u64::<1>(m[1], self.0);
-                sq
-            }
-        } else {
-            None
-        }
-    }
-    fn pop_lsb(n: &mut u64) -> u8 {
-        let ret = n.trailing_zeros() as u8;
-        *n = *n & (*n - 1);
-        ret
+    #[inline(always)]
+    pub fn count(self) -> u8 {
+        let m = self.to_u64x2();
+        (m[0].count_ones() + m[1].count_ones()) as u8
     }
     #[inline(always)]
     fn to_u64x2(self) -> [u64; 2] {
@@ -253,15 +235,42 @@ impl PartialEq for Bitboard {
     }
 }
 
-impl Iterator for Bitboard {
+pub(crate) struct SquareIterator([u64; 2]);
+
+impl SquareIterator {
+    #[inline(always)]
+    fn pop_lsb(n: &mut u64) -> u8 {
+        let pos = n.trailing_zeros() as u8;
+        *n &= n.wrapping_sub(1);
+        pos
+    }
+}
+
+impl Iterator for SquareIterator {
     type Item = Square;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        self.pop()
+        if self.0[0] != 0 {
+            return Some(unsafe { Square::from_u8_unchecked(Self::pop_lsb(&mut self.0[0]) + 1) });
+        }
+        if self.0[1] != 0 {
+            return Some(unsafe { Square::from_u8_unchecked(Self::pop_lsb(&mut self.0[1]) + 64) });
+        }
+        None
     }
+}
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(81))
+impl IntoIterator for Bitboard {
+    type Item = Square;
+    type IntoIter = SquareIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        unsafe {
+            let m = std::mem::MaybeUninit::<[u64; 2]>::uninit();
+            aarch64::vst1q_u64(m.as_ptr() as *mut _, self.0);
+            SquareIterator(m.assume_init())
+        }
     }
 }
 

@@ -69,22 +69,6 @@ mod tests {
     }
 
     #[test]
-    fn pop() {
-        assert_eq!(None, Bitboard::empty().pop());
-        for sq in Square::all() {
-            let mut bb = Bitboard::single(sq);
-            assert_eq!(Some(sq), bb.pop());
-            assert!(bb.is_empty());
-            assert_eq!(None, bb.pop());
-        }
-        assert_eq!(Vec::<Square>::new(), Bitboard::empty().collect::<Vec<_>>());
-        assert_eq!(
-            Square::all().collect::<Vec<_>>(),
-            (!Bitboard::empty()).collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
     fn shift() {
         assert_eq!(
             Bitboard::single(Square::SQ_1B),
