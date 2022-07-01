@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1656634904640,
+  "lastUpdate": 1656639737461,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -493,6 +493,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 328120300,
             "range": "± 773026",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "86a25a291493b8b39ce89cf74f8504d499db465e",
+          "message": "Fix test zobrist::tests::full_hands",
+          "timestamp": "2022-07-01T10:37:42+09:00",
+          "tree_id": "caa30de9b52682ef4b7e1b5c715128ffc12dc94d",
+          "url": "https://github.com/sugyan/yasai/commit/86a25a291493b8b39ce89cf74f8504d499db465e"
+        },
+        "date": 1656639735843,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 418703234,
+            "range": "± 28408364",
             "unit": "ns/iter"
           }
         ]
