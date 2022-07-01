@@ -116,7 +116,7 @@ mod tests {
                 .expect("failed to parse"),
         );
         assert_eq!(0, all_black_hands.keys().0);
-        assert_eq!(0, all_black_hands.keys().0);
+        assert_eq!(0, all_white_hands.keys().0);
         assert_ne!(all_black_hands.keys().1, all_white_hands.keys().1);
     }
 
