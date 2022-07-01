@@ -667,8 +667,8 @@ mod tests {
                 false,
             ),
         ];
-        for (pos, sq, expected) in test_cases {
-            assert_eq!(expected, pos.is_pawn_drop_mate(sq));
+        for (i, (pos, sq, expected)) in test_cases.into_iter().enumerate() {
+            assert_eq!(expected, pos.is_pawn_drop_mate(sq), "failed at {i}");
         }
     }
 }

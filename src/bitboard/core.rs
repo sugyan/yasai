@@ -20,13 +20,13 @@ const MASKED_BBS: [Bitboard; Square::NUM + 2] = {
 
 #[inline(always)]
 fn sliding_positive(bb: &Bitboard, mask: &Bitboard) -> Bitboard {
-    let tz = (*bb & *mask | BB_9I).to_u128().trailing_zeros();
+    let tz = (*bb & mask | BB_9I).to_u128().trailing_zeros();
     *mask & MASKED_BBS[tz as usize + 1]
 }
 
 #[inline(always)]
 fn sliding_negative(bb: &Bitboard, mask: &Bitboard) -> Bitboard {
-    let lz = (*bb & *mask | BB_1A).to_u128().leading_zeros();
+    let lz = (*bb & mask | BB_1A).to_u128().leading_zeros();
     *mask & !MASKED_BBS[127 - lz as usize]
 }
 
