@@ -310,7 +310,9 @@ impl PartialPosition {
     }
     #[inline(always)]
     fn king_position(&self, c: Color) -> Option<Square> {
-        (self.player_bb[c.array_index()] & self.piece_bb[PieceKind::King.array_index()]).pop()
+        (self.player_bb[c.array_index()] & self.piece_bb[PieceKind::King.array_index()])
+            .into_iter()
+            .next()
     }
 }
 
