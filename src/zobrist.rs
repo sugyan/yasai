@@ -107,11 +107,84 @@ mod tests {
 
     #[test]
     fn full_hands() {
-        let pos = Position::new(
+        let all_black_hands = Position::new(
             PartialPosition::from_usi("sfen 9/9/9/9/9/9/9/9/9 b 2R2B4G4S4N4L18P 1")
                 .expect("failed to parse"),
         );
-        assert_ne!(0, pos.key());
+        let all_white_hands = Position::new(
+            PartialPosition::from_usi("sfen 9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1")
+                .expect("failed to parse"),
+        );
+        assert_eq!(0, all_black_hands.keys().0);
+        assert_eq!(0, all_white_hands.keys().0);
+        assert_ne!(all_black_hands.keys().1, all_white_hands.keys().1);
+    }
+
+    #[test]
+    fn capture_all_pawns() {
+        // P1 *  *  *  * -OU *  *  * +OU
+        // P2 *  *  *  *  *  *  * -TO *
+        // P3 *  *  *  *  *  *  *  * -TO
+        // P4 * -FU *  *  *  *  * -TO *
+        // P5-FU * -FU *  *  *  *  * -TO
+        // P6 * -TO * -FU *  *  * -TO *
+        // P7-TO *  *  * -FU *  *  * -TO
+        // P8 * -TO *  *  * -FU * -TO *
+        // P9-TO *  *  *  *  * -TO *  *
+        let mut pos = Position::new(
+            PartialPosition::from_usi(
+                "sfen 4k3K/7+p1/8+p/1p5+p1/p1p5+p/1+p1p3+p1/+p3p3+p/1+p3p1+p1/+p5+p2 b 2R2B4G4S4N4L 1",
+            )
+            .expect("failed to parse"),
+        );
+        #[rustfmt::skip]
+        let moves = [
+            Move::Normal { from: Square::SQ_1A, to: Square::SQ_2B, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_2B, to: Square::SQ_1C, promote: false },
+            Move::Normal { from: Square::SQ_5B, to: Square::SQ_5A, promote: false },
+            Move::Normal { from: Square::SQ_1C, to: Square::SQ_2D, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_2D, to: Square::SQ_1E, promote: false },
+            Move::Normal { from: Square::SQ_5B, to: Square::SQ_5A, promote: false },
+            Move::Normal { from: Square::SQ_1E, to: Square::SQ_2F, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_2F, to: Square::SQ_1G, promote: false },
+            Move::Normal { from: Square::SQ_5B, to: Square::SQ_5A, promote: false },
+            Move::Normal { from: Square::SQ_1G, to: Square::SQ_2H, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_2H, to: Square::SQ_3I, promote: false },
+            Move::Normal { from: Square::SQ_5B, to: Square::SQ_5A, promote: false },
+            Move::Normal { from: Square::SQ_3I, to: Square::SQ_4H, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_4H, to: Square::SQ_5G, promote: false },
+            Move::Normal { from: Square::SQ_5B, to: Square::SQ_5A, promote: false },
+            Move::Normal { from: Square::SQ_5G, to: Square::SQ_6F, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_6F, to: Square::SQ_7E, promote: false },
+            Move::Normal { from: Square::SQ_5B, to: Square::SQ_5A, promote: false },
+            Move::Normal { from: Square::SQ_7E, to: Square::SQ_8D, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_8D, to: Square::SQ_9E, promote: false },
+            Move::Normal { from: Square::SQ_5B, to: Square::SQ_5A, promote: false },
+            Move::Normal { from: Square::SQ_9E, to: Square::SQ_8F, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_8F, to: Square::SQ_9G, promote: false },
+            Move::Normal { from: Square::SQ_5B, to: Square::SQ_5A, promote: false },
+            Move::Normal { from: Square::SQ_9G, to: Square::SQ_8H, promote: false },
+            Move::Normal { from: Square::SQ_5A, to: Square::SQ_5B, promote: false },
+            Move::Normal { from: Square::SQ_8H, to: Square::SQ_9I, promote: false },
+        ];
+        for (i, &m) in moves.iter().enumerate() {
+            assert!(pos.legal_moves().contains(&m), "move {:?} is not legal", m);
+            pos.do_move(m);
+            assert_eq!(
+                i as u8 / 2 + 1,
+                pos.hand(Color::Black)
+                    .count(PieceKind::Pawn)
+                    .unwrap_or_default()
+            );
+        }
     }
 
     #[test]
