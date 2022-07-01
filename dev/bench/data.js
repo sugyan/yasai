@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1656169911633,
+  "lastUpdate": 1656634904640,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -463,6 +463,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 406308097,
             "range": "± 157251",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "55f84a7511d2a6fc4c1f0b42bacb3da262eddf32",
+          "message": "Fix zobrist keys (#21)\n\n* Fix zobrist keys\r\n\r\n* Add tests",
+          "timestamp": "2022-07-01T09:18:02+09:00",
+          "tree_id": "57a8b1c4ef3a66494b029497e4b8092d6794352f",
+          "url": "https://github.com/sugyan/yasai/commit/55f84a7511d2a6fc4c1f0b42bacb3da262eddf32"
+        },
+        "date": 1656634904138,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 328120300,
+            "range": "± 773026",
             "unit": "ns/iter"
           }
         ]
