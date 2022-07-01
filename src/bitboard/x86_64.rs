@@ -57,34 +57,14 @@ impl Bitboard {
     pub fn contains(&self, square: Square) -> bool {
         unsafe { x86_64::_mm_test_all_zeros(self.0, Self::single(square).0) == 0 }
     }
-    pub fn pop(&mut self) -> Option<Square> {
-        let mut m = {
-            unsafe {
-                let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
-                x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
-                m.assume_init()
-            }
-        };
-        if m[0] != 0 {
-            unsafe {
-                let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut m[0]) + 1));
-                self.0 = x86_64::_mm_insert_epi64::<0>(self.0, m[0]);
-                sq
-            }
-        } else if m[1] != 0 {
-            unsafe {
-                let sq = Some(Square::from_u8_unchecked(Self::pop_lsb(&mut m[1]) + 64));
-                self.0 = x86_64::_mm_insert_epi64::<1>(self.0, m[1]);
-                sq
-            }
-        } else {
-            None
+    #[inline(always)]
+    pub fn count(self) -> u8 {
+        unsafe {
+            let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
+            x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
+            let i = m.assume_init();
+            (i[0].count_ones() + i[1].count_ones()) as u8
         }
-    }
-    fn pop_lsb(n: &mut i64) -> u8 {
-        let ret = n.trailing_zeros() as u8;
-        *n = *n & (*n - 1);
-        ret
     }
 }
 
@@ -274,15 +254,42 @@ impl PartialEq for Bitboard {
     }
 }
 
-impl Iterator for Bitboard {
+pub(crate) struct SquareIterator([i64; 2]);
+
+impl SquareIterator {
+    #[inline(always)]
+    fn pop_lsb(n: &mut i64) -> u8 {
+        let pos = n.trailing_zeros() as u8;
+        *n &= n.wrapping_sub(1);
+        pos
+    }
+}
+
+impl Iterator for SquareIterator {
     type Item = Square;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        self.pop()
+        if self.0[0] != 0 {
+            return Some(unsafe { Square::from_u8_unchecked(Self::pop_lsb(&mut self.0[0]) + 1) });
+        }
+        if self.0[1] != 0 {
+            return Some(unsafe { Square::from_u8_unchecked(Self::pop_lsb(&mut self.0[1]) + 64) });
+        }
+        None
     }
+}
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(81))
+impl IntoIterator for Bitboard {
+    type Item = Square;
+    type IntoIter = SquareIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        unsafe {
+            let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
+            x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
+            SquareIterator(m.assume_init())
+        }
     }
 }
 
