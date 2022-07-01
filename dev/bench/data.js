@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1656639737461,
+  "lastUpdate": 1656656348838,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -523,6 +523,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 418703234,
             "range": "± 28408364",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "833a1a0ac075f79038d998fa99152df46a786662",
+          "message": "Merge pull request #22 from sugyan/feature/simd-x86_64\n\nImprove Bitboard iterator for x86_64",
+          "timestamp": "2022-07-01T15:15:25+09:00",
+          "tree_id": "b648523ce175da87d9e3c2adb52f8c4e0aec76b8",
+          "url": "https://github.com/sugyan/yasai/commit/833a1a0ac075f79038d998fa99152df46a786662"
+        },
+        "date": 1656656347973,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 347047801,
+            "range": "± 97377",
             "unit": "ns/iter"
           }
         ]
