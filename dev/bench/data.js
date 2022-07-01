@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1656656348838,
+  "lastUpdate": 1656683218320,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -553,6 +553,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 347047801,
             "range": "± 97377",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6f4f7fbd85217f6007c29d4299ee1e28a3b47b33",
+          "message": "SIMD Bitboard for AArch64 NEON (#19)\n\n* Add simple aarch64 Bitboard\r\n\r\n* Improve performance\r\n\r\n* Rename functions",
+          "timestamp": "2022-07-01T22:43:18+09:00",
+          "tree_id": "725188c5f62ff217076464da1401a168e505d4b2",
+          "url": "https://github.com/sugyan/yasai/commit/6f4f7fbd85217f6007c29d4299ee1e28a3b47b33"
+        },
+        "date": 1656683217559,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 341770140,
+            "range": "± 51861967",
             "unit": "ns/iter"
           }
         ]
