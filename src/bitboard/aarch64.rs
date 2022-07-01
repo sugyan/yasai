@@ -1,6 +1,7 @@
 use super::Occupied;
 use shogi_core::Square;
 use std::arch::aarch64;
+use std::mem::MaybeUninit;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 #[derive(Clone, Copy, Debug)]
@@ -59,19 +60,19 @@ impl Bitboard {
     }
     #[inline(always)]
     pub fn count(self) -> u8 {
-        let m = self.to_u64x2();
+        let m = self.values();
         (m[0].count_ones() + m[1].count_ones()) as u8
     }
     #[inline(always)]
-    fn to_u64x2(self) -> [u64; 2] {
+    fn values(self) -> [u64; 2] {
         unsafe {
-            let m = std::mem::MaybeUninit::<[u64; 2]>::uninit();
+            let m = MaybeUninit::<[u64; 2]>::uninit();
             aarch64::vst1q_u64(m.as_ptr() as *mut _, self.0);
             m.assume_init()
         }
     }
     fn sliding_positive(&self, mask: &Bitboard) -> Bitboard {
-        let m = (*self & mask).to_u64x2();
+        let m = (*self & mask).values();
         let tz = if m[0] == 0 {
             (m[1] | 0x0002_0000).trailing_zeros() + 64
         } else {
@@ -85,7 +86,7 @@ impl Bitboard {
         })
     }
     fn sliding_negative(&self, mask: &Bitboard) -> Bitboard {
-        let m = (*self & mask).to_u64x2();
+        let m = (*self & mask).values();
         let lz = if m[1] == 0 {
             (m[0] | 1).leading_zeros() + 64
         } else {
@@ -266,11 +267,7 @@ impl IntoIterator for Bitboard {
     type IntoIter = SquareIterator;
 
     fn into_iter(self) -> Self::IntoIter {
-        unsafe {
-            let m = std::mem::MaybeUninit::<[u64; 2]>::uninit();
-            aarch64::vst1q_u64(m.as_ptr() as *mut _, self.0);
-            SquareIterator(m.assume_init())
-        }
+        SquareIterator(self.values())
     }
 }
 

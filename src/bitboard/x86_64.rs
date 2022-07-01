@@ -60,11 +60,15 @@ impl Bitboard {
     }
     #[inline(always)]
     pub fn count(self) -> u8 {
+        let m = self.values();
+        (m[0].count_ones() + m[1].count_ones()) as u8
+    }
+    #[inline(always)]
+    fn values(&self) -> [i64; 2] {
         unsafe {
-            let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
+            let m = MaybeUninit::<[i64; 2]>::uninit();
             x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
-            let i = m.assume_init();
-            (i[0].count_ones() + i[1].count_ones()) as u8
+            m.assume_init()
         }
     }
 }
@@ -287,11 +291,7 @@ impl IntoIterator for Bitboard {
     type IntoIter = SquareIterator;
 
     fn into_iter(self) -> Self::IntoIter {
-        unsafe {
-            let m = std::mem::MaybeUninit::<[i64; 2]>::uninit();
-            x86_64::_mm_storeu_si128(m.as_ptr() as *mut _, self.0);
-            SquareIterator(m.assume_init())
-        }
+        SquareIterator(self.values())
     }
 }
 
