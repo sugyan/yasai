@@ -3,30 +3,32 @@ use shogi_core::Square;
 use std::arch::wasm32;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-const SINGLE_VALUES: [[u64; 2]; Square::NUM] = {
-    let mut values = [[0, 0]; Square::NUM];
+const SINGLES: [Bitboard; Square::NUM] = {
+    let mut bbs = [Bitboard(wasm32::u64x2(0, 0)); Square::NUM];
     let mut i = 0;
     while i < Square::NUM {
-        values[i] = if i < 63 {
-            [1 << i, 0]
+        bbs[i] = Bitboard(if i < 63 {
+            wasm32::u64x2(1 << i, 0)
         } else {
-            [0, 1 << (i - 63)]
-        };
+            wasm32::u64x2(0, 1 << (i - 63))
+        });
+        i += 1;
+    }
+    bbs
+};
+
+const MASKED_VALUES: [wasm32::v128; Square::NUM + 2] = {
+    let mut values = [wasm32::u64x2(0, 0); Square::NUM + 2];
+    let mut i = 0;
+    while i < Square::NUM + 2 {
+        let u = (1_u128 << i) - 1;
+        values[i] = wasm32::u64x2(u as u64, (u >> 64) as u64);
         i += 1;
     }
     values
 };
 
-const MASKED_VALUES: [[u64; 2]; Square::NUM + 2] = {
-    let mut values = [[0; 2]; Square::NUM + 2];
-    let mut i = 0;
-    while i < Square::NUM + 2 {
-        let u = (1_u128 << i) - 1;
-        values[i] = [u as u64, (u >> 64) as u64];
-        i += 1;
-    }
-    values
-};
+const ONES: wasm32::v128 = wasm32::u64x2(0x7fff_ffff_ffff_ffff, 0x0003_ffff);
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Bitboard(wasm32::v128);
@@ -34,12 +36,11 @@ pub(crate) struct Bitboard(wasm32::v128);
 impl Bitboard {
     #[inline(always)]
     pub fn empty() -> Self {
-        Self(wasm32::u64x2(0, 0))
+        Self(wasm32::u64x2_splat(0))
     }
     #[inline(always)]
     pub fn single(square: Square) -> Self {
-        let values = SINGLE_VALUES[square.array_index()];
-        Self(wasm32::u64x2(values[0], values[1]))
+        SINGLES[square.array_index()]
     }
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
@@ -68,8 +69,7 @@ impl Bitboard {
         } else {
             m[0].trailing_zeros()
         };
-        let v = MASKED_VALUES[tz as usize + 1];
-        Self(wasm32::v128_and(mask.0, wasm32::u64x2(v[0], v[1])))
+        Self(wasm32::v128_and(mask.0, MASKED_VALUES[tz as usize + 1]))
     }
     fn sliding_negative(&self, mask: &Bitboard) -> Bitboard {
         let m = (*self & mask).values();
@@ -78,27 +78,39 @@ impl Bitboard {
         } else {
             m[1].leading_zeros()
         };
-        let v = MASKED_VALUES[127 - lz as usize];
-        Self(wasm32::v128_andnot(mask.0, wasm32::u64x2(v[0], v[1])))
+        Self(wasm32::v128_andnot(
+            mask.0,
+            MASKED_VALUES[127 - lz as usize],
+        ))
     }
 }
 
 impl Occupied for Bitboard {
+    #[inline(always)]
     fn shl(&self) -> Self {
         Self(wasm32::u64x2_shl(self.0, 1))
     }
+    #[inline(always)]
     fn shr(&self) -> Self {
         Self(wasm32::u64x2_shr(self.0, 1))
     }
+    #[inline(always)]
     fn sliding_positive_consecutive(&self, mask: &Self) -> Self {
-        self.sliding_positive(mask)
+        let and = wasm32::v128_and(self.0, mask.0);
+        let all = wasm32::u64x2_eq(self.0, self.0);
+        let add = wasm32::u64x2_add(and, all);
+        let xor = wasm32::v128_xor(add, and);
+        Self(wasm32::v128_and(xor, mask.0))
     }
+    #[inline(always)]
     fn sliding_negative_consecutive(&self, mask: &Self) -> Self {
         self.sliding_negative(mask)
     }
+    #[inline(always)]
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_positive(&masks[0]) | self.sliding_positive(&masks[1])
     }
+    #[inline(always)]
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
     }
@@ -165,10 +177,7 @@ impl Not for Bitboard {
 
     #[inline(always)]
     fn not(self) -> Self::Output {
-        Bitboard(wasm32::v128_andnot(
-            wasm32::u64x2(0x7fff_ffff_ffff_ffff, 0x0003_ffff),
-            self.0,
-        ))
+        Bitboard(wasm32::v128_andnot(ONES, self.0))
     }
 }
 
@@ -177,10 +186,7 @@ impl Not for &Bitboard {
 
     #[inline(always)]
     fn not(self) -> Self::Output {
-        Bitboard(wasm32::v128_andnot(
-            wasm32::u64x2(0x7fff_ffff_ffff_ffff, 0x0003_ffff),
-            self.0,
-        ))
+        Bitboard(wasm32::v128_andnot(ONES, self.0))
     }
 }
 
