@@ -294,33 +294,3 @@ impl IntoIterator for Bitboard {
         SquareIterator(self.values())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use shogi_core::consts::square::*;
-
-    #[test]
-    fn sliding_positives() {
-        let bb = Bitboard::single(SQ_8C) | Bitboard::single(SQ_8G);
-        assert_eq!(
-            bb | Bitboard::single(SQ_7D) | Bitboard::single(SQ_7F),
-            bb.sliding_positives(&[
-                Bitboard::single(SQ_7D) | Bitboard::single(SQ_8C) | Bitboard::single(SQ_9B),
-                Bitboard::single(SQ_7F) | Bitboard::single(SQ_8G) | Bitboard::single(SQ_9H),
-            ])
-        );
-    }
-
-    #[test]
-    fn sliding_negatives() {
-        let bb = Bitboard::single(SQ_2C) | Bitboard::single(SQ_2G);
-        assert_eq!(
-            bb | Bitboard::single(SQ_3D) | Bitboard::single(SQ_3F),
-            bb.sliding_negatives(&[
-                Bitboard::single(SQ_3D) | Bitboard::single(SQ_2C) | Bitboard::single(SQ_1B),
-                Bitboard::single(SQ_3F) | Bitboard::single(SQ_2G) | Bitboard::single(SQ_1H),
-            ])
-        );
-    }
-}

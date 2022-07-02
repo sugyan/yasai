@@ -26,6 +26,13 @@ cfg_if::cfg_if! {
     ))] {
         mod aarch64;
         pub(crate) use self::aarch64::Bitboard;
+    } else if #[cfg(all(
+        feature = "simd",
+        target_arch = "wasm32",
+        target_feature = "simd128"
+    ))] {
+        mod wasm32;
+        pub(crate) use self::wasm32::Bitboard;
     } else {
         mod core;
         pub(crate) use self::core::Bitboard;
@@ -35,6 +42,7 @@ cfg_if::cfg_if! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shogi_core::consts::square::*;
     use shogi_core::Square;
 
     #[test]
@@ -43,17 +51,23 @@ mod tests {
     }
 
     #[test]
+    fn single() {
+        for sq in Square::all() {
+            assert_eq!(1, Bitboard::single(sq).count());
+        }
+    }
+
+    #[test]
     fn contains() {
         for sq in Square::all() {
-            let bb = Bitboard::single(sq);
-            assert!(bb.contains(sq));
+            assert!(Bitboard::single(sq).contains(sq));
         }
     }
 
     #[test]
     fn bit_ops() {
         let bb0 = Bitboard::empty();
-        let bb1 = Bitboard::single(Square::SQ_1A);
+        let bb1 = Bitboard::single(SQ_1A);
         assert_eq!(bb0, bb0 & bb1);
         assert_eq!(bb1, bb0 | bb1);
         assert_eq!(bb1, bb0 ^ bb1);
@@ -70,13 +84,31 @@ mod tests {
 
     #[test]
     fn shift() {
+        assert_eq!(Bitboard::single(SQ_1B), Bitboard::single(SQ_1A).shl());
+        assert_eq!(Bitboard::single(SQ_9H), Bitboard::single(SQ_9I).shr());
+    }
+
+    #[test]
+    fn sliding_positives() {
+        let bb = Bitboard::single(SQ_8C) | Bitboard::single(SQ_8G);
         assert_eq!(
-            Bitboard::single(Square::SQ_1B),
-            Bitboard::single(Square::SQ_1A).shl()
+            bb | Bitboard::single(SQ_7D) | Bitboard::single(SQ_7F),
+            bb.sliding_positives(&[
+                Bitboard::single(SQ_7D) | Bitboard::single(SQ_8C) | Bitboard::single(SQ_9B),
+                Bitboard::single(SQ_7F) | Bitboard::single(SQ_8G) | Bitboard::single(SQ_9H),
+            ])
         );
+    }
+
+    #[test]
+    fn sliding_negatives() {
+        let bb = Bitboard::single(SQ_2C) | Bitboard::single(SQ_2G);
         assert_eq!(
-            Bitboard::single(Square::SQ_9H),
-            Bitboard::single(Square::SQ_9I).shr()
+            bb | Bitboard::single(SQ_3D) | Bitboard::single(SQ_3F),
+            bb.sliding_negatives(&[
+                Bitboard::single(SQ_3D) | Bitboard::single(SQ_2C) | Bitboard::single(SQ_1B),
+                Bitboard::single(SQ_3F) | Bitboard::single(SQ_2G) | Bitboard::single(SQ_1H),
+            ])
         );
     }
 }

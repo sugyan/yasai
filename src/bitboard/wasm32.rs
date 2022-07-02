@@ -1,62 +1,54 @@
 use super::Occupied;
 use shogi_core::Square;
-use std::arch::aarch64;
-use std::mem::MaybeUninit;
+use std::arch::wasm32;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Bitboard(aarch64::uint64x2_t);
-
-const SINGLE_VALUES: [[u64; 2]; Square::NUM] = {
-    let mut values = [[0, 0]; Square::NUM];
+const SINGLES: [Bitboard; Square::NUM] = {
+    let mut bbs = [Bitboard(wasm32::u64x2(0, 0)); Square::NUM];
     let mut i = 0;
     while i < Square::NUM {
-        values[i] = if i < 63 {
-            [1 << i, 0]
+        bbs[i] = Bitboard(if i < 63 {
+            wasm32::u64x2(1 << i, 0)
         } else {
-            [0, 1 << (i - 63)]
-        };
+            wasm32::u64x2(0, 1 << (i - 63))
+        });
         i += 1;
     }
-    values
+    bbs
 };
 
-const MASKED_VALUES: [[u64; 2]; Square::NUM + 2] = {
-    let mut values = [[0; 2]; Square::NUM + 2];
+const MASKED_VALUES: [wasm32::v128; Square::NUM + 2] = {
+    let mut values = [wasm32::u64x2(0, 0); Square::NUM + 2];
     let mut i = 0;
     while i < Square::NUM + 2 {
         let u = (1_u128 << i) - 1;
-        values[i] = [u as u64, (u >> 64) as u64];
+        values[i] = wasm32::u64x2(u as u64, (u >> 64) as u64);
         i += 1;
     }
     values
 };
+
+const ONES: wasm32::v128 = wasm32::u64x2(0x7fff_ffff_ffff_ffff, 0x0003_ffff);
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Bitboard(wasm32::v128);
 
 impl Bitboard {
     #[inline(always)]
     pub fn empty() -> Self {
-        Self(unsafe { aarch64::vdupq_n_u64(0) })
+        Self(wasm32::u64x2_splat(0))
     }
     #[inline(always)]
     pub fn single(square: Square) -> Self {
-        let e = SINGLE_VALUES[square.array_index()];
-        Self(unsafe { aarch64::vld1q_u64(e.as_ptr()) })
+        SINGLES[square.array_index()]
     }
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::veorq_u64(self.0, aarch64::vdupq_n_u64(0)),
-            ))) == 0
-        }
+        !wasm32::v128_any_true(self.0)
     }
     #[inline(always)]
     pub fn contains(&self, square: Square) -> bool {
-        unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::vandq_u64(self.0, Self::single(square).0),
-            ))) != 0
-        }
+        wasm32::v128_any_true(wasm32::v128_and(self.0, Self::single(square).0))
     }
     #[inline(always)]
     pub fn count(self) -> u8 {
@@ -65,11 +57,10 @@ impl Bitboard {
     }
     #[inline(always)]
     fn values(self) -> [u64; 2] {
-        unsafe {
-            let m = MaybeUninit::<[u64; 2]>::uninit();
-            aarch64::vst1q_u64(m.as_ptr() as *mut _, self.0);
-            m.assume_init()
-        }
+        [
+            wasm32::u64x2_extract_lane::<0>(self.0),
+            wasm32::u64x2_extract_lane::<1>(self.0),
+        ]
     }
     fn sliding_positive(&self, mask: &Bitboard) -> Bitboard {
         let m = (*self & mask).values();
@@ -78,12 +69,7 @@ impl Bitboard {
         } else {
             m[0].trailing_zeros()
         };
-        Self(unsafe {
-            aarch64::vandq_u64(
-                mask.0,
-                aarch64::vld1q_u64(MASKED_VALUES[tz as usize + 1].as_ptr()),
-            )
-        })
+        Self(wasm32::v128_and(mask.0, MASKED_VALUES[tz as usize + 1]))
     }
     fn sliding_negative(&self, mask: &Bitboard) -> Bitboard {
         let m = (*self & mask).values();
@@ -92,42 +78,33 @@ impl Bitboard {
         } else {
             m[1].leading_zeros()
         };
-        Self(unsafe {
-            aarch64::vbicq_u64(
-                mask.0,
-                aarch64::vld1q_u64(MASKED_VALUES[127 - lz as usize].as_ptr()),
-            )
-        })
+        Self(wasm32::v128_andnot(
+            mask.0,
+            MASKED_VALUES[127 - lz as usize],
+        ))
     }
 }
 
 impl Occupied for Bitboard {
     #[inline(always)]
     fn shl(&self) -> Self {
-        Self(unsafe { aarch64::vshlq_n_u64::<1>(self.0) })
+        Self(wasm32::u64x2_shl(self.0, 1))
     }
     #[inline(always)]
     fn shr(&self) -> Self {
-        Self(unsafe { aarch64::vshrq_n_u64::<1>(self.0) })
+        Self(wasm32::u64x2_shr(self.0, 1))
     }
+    #[inline(always)]
     fn sliding_positive_consecutive(&self, mask: &Self) -> Self {
-        unsafe {
-            let and = aarch64::vandq_u64(self.0, mask.0);
-            let all = aarch64::vceqq_u64(self.0, self.0);
-            let add = aarch64::vaddq_u64(and, all);
-            let xor = aarch64::veorq_u64(add, and);
-            Self(aarch64::vandq_u64(xor, mask.0))
-        }
+        let and = wasm32::v128_and(self.0, mask.0);
+        let all = wasm32::u64x2_eq(self.0, self.0);
+        let add = wasm32::u64x2_add(and, all);
+        let xor = wasm32::v128_xor(add, and);
+        Self(wasm32::v128_and(xor, mask.0))
     }
+    #[inline(always)]
     fn sliding_negative_consecutive(&self, mask: &Self) -> Self {
-        unsafe {
-            let m = aarch64::vandq_u64(self.0, mask.0);
-            let m = aarch64::vorrq_u64(m, aarch64::vshrq_n_u64::<1>(m));
-            let m = aarch64::vorrq_u64(m, aarch64::vshrq_n_u64::<2>(m));
-            let m = aarch64::vorrq_u64(m, aarch64::vshrq_n_u64::<4>(m));
-            let m = aarch64::vshrq_n_u64::<1>(m);
-            Self(aarch64::vbicq_u64(mask.0, m))
-        }
+        self.sliding_negative(mask)
     }
     #[inline(always)]
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self {
@@ -137,14 +114,12 @@ impl Occupied for Bitboard {
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
     }
-    #[inline(always)]
     fn vacant_files(&self) -> Self {
-        unsafe {
-            let mask = aarch64::vld1q_u64([0x4020_1008_0402_0100, 0x0002_0100].as_ptr());
-            let sub = aarch64::vsubq_u64(mask, self.0);
-            let shr = aarch64::vshrq_n_u64::<8>(aarch64::vandq_u64(sub, mask));
-            Self(aarch64::veorq_u64(mask, aarch64::vsubq_u64(mask, shr)))
-        }
+        let mask = wasm32::u64x2(0x4020_1008_0402_0100, 0x0002_0100);
+        let sub = wasm32::u64x2_sub(mask, self.0);
+        let and = wasm32::v128_and(sub, mask);
+        let shr = wasm32::u64x2_shr(and, 8);
+        Self(wasm32::v128_xor(mask, wasm32::u64x2_sub(mask, shr)))
     }
 }
 
@@ -159,7 +134,7 @@ macro_rules! define_bit_trait {
 
             #[inline(always)]
             fn $func(self, rhs: Self) -> Self::Output {
-                Self(unsafe { aarch64::$intrinsic(self.0, rhs.0) })
+                Self(wasm32::$intrinsic(self.0, rhs.0))
             }
         }
         impl $trait<&Bitboard> for Bitboard {
@@ -167,13 +142,13 @@ macro_rules! define_bit_trait {
 
             #[inline(always)]
             fn $func(self, rhs: &Self) -> Self::Output {
-                Self(unsafe { aarch64::$intrinsic(self.0, rhs.0) })
+                Self(wasm32::$intrinsic(self.0, rhs.0))
             }
         }
         impl $assign_trait for Bitboard {
             #[inline(always)]
             fn $assign_func(&mut self, rhs: Self) {
-                self.0 = unsafe { aarch64::$intrinsic(self.0, rhs.0) }
+                self.0 = wasm32::$intrinsic(self.0, rhs.0)
             }
         }
     };
@@ -182,19 +157,19 @@ macro_rules! define_bit_trait {
 define_bit_trait!(
     target_trait => BitAnd, assign_trait => BitAndAssign,
     target_func => bitand, assign_func => bitand_assign,
-    intrinsic => vandq_u64
+    intrinsic => v128_and
 );
 
 define_bit_trait!(
     target_trait => BitOr, assign_trait => BitOrAssign,
     target_func => bitor, assign_func => bitor_assign,
-    intrinsic => vorrq_u64
+    intrinsic => v128_or
 );
 
 define_bit_trait!(
     target_trait => BitXor, assign_trait => BitXorAssign,
     target_func => bitxor, assign_func => bitxor_assign,
-    intrinsic => veorq_u64
+    intrinsic => v128_xor
 );
 
 impl Not for Bitboard {
@@ -202,12 +177,7 @@ impl Not for Bitboard {
 
     #[inline(always)]
     fn not(self) -> Self::Output {
-        Bitboard(unsafe {
-            aarch64::vbicq_u64(
-                aarch64::vld1q_u64([0x7fff_ffff_ffff_ffff, 0x0003_ffff].as_ptr()),
-                self.0,
-            )
-        })
+        Bitboard(wasm32::v128_andnot(ONES, self.0))
     }
 }
 
@@ -216,23 +186,14 @@ impl Not for &Bitboard {
 
     #[inline(always)]
     fn not(self) -> Self::Output {
-        Bitboard(unsafe {
-            aarch64::vbicq_u64(
-                aarch64::vld1q_u64([0x7fff_ffff_ffff_ffff, 0x0003_ffff].as_ptr()),
-                self.0,
-            )
-        })
+        Bitboard(wasm32::v128_andnot(ONES, self.0))
     }
 }
 
 impl PartialEq for Bitboard {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::veorq_u64(self.0, other.0),
-            ))) == 0
-        }
+        wasm32::u64x2_all_true(wasm32::u64x2_eq(self.0, other.0))
     }
 }
 
