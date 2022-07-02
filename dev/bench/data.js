@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1656683218320,
+  "lastUpdate": 1656773894125,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -583,6 +583,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 341770140,
             "range": "± 51861967",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0502f315fe14ed89c5ca7261edf4bcfecbaa8489",
+          "message": "Implement wasm32 simd128 Bitboard (#23)\n\n* Add wasm32 simd128 Bitboard\r\n\r\n* Improve performance",
+          "timestamp": "2022-07-02T23:54:28+09:00",
+          "tree_id": "8312c0e831148c12d18a4cbc7b9a23594b952a60",
+          "url": "https://github.com/sugyan/yasai/commit/0502f315fe14ed89c5ca7261edf4bcfecbaa8489"
+        },
+        "date": 1656773893734,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 352913480,
+            "range": "± 803735",
             "unit": "ns/iter"
           }
         ]
