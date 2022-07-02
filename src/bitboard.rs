@@ -26,6 +26,13 @@ cfg_if::cfg_if! {
     ))] {
         mod aarch64;
         pub(crate) use self::aarch64::Bitboard;
+    } else if #[cfg(all(
+        feature = "simd",
+        target_arch = "wasm32",
+        target_feature = "simd128"
+    ))] {
+        mod wasm32;
+        pub(crate) use self::wasm32::Bitboard;
     } else {
         mod core;
         pub(crate) use self::core::Bitboard;
