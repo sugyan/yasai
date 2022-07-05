@@ -84,28 +84,20 @@ impl Occupied for Bitboard {
     }
     fn sliding_positive_consecutive(&self, mask: &Self) -> Self {
         unsafe {
-            let masked = x86_64::_mm_and_si128(self.0, mask.0);
+            let and = x86_64::_mm_and_si128(self.0, mask.0);
             // calculate decremented masked
             let all = x86_64::_mm_cmpeq_epi64(self.0, self.0);
             //      self.0: ...00000000000010000000 0000000000000000000000000000000000000000000000000000000000000000
-            let add = x86_64::_mm_add_epi64(masked, all);
+            let add = x86_64::_mm_add_epi64(and, all);
             // self.0 + !0: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
-            let cmp = x86_64::_mm_cmpeq_epi64(add, all);
-            // self.0 == 0: ...00000000000000000000 1111111111111111111111111111111111111111111111111111111111111111
-            let shl = x86_64::_mm_slli_si128::<8>(x86_64::_mm_xor_si128(cmp, all));
-            //  !cmp << 64: ...00000000000000000000 0000000000000000000000000000000000000000000000000000000000000000
-            let dec = x86_64::_mm_sub_epi64(add, shl);
-            //   add + shl: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
-            Self(x86_64::_mm_and_si128(
-                x86_64::_mm_xor_si128(masked, dec),
-                mask.0,
-            ))
+            let xor = x86_64::_mm_xor_si128(and, add);
+            //            : ...00000000000011111111 1111111111111111111111111111111111111111111111111111111111111111
+            Self(x86_64::_mm_and_si128(xor, mask.0))
         }
     }
     fn sliding_negative_consecutive(&self, mask: &Self) -> Self {
         unsafe {
-            let masked = x86_64::_mm_and_si128(self.0, mask.0);
-            let m = masked;
+            let m = x86_64::_mm_and_si128(self.0, mask.0);
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<1>(m));
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<2>(m));
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<4>(m));
