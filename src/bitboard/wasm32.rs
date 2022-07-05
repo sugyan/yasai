@@ -3,22 +3,22 @@ use shogi_core::Square;
 use std::arch::wasm32;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-const SINGLES: [Bitboard; Square::NUM] = {
-    let mut bbs = [Bitboard(wasm32::u64x2(0, 0)); Square::NUM];
+const SINGLES: [wasm32::v128; Square::NUM] = {
+    let mut values = [ZERO; Square::NUM];
     let mut i = 0;
     while i < Square::NUM {
-        bbs[i] = Bitboard(if i < 63 {
+        values[i] = if i < 63 {
             wasm32::u64x2(1 << i, 0)
         } else {
             wasm32::u64x2(0, 1 << (i - 63))
-        });
+        };
         i += 1;
     }
-    bbs
+    values
 };
 
 const MASKED_VALUES: [wasm32::v128; Square::NUM + 2] = {
-    let mut values = [wasm32::u64x2(0, 0); Square::NUM + 2];
+    let mut values = [ZERO; Square::NUM + 2];
     let mut i = 0;
     while i < Square::NUM + 2 {
         let u = (1_u128 << i) - 1;
@@ -28,6 +28,7 @@ const MASKED_VALUES: [wasm32::v128; Square::NUM + 2] = {
     values
 };
 
+const ZERO: wasm32::v128 = wasm32::u64x2(0, 0);
 const ONES: wasm32::v128 = wasm32::u64x2(0x7fff_ffff_ffff_ffff, 0x0003_ffff);
 
 #[derive(Clone, Copy, Debug)]
@@ -36,11 +37,11 @@ pub(crate) struct Bitboard(wasm32::v128);
 impl Bitboard {
     #[inline(always)]
     pub fn empty() -> Self {
-        Self(wasm32::u64x2_splat(0))
+        Self(ZERO)
     }
     #[inline(always)]
     pub fn single(square: Square) -> Self {
-        SINGLES[square.array_index()]
+        Self(SINGLES[square.array_index()])
     }
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
