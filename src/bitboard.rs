@@ -11,6 +11,39 @@ where
     fn vacant_files(&self) -> Self;
 }
 
+#[allow(unused_macros)]
+macro_rules! define_bit_trait {
+    (
+        target_trait => $trait:ident, assign_trait => $assign_trait:ident,
+        target_func  => $func:ident,  assign_func  => $assign_func:ident,
+        intrinsic    => $intrinsic:path
+    ) => {
+        impl $trait for Bitboard {
+            type Output = Bitboard;
+
+            #[inline(always)]
+            fn $func(self, rhs: Self) -> Self::Output {
+                Self($intrinsic(self.0, rhs.0))
+            }
+        }
+        impl $trait<&Bitboard> for Bitboard {
+            type Output = Bitboard;
+
+            #[inline(always)]
+            fn $func(self, rhs: &Self) -> Self::Output {
+                Self($intrinsic(self.0, rhs.0))
+            }
+        }
+        impl $assign_trait for Bitboard {
+            #[inline(always)]
+            fn $assign_func(&mut self, rhs: Self) {
+                self.0 = $intrinsic(self.0, rhs.0)
+            }
+        }
+    };
+}
+
+#[allow(unused_macros)]
 macro_rules! define_bit_trait_unsafe {
     (
         target_trait => $trait:ident, assign_trait => $assign_trait:ident,

@@ -4,9 +4,6 @@ use std::arch::x86_64;
 use std::mem::MaybeUninit;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Bitboard(x86_64::__m128i);
-
 const SINGLE_VALUES: [(i64, i64); Square::NUM] = {
     let mut values = [(0, 0); Square::NUM];
     let mut i = 0;
@@ -39,6 +36,9 @@ const MASKED_VALUES: [(i64, i64); 16] = [
     (-1, 0x0000_ffff_ffff_ffff),
     (-1, 0x00ff_ffff_ffff_ffff),
 ];
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Bitboard(x86_64::__m128i);
 
 impl Bitboard {
     #[inline(always)]

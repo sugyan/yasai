@@ -4,9 +4,6 @@ use std::arch::aarch64;
 use std::mem::MaybeUninit;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Bitboard(aarch64::uint64x2_t);
-
 const SINGLE_VALUES: [[u64; 2]; Square::NUM] = {
     let mut values = [[0, 0]; Square::NUM];
     let mut i = 0;
@@ -31,6 +28,9 @@ const MASKED_VALUES: [[u64; 2]; Square::NUM + 2] = {
     }
     values
 };
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Bitboard(aarch64::uint64x2_t);
 
 impl Bitboard {
     #[inline(always)]
@@ -137,7 +137,6 @@ impl Occupied for Bitboard {
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
     }
-    #[inline(always)]
     fn vacant_files(&self) -> Self {
         unsafe {
             let mask = aarch64::vld1q_u64([0x4020_1008_0402_0100, 0x0002_0100].as_ptr());
@@ -151,19 +150,19 @@ impl Occupied for Bitboard {
 define_bit_trait_unsafe!(
     target_trait => BitAnd, assign_trait => BitAndAssign,
     target_func => bitand, assign_func => bitand_assign,
-    intrinsic => vandq_u64
+    intrinsic => aarch64::vandq_u64
 );
 
 define_bit_trait_unsafe!(
     target_trait => BitOr, assign_trait => BitOrAssign,
     target_func => bitor, assign_func => bitor_assign,
-    intrinsic => vorrq_u64
+    intrinsic => aarch64::vorrq_u64
 );
 
 define_bit_trait_unsafe!(
     target_trait => BitXor, assign_trait => BitXorAssign,
     target_func => bitxor, assign_func => bitxor_assign,
-    intrinsic => veorq_u64
+    intrinsic => aarch64::veorq_u64
 );
 
 impl Not for Bitboard {

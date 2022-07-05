@@ -123,53 +123,22 @@ impl Occupied for Bitboard {
     }
 }
 
-macro_rules! define_bit_trait {
-    (
-        target_trait => $trait:ident, assign_trait => $assign_trait:ident,
-        target_func  => $func:ident,  assign_func  => $assign_func:ident,
-        intrinsic    => $intrinsic:ident
-    ) => {
-        impl $trait for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: Self) -> Self::Output {
-                Self(wasm32::$intrinsic(self.0, rhs.0))
-            }
-        }
-        impl $trait<&Bitboard> for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: &Self) -> Self::Output {
-                Self(wasm32::$intrinsic(self.0, rhs.0))
-            }
-        }
-        impl $assign_trait for Bitboard {
-            #[inline(always)]
-            fn $assign_func(&mut self, rhs: Self) {
-                self.0 = wasm32::$intrinsic(self.0, rhs.0)
-            }
-        }
-    };
-}
-
 define_bit_trait!(
     target_trait => BitAnd, assign_trait => BitAndAssign,
     target_func => bitand, assign_func => bitand_assign,
-    intrinsic => v128_and
+    intrinsic => wasm32::v128_and
 );
 
 define_bit_trait!(
     target_trait => BitOr, assign_trait => BitOrAssign,
     target_func => bitor, assign_func => bitor_assign,
-    intrinsic => v128_or
+    intrinsic => wasm32::v128_or
 );
 
 define_bit_trait!(
     target_trait => BitXor, assign_trait => BitXorAssign,
     target_func => bitxor, assign_func => bitxor_assign,
-    intrinsic => v128_xor
+    intrinsic => wasm32::v128_xor
 );
 
 impl Not for Bitboard {
