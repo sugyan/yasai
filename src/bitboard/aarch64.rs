@@ -148,50 +148,19 @@ impl Occupied for Bitboard {
     }
 }
 
-macro_rules! define_bit_trait {
-    (
-        target_trait => $trait:ident, assign_trait => $assign_trait:ident,
-        target_func  => $func:ident,  assign_func  => $assign_func:ident,
-        intrinsic    => $intrinsic:ident
-    ) => {
-        impl $trait for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: Self) -> Self::Output {
-                Self(unsafe { aarch64::$intrinsic(self.0, rhs.0) })
-            }
-        }
-        impl $trait<&Bitboard> for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: &Self) -> Self::Output {
-                Self(unsafe { aarch64::$intrinsic(self.0, rhs.0) })
-            }
-        }
-        impl $assign_trait for Bitboard {
-            #[inline(always)]
-            fn $assign_func(&mut self, rhs: Self) {
-                self.0 = unsafe { aarch64::$intrinsic(self.0, rhs.0) }
-            }
-        }
-    };
-}
-
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitAnd, assign_trait => BitAndAssign,
     target_func => bitand, assign_func => bitand_assign,
     intrinsic => vandq_u64
 );
 
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitOr, assign_trait => BitOrAssign,
     target_func => bitor, assign_func => bitor_assign,
     intrinsic => vorrq_u64
 );
 
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitXor, assign_trait => BitXorAssign,
     target_func => bitxor, assign_func => bitxor_assign,
     intrinsic => veorq_u64
