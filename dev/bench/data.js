@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1656774297161,
+  "lastUpdate": 1657117231999,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -643,6 +643,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 311413147,
             "range": "± 2393090",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9ea383121525b7391aceb8ffeead3cc6eda037a4",
+          "message": "Merge pull request #25 from sugyan/refactor/bitboards\n\nRefactor bitboards",
+          "timestamp": "2022-07-06T23:17:37+09:00",
+          "tree_id": "d21e5bc1568fde5989c6704d3c88db1b78520bc0",
+          "url": "https://github.com/sugyan/yasai/commit/9ea383121525b7391aceb8ffeead3cc6eda037a4"
+        },
+        "date": 1657117231562,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 311661306,
+            "range": "± 125048",
             "unit": "ns/iter"
           }
         ]
