@@ -4,9 +4,6 @@ use std::arch::aarch64;
 use std::mem::MaybeUninit;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Bitboard(aarch64::uint64x2_t);
-
 const SINGLE_VALUES: [[u64; 2]; Square::NUM] = {
     let mut values = [[0, 0]; Square::NUM];
     let mut i = 0;
@@ -32,6 +29,9 @@ const MASKED_VALUES: [[u64; 2]; Square::NUM + 2] = {
     values
 };
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Bitboard(aarch64::uint64x2_t);
+
 impl Bitboard {
     #[inline(always)]
     pub fn empty() -> Self {
@@ -45,18 +45,14 @@ impl Bitboard {
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::veorq_u64(self.0, aarch64::vdupq_n_u64(0)),
-            ))) == 0
+            let vqmovn = aarch64::vqmovn_u64(self.0);
+            let result = aarch64::vreinterpret_u64_u32(vqmovn);
+            aarch64::vget_lane_u64::<0>(result) == 0
         }
     }
     #[inline(always)]
     pub fn contains(&self, square: Square) -> bool {
-        unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::vandq_u64(self.0, Self::single(square).0),
-            ))) != 0
-        }
+        !(Self::single(square) & self).is_empty()
     }
     #[inline(always)]
     pub fn count(self) -> u8 {
@@ -137,7 +133,6 @@ impl Occupied for Bitboard {
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self {
         self.sliding_negative(&masks[0]) | self.sliding_negative(&masks[1])
     }
-    #[inline(always)]
     fn vacant_files(&self) -> Self {
         unsafe {
             let mask = aarch64::vld1q_u64([0x4020_1008_0402_0100, 0x0002_0100].as_ptr());
@@ -148,53 +143,22 @@ impl Occupied for Bitboard {
     }
 }
 
-macro_rules! define_bit_trait {
-    (
-        target_trait => $trait:ident, assign_trait => $assign_trait:ident,
-        target_func  => $func:ident,  assign_func  => $assign_func:ident,
-        intrinsic    => $intrinsic:ident
-    ) => {
-        impl $trait for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: Self) -> Self::Output {
-                Self(unsafe { aarch64::$intrinsic(self.0, rhs.0) })
-            }
-        }
-        impl $trait<&Bitboard> for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: &Self) -> Self::Output {
-                Self(unsafe { aarch64::$intrinsic(self.0, rhs.0) })
-            }
-        }
-        impl $assign_trait for Bitboard {
-            #[inline(always)]
-            fn $assign_func(&mut self, rhs: Self) {
-                self.0 = unsafe { aarch64::$intrinsic(self.0, rhs.0) }
-            }
-        }
-    };
-}
-
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitAnd, assign_trait => BitAndAssign,
     target_func => bitand, assign_func => bitand_assign,
-    intrinsic => vandq_u64
+    intrinsic => aarch64::vandq_u64
 );
 
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitOr, assign_trait => BitOrAssign,
     target_func => bitor, assign_func => bitor_assign,
-    intrinsic => vorrq_u64
+    intrinsic => aarch64::vorrq_u64
 );
 
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitXor, assign_trait => BitXorAssign,
     target_func => bitxor, assign_func => bitxor_assign,
-    intrinsic => veorq_u64
+    intrinsic => aarch64::veorq_u64
 );
 
 impl Not for Bitboard {
@@ -228,11 +192,7 @@ impl Not for &Bitboard {
 impl PartialEq for Bitboard {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::veorq_u64(self.0, other.0),
-            ))) == 0
-        }
+        (*self ^ other).is_empty()
     }
 }
 

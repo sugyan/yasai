@@ -4,9 +4,6 @@ use std::arch::x86_64;
 use std::mem::MaybeUninit;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Bitboard(x86_64::__m128i);
-
 const SINGLE_VALUES: [(i64, i64); Square::NUM] = {
     let mut values = [(0, 0); Square::NUM];
     let mut i = 0;
@@ -39,6 +36,9 @@ const MASKED_VALUES: [(i64, i64); 16] = [
     (-1, 0x0000_ffff_ffff_ffff),
     (-1, 0x00ff_ffff_ffff_ffff),
 ];
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Bitboard(x86_64::__m128i);
 
 impl Bitboard {
     #[inline(always)]
@@ -84,28 +84,20 @@ impl Occupied for Bitboard {
     }
     fn sliding_positive_consecutive(&self, mask: &Self) -> Self {
         unsafe {
-            let masked = x86_64::_mm_and_si128(self.0, mask.0);
+            let and = x86_64::_mm_and_si128(self.0, mask.0);
             // calculate decremented masked
             let all = x86_64::_mm_cmpeq_epi64(self.0, self.0);
             //      self.0: ...00000000000010000000 0000000000000000000000000000000000000000000000000000000000000000
-            let add = x86_64::_mm_add_epi64(masked, all);
+            let add = x86_64::_mm_add_epi64(and, all);
             // self.0 + !0: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
-            let cmp = x86_64::_mm_cmpeq_epi64(add, all);
-            // self.0 == 0: ...00000000000000000000 1111111111111111111111111111111111111111111111111111111111111111
-            let shl = x86_64::_mm_slli_si128::<8>(x86_64::_mm_xor_si128(cmp, all));
-            //  !cmp << 64: ...00000000000000000000 0000000000000000000000000000000000000000000000000000000000000000
-            let dec = x86_64::_mm_sub_epi64(add, shl);
-            //   add + shl: ...00000000000001111111 1111111111111111111111111111111111111111111111111111111111111111
-            Self(x86_64::_mm_and_si128(
-                x86_64::_mm_xor_si128(masked, dec),
-                mask.0,
-            ))
+            let xor = x86_64::_mm_xor_si128(and, add);
+            //            : ...00000000000011111111 1111111111111111111111111111111111111111111111111111111111111111
+            Self(x86_64::_mm_and_si128(xor, mask.0))
         }
     }
     fn sliding_negative_consecutive(&self, mask: &Self) -> Self {
         unsafe {
-            let masked = x86_64::_mm_and_si128(self.0, mask.0);
-            let m = masked;
+            let m = x86_64::_mm_and_si128(self.0, mask.0);
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<1>(m));
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<2>(m));
             let m = x86_64::_mm_or_si128(m, x86_64::_mm_srli_epi64::<4>(m));
@@ -172,53 +164,22 @@ impl Occupied for Bitboard {
     }
 }
 
-macro_rules! define_bit_trait {
-    (
-        target_trait => $trait:ident, assign_trait => $assign_trait:ident,
-        target_func  => $func:ident,  assign_func  => $assign_func:ident,
-        intrinsic    => $intrinsic:ident
-    ) => {
-        impl $trait for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: Self) -> Self::Output {
-                Self(unsafe { x86_64::$intrinsic(self.0, rhs.0) })
-            }
-        }
-        impl $trait<&Bitboard> for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: &Self) -> Self::Output {
-                Self(unsafe { x86_64::$intrinsic(self.0, rhs.0) })
-            }
-        }
-        impl $assign_trait for Bitboard {
-            #[inline(always)]
-            fn $assign_func(&mut self, rhs: Self) {
-                self.0 = unsafe { x86_64::$intrinsic(self.0, rhs.0) }
-            }
-        }
-    };
-}
-
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitAnd, assign_trait => BitAndAssign,
     target_func => bitand, assign_func => bitand_assign,
-    intrinsic => _mm_and_si128
+    intrinsic => x86_64::_mm_and_si128
 );
 
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitOr, assign_trait => BitOrAssign,
     target_func => bitor, assign_func => bitor_assign,
-    intrinsic => _mm_or_si128
+    intrinsic => x86_64::_mm_or_si128
 );
 
-define_bit_trait!(
+define_bit_trait_unsafe!(
     target_trait => BitXor, assign_trait => BitXorAssign,
     target_func => bitxor, assign_func => bitxor_assign,
-    intrinsic => _mm_xor_si128
+    intrinsic => x86_64::_mm_xor_si128
 );
 
 impl Not for Bitboard {

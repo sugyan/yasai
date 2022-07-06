@@ -3,22 +3,22 @@ use shogi_core::Square;
 use std::arch::wasm32;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-const SINGLES: [Bitboard; Square::NUM] = {
-    let mut bbs = [Bitboard(wasm32::u64x2(0, 0)); Square::NUM];
+const SINGLES: [wasm32::v128; Square::NUM] = {
+    let mut values = [ZERO; Square::NUM];
     let mut i = 0;
     while i < Square::NUM {
-        bbs[i] = Bitboard(if i < 63 {
+        values[i] = if i < 63 {
             wasm32::u64x2(1 << i, 0)
         } else {
             wasm32::u64x2(0, 1 << (i - 63))
-        });
+        };
         i += 1;
     }
-    bbs
+    values
 };
 
 const MASKED_VALUES: [wasm32::v128; Square::NUM + 2] = {
-    let mut values = [wasm32::u64x2(0, 0); Square::NUM + 2];
+    let mut values = [ZERO; Square::NUM + 2];
     let mut i = 0;
     while i < Square::NUM + 2 {
         let u = (1_u128 << i) - 1;
@@ -28,6 +28,7 @@ const MASKED_VALUES: [wasm32::v128; Square::NUM + 2] = {
     values
 };
 
+const ZERO: wasm32::v128 = wasm32::u64x2(0, 0);
 const ONES: wasm32::v128 = wasm32::u64x2(0x7fff_ffff_ffff_ffff, 0x0003_ffff);
 
 #[derive(Clone, Copy, Debug)]
@@ -36,11 +37,11 @@ pub(crate) struct Bitboard(wasm32::v128);
 impl Bitboard {
     #[inline(always)]
     pub fn empty() -> Self {
-        Self(wasm32::u64x2_splat(0))
+        Self(ZERO)
     }
     #[inline(always)]
     pub fn single(square: Square) -> Self {
-        SINGLES[square.array_index()]
+        Self(SINGLES[square.array_index()])
     }
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
@@ -123,53 +124,22 @@ impl Occupied for Bitboard {
     }
 }
 
-macro_rules! define_bit_trait {
-    (
-        target_trait => $trait:ident, assign_trait => $assign_trait:ident,
-        target_func  => $func:ident,  assign_func  => $assign_func:ident,
-        intrinsic    => $intrinsic:ident
-    ) => {
-        impl $trait for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: Self) -> Self::Output {
-                Self(wasm32::$intrinsic(self.0, rhs.0))
-            }
-        }
-        impl $trait<&Bitboard> for Bitboard {
-            type Output = Bitboard;
-
-            #[inline(always)]
-            fn $func(self, rhs: &Self) -> Self::Output {
-                Self(wasm32::$intrinsic(self.0, rhs.0))
-            }
-        }
-        impl $assign_trait for Bitboard {
-            #[inline(always)]
-            fn $assign_func(&mut self, rhs: Self) {
-                self.0 = wasm32::$intrinsic(self.0, rhs.0)
-            }
-        }
-    };
-}
-
 define_bit_trait!(
     target_trait => BitAnd, assign_trait => BitAndAssign,
     target_func => bitand, assign_func => bitand_assign,
-    intrinsic => v128_and
+    intrinsic => wasm32::v128_and
 );
 
 define_bit_trait!(
     target_trait => BitOr, assign_trait => BitOrAssign,
     target_func => bitor, assign_func => bitor_assign,
-    intrinsic => v128_or
+    intrinsic => wasm32::v128_or
 );
 
 define_bit_trait!(
     target_trait => BitXor, assign_trait => BitXorAssign,
     target_func => bitxor, assign_func => bitxor_assign,
-    intrinsic => v128_xor
+    intrinsic => wasm32::v128_xor
 );
 
 impl Not for Bitboard {
