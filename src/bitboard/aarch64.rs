@@ -45,18 +45,14 @@ impl Bitboard {
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::veorq_u64(self.0, aarch64::vdupq_n_u64(0)),
-            ))) == 0
+            let vqmovn = aarch64::vqmovn_u64(self.0);
+            let result = aarch64::vreinterpret_u64_u32(vqmovn);
+            aarch64::vget_lane_u64::<0>(result) == 0
         }
     }
     #[inline(always)]
     pub fn contains(&self, square: Square) -> bool {
-        unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::vandq_u64(self.0, Self::single(square).0),
-            ))) != 0
-        }
+        !(Self::single(square) & self).is_empty()
     }
     #[inline(always)]
     pub fn count(self) -> u8 {
@@ -196,11 +192,7 @@ impl Not for &Bitboard {
 impl PartialEq for Bitboard {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        unsafe {
-            aarch64::vget_lane_u64::<0>(aarch64::vreinterpret_u64_u32(aarch64::vqmovn_u64(
-                aarch64::veorq_u64(self.0, other.0),
-            ))) == 0
-        }
+        (*self ^ other).is_empty()
     }
 }
 
