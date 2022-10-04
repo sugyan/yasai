@@ -370,7 +370,7 @@ impl Position {
             let escape =
                 ATTACK_TABLE.ou.attack(king, c.flip()) & !self.player_bitboard(c.flip()) & !single;
             let occupied = self.occupied_bitboard() | single;
-            for to in escape ^ single {
+            for to in escape {
                 if self.attackers_to(c, to, &occupied).is_empty() {
                     return false;
                 }
