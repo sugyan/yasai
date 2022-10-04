@@ -242,6 +242,14 @@ pub(crate) static PROMOTABLE: Lazy<[[bool; Color::NUM]; Square::NUM]> = Lazy::ne
     table
 });
 
+pub(crate) static FILES: Lazy<[Bitboard; 10]> = Lazy::new(|| {
+    let mut bbs = [Bitboard::empty(); 10];
+    for sq in Square::all() {
+        bbs[usize::from(sq.file())] |= Bitboard::single(sq);
+    }
+    bbs
+});
+
 #[cfg(test)]
 mod tests {
     use super::*;
