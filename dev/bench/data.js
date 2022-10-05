@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1657117231999,
+  "lastUpdate": 1664961647543,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -673,6 +673,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 311661306,
             "range": "± 125048",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f4be403dde38dd9637e9dab0868202e6f5bcb8e7",
+          "message": "Merge pull request #27 from taotao54321/fix-is_pawn_drop_mate\n\n打ち歩詰め判定の修正",
+          "timestamp": "2022-10-05T18:16:53+09:00",
+          "tree_id": "0d46e23a87bc74e061028ca14d007187591a21ef",
+          "url": "https://github.com/sugyan/yasai/commit/f4be403dde38dd9637e9dab0868202e6f5bcb8e7"
+        },
+        "date": 1664961645873,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 410762468,
+            "range": "± 1587266",
             "unit": "ns/iter"
           }
         ]
