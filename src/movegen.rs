@@ -1,5 +1,5 @@
 use crate::bitboard::{Bitboard, Occupied};
-use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, PROMOTABLE, RELATIVE_RANKS};
+use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE, FILES, PROMOTABLE, RELATIVE_RANKS};
 use crate::Position;
 use arrayvec::ArrayVec;
 use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
@@ -357,8 +357,11 @@ impl Position {
             return false;
         }
         // 他の駒が歩を取れる
+        // 飛/龍がまっすぐ引いて取るのは常に可能
         let capture_candidates = self.attackers_to_except_klp(c.flip(), sq);
-        if !(capture_candidates & !self.pinned(c.flip())).is_empty() {
+        if !(capture_candidates & (!self.pinned(c.flip()) | FILES[usize::from(sq.file())]))
+            .is_empty()
+        {
             return false;
         }
         // 玉が逃げられる
@@ -367,7 +370,7 @@ impl Position {
             let escape =
                 ATTACK_TABLE.ou.attack(king, c.flip()) & !self.player_bitboard(c.flip()) & !single;
             let occupied = self.occupied_bitboard() | single;
-            for to in escape ^ single {
+            for to in escape {
                 if self.attackers_to(c, to, &occupied).is_empty() {
                     return false;
                 }
@@ -664,6 +667,27 @@ mod tests {
                         .expect("failed to parse"),
                 ),
                 Square::SQ_2B,
+                false,
+            ),
+            // 香がいても飛で歩を取れる
+            // P1 *  *  *  *  *  *  *  * -OU
+            // P2 *  *  *  *  *  *  *  *  *
+            // P3 *  *  *  *  *  *  * +RY-HI
+            // P4 *  *  *  *  *  *  *  * +KY
+            // P5 *  *  *  *  *  *  *  *  *
+            // P6 *  *  *  *  *  *  *  *  *
+            // P7 *  *  *  *  *  *  *  *  *
+            // P8 *  *  *  *  *  *  *  *  *
+            // P9 *  *  *  *  *  *  *  *  *
+            // P+00FU
+            // P-00AL
+            // +
+            (
+                Position::new(
+                    PartialPosition::from_usi("sfen 8k/9/7+Rr/8L/9/9/9/9/9 b P2b4g4s4n3l17p 1")
+                        .expect("failed to parse"),
+                ),
+                Square::SQ_1B,
                 false,
             ),
         ];
