@@ -43,50 +43,49 @@ impl Position {
     /// Generate moves to evade check, optimized using AttackInfo.
     fn generate_evasions(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>) {
         let c = self.side_to_move();
-        if let Some(king) = self.king_position(c) {
-            let mut checkers_attacks = Bitboard::empty();
-            let mut checkers_count = 0;
-            for ch in self.checkers() {
-                if let Some(p) = self.piece_at(ch) {
-                    let pk = p.piece_kind();
-                    // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
-                    if pk == PieceKind::ProRook
-                        && ch.file() != king.file()
-                        && ch.rank() != king.rank()
-                    {
-                        checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &self.occupied_bitboard());
-                    } else {
-                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
-                    }
-                }
-                checkers_count += 1;
-            }
-            for to in ATTACK_TABLE.ou.attack(king, c) & !self.player_bitboard(c) & !checkers_attacks
+        let king = self.king_position(c).unwrap();
+        let mut checkers_attacks = Bitboard::empty();
+        let mut checkers_count = 0;
+        for ch in self.checkers() {
+            let pk = self.piece_at(ch).unwrap().piece_kind();
+            // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
+            if pk == PieceKind::ProRook
+                && ch.file() != king.file()
+                && ch.rank() != king.rank()
             {
-                av.push(Move::Normal {
-                    from: king,
-                    to,
-                    promote: false,
-                });
+                checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &self.occupied_bitboard());
+            } else {
+                checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
             }
-            // 両王手の場合は玉が逃げるしかない
-            if checkers_count > 1 {
-                return;
-            }
-            if let Some(ch) = self.checkers().into_iter().next() {
-                let target_drop = BETWEEN_TABLE[ch.array_index()][king.array_index()];
-                let target_move = target_drop | self.checkers();
-                self.generate_for_fu(av, &target_move);
-                self.generate_for_ky(av, &target_move);
-                self.generate_for_ke(av, &target_move);
-                self.generate_for_gi(av, &target_move);
-                self.generate_for_ka(av, &target_move);
-                self.generate_for_hi(av, &target_move);
-                self.generate_for_ki(av, &target_move);
-                self.generate_for_um(av, &target_move);
-                self.generate_for_ry(av, &target_move);
-                self.generate_drop(av, &target_drop);
-            }
+            checkers_count += 1;
+        }
+        for to in ATTACK_TABLE.ou.attack(king, c) & !self.player_bitboard(c) & !checkers_attacks
+        {
+            av.push(Move::Normal {
+                from: king,
+                to,
+                promote: false,
+            });
+        }
+        // 両王手の場合は玉が逃げるしかない
+        if checkers_count > 1 {
+            return;
+        }
+        let ch = self.checkers().into_iter().next().unwrap();
+        let target_drop = BETWEEN_TABLE[ch.array_index()][king.array_index()];
+        let target_move = target_drop | self.checkers();
+        self.generate_for_fu(av, &target_move);
+        self.generate_for_ky(av, &target_move);
+        self.generate_for_ke(av, &target_move);
+        self.generate_for_gi(av, &target_move);
+        self.generate_for_ka(av, &target_move);
+        self.generate_for_hi(av, &target_move);
+        self.generate_for_ki(av, &target_move);
+        self.generate_for_um(av, &target_move);
+        self.generate_for_ry(av, &target_move);
+        if !target_drop.is_empty() {
+            // No need to exclude occupied bitboard: Existence of cells between attacker and king is given.
+            self.generate_drop(av, &target_drop);
         }
     }
     fn generate_for_fu(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
@@ -333,8 +332,8 @@ impl Position {
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
             if self.piece_at(from) == Some(king)
                 && !self
-                    .attackers_to(c.flip(), m.to(), &self.occupied_bitboard())
-                    .is_empty()
+                .attackers_to(c.flip(), m.to(), &self.occupied_bitboard())
+                .is_empty()
             {
                 return false;
             }
