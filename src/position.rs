@@ -3,10 +3,11 @@ use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
 use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 
-/// Represents a state of the game.
+/// Represents a state of the game with history. This provides an ability to do and undo moves.
 #[derive(Debug, Clone)]
 pub struct Position {
     inner: PartialPosition,
+    /// History of the positions
     states: Vec<State>,
 }
 
@@ -270,6 +271,7 @@ impl Default for Position {
     }
 }
 
+/// Represents a state of a single position of a game.
 #[derive(Clone, Debug)]
 pub(crate) struct PartialPosition {
     side: Color,
@@ -346,17 +348,24 @@ impl From<shogi_core::PartialPosition> for PartialPosition {
 
 #[derive(Debug, Clone)]
 struct State {
+    /// Zobrist hashes for (board ^ side, hand)
+    /// TODO: It seems it's always used by XOR-ing two keys. Can we only store a single XOR-ed key?
     keys: (Key, Key),
+    /// Captured piece in the last move
     captured: Option<Piece>,
+    /// Last moved piece
     last_moved: Option<Piece>,
     attack_info: AttackInfo,
 }
 
 #[derive(Debug, Clone)]
 struct AttackInfo {
-    checkers: Bitboard,                     // 王手をかけている駒の位置
-    checkables: [Bitboard; PieceKind::NUM], // 各駒種が王手になり得る位置
-    pinned: [Bitboard; Color::NUM],         // 飛び駒から玉を守っている駒の位置
+    /// 手番側の王に対して王手をかけている相手駒の位置
+    checkers: Bitboard,
+    /// 各駒種が王手になり得る位置
+    checkables: [Bitboard; PieceKind::NUM],
+    /// Color番目の玉を飛び駒から守っている駒（Color問わず）の位置
+    pinned: [Bitboard; Color::NUM],
 }
 
 impl AttackInfo {
@@ -421,7 +430,9 @@ impl AttackInfo {
             (     (ATTACK_TABLE.fu.attack(sq, c)       & pos.piece_bb[PieceKind::Pawn.array_index()])
                 | (ATTACK_TABLE.ky.attack(sq, c, &occ) & pos.piece_bb[PieceKind::Lance.array_index()])
                 | (ATTACK_TABLE.ke.attack(sq, c)       & pos.piece_bb[PieceKind::Knight.array_index()])
+                // Delta of ProRook (龍) is a superposition of GI and HI
                 | (ATTACK_TABLE.gi.attack(sq, c)       & (pos.piece_bb[PieceKind::Silver.array_index()] | pos.piece_bb[PieceKind::ProRook.array_index()]))
+                // Delta of ProBishop (馬) is a superposition of KA and KI
                 | (ATTACK_TABLE.ka.attack(sq, &occ)    & (pos.piece_bb[PieceKind::Bishop.array_index()] | pos.piece_bb[PieceKind::ProBishop.array_index()]))
                 | (ATTACK_TABLE.hi.attack(sq, &occ)    & (pos.piece_bb[PieceKind::Rook.array_index()] | pos.piece_bb[PieceKind::ProRook.array_index()]))
                 | (ATTACK_TABLE.ki.attack(sq, c)       & (pos.piece_bb[PieceKind::Gold.array_index()] | pos.piece_bb[PieceKind::ProPawn.array_index()] | pos.piece_bb[PieceKind::ProLance.array_index()] | pos.piece_bb[PieceKind::ProKnight.array_index()] | pos.piece_bb[PieceKind::ProSilver.array_index()] | pos.piece_bb[PieceKind::ProBishop.array_index()]))

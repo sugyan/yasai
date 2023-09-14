@@ -58,6 +58,7 @@ impl PieceAttackTable {
     }
 }
 
+/// Sliding attack, potentially including a square occupied by a friend.
 fn sliding_attack(sq: Square, occ: Bitboard, delta: Delta) -> Bitboard {
     let mut bb = Bitboard::empty();
     let mut curr = sq.shift(delta.file, delta.rank);
@@ -90,6 +91,7 @@ impl LanceAttackTable {
         }
         Self { masks }
     }
+    /// Attack as if there were nothing else on the board.
     #[inline(always)]
     fn pseudo_attack(&self, sq: Square, c: Color) -> Bitboard {
         self.masks[sq.array_index()][c.array_index()]
@@ -128,6 +130,7 @@ impl SlidingAttackTable {
             merged_masks,
         }
     }
+    /// Attack as if there were nothing else on the board.
     #[inline(always)]
     fn pseudo_attack(&self, sq: Square) -> Bitboard {
         self.merged_masks[sq.array_index()]
@@ -169,6 +172,7 @@ impl AttackTable {
             PieceKind::ProRook => self.hi.attack(sq, occ) | self.ou.attack(sq, c),
         }
     }
+    /// Attack as if there were nothing else on the board.
     pub(crate) fn pseudo_attack(&self, pk: PieceKind, sq: Square, c: Color) -> Bitboard {
         match pk {
             PieceKind::Lance => self.ky.pseudo_attack(sq, c),
@@ -190,6 +194,7 @@ pub static ATTACK_TABLE: Lazy<AttackTable> = Lazy::new(|| AttackTable {
     ou: PieceAttackTable::new(&[PieceAttackTable::BOU_DELTAS, PieceAttackTable::WOU_DELTAS]),
 });
 
+/// A table of the squares between two squares. "Between" is defined only for 8 directions.
 pub(crate) static BETWEEN_TABLE: Lazy<[[Bitboard; Square::NUM]; Square::NUM]> = Lazy::new(|| {
     let mut bbs = [[Bitboard::empty(); Square::NUM]; Square::NUM];
     for sq0 in Square::all() {

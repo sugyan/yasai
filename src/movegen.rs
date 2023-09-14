@@ -25,6 +25,7 @@ impl Position {
         }
         av
     }
+    /// Generate moves.
     fn generate_all(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>) {
         let target = !self.player_bitboard(self.side_to_move());
         self.generate_for_fu(av, &target);
@@ -39,6 +40,7 @@ impl Position {
         self.generate_for_ry(av, &target);
         self.generate_drop(av, &(!self.occupied_bitboard() & !Bitboard::empty()));
     }
+    /// Generate moves to evade check, optimized using AttackInfo.
     fn generate_evasions(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>) {
         let c = self.side_to_move();
         if let Some(king) = self.king_position(c) {
@@ -231,6 +233,7 @@ impl Position {
             }
         }
     }
+    // Generate moves of pieces which moves like KI
     fn generate_for_ki(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         for from in (self.piece_kind_bitboard(PieceKind::Gold)
@@ -322,6 +325,7 @@ impl Position {
             }
         }
     }
+    // Checks if the move isn't illegal: king's suicidal moves and moving pinned piece away.
     fn is_legal(&self, m: Move) -> bool {
         if let Some(from) = m.from() {
             let c = self.side_to_move();
@@ -390,6 +394,7 @@ impl Position {
             | (ATTACK_TABLE.ki.attack(to, opp)      & (self.piece_kind_bitboard(PieceKind::Gold) | self.piece_kind_bitboard(PieceKind::ProPawn) | self.piece_kind_bitboard(PieceKind::ProLance) | self.piece_kind_bitboard(PieceKind::ProKnight) | self.piece_kind_bitboard(PieceKind::ProSilver) | self.piece_kind_bitboard(PieceKind::ProBishop) | self.piece_kind_bitboard(PieceKind::King)))
         ) & self.player_bitboard(c)
     }
+    /// Attackers except for king, lance & pawn, which are not applicable to evade check by pawn
     #[rustfmt::skip]
     fn attackers_to_except_klp(&self, c: Color, to: Square) -> Bitboard {
         let opp = c.flip();
@@ -405,6 +410,7 @@ impl Position {
 
 #[cfg(test)]
 mod tests {
+    use shogi_core::consts::square::SQ_2I;
     use super::*;
     use shogi_core::PartialPosition;
     use shogi_usi_parser::FromUsi;
@@ -433,7 +439,7 @@ mod tests {
             PartialPosition::from_usi(
                 "sfen lnsgkg1nl/1r5s1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/7R1/LNSGKGSNL b Bb 1",
             )
-            .expect("failed to parse"),
+                .expect("failed to parse"),
         );
         assert_eq!(
             43,
@@ -467,6 +473,31 @@ mod tests {
     }
 
     #[test]
+    fn evasion_moves() {
+        // TODO: add more cases
+        // Behind RY
+        // P1 *  *  *  *  *  *  *  *  *
+        // P2 *  *  *  *  *  *  *  *  *
+        // P3 *  *  *  *  *  *  *  *  *
+        // P4 *  *  *  *  *  *  *  *  *
+        // P5 *  *  *  *  *  *  *  *  *
+        // P6 *  *  *  *  *  *  * -FU *
+        // P7 *  *  *  *  *  *  * -RY *
+        // P8 *  *  *  *  *  * +OU+KE *
+        // P9 *  *  *  * -OU * +GI *  *
+        // P+00FU
+        // P-00AL
+        // +
+        let pos = Position::new(
+            PartialPosition::from_usi("sfen 9/9/9/9/9/7p1/7+r1/6KN1/4k1S2 b Pr2b4g3s3n4l16p 1")
+                .expect("failed to parse"),
+        );
+        let moves = pos.legal_moves();
+        assert_eq!(1, moves.len());
+        assert_eq!(SQ_2I, moves[0].to());
+    }
+
+    #[test]
     fn pawn_drop() {
         {
             // P1-KY-KE-GI-KI-OU-KI-GI-KE-KY
@@ -485,7 +516,7 @@ mod tests {
                 PartialPosition::from_usi(
                     "sfen lnsgkgsnl/1r5s1/pppppppp1/9/8L/9/PPPPPPPP1/1B5S1/LNSGKGSN1 w Pp 1",
                 )
-                .expect("failed to parse"),
+                    .expect("failed to parse"),
             );
             let drop_moves = pos
                 .legal_moves()
@@ -518,7 +549,7 @@ mod tests {
                 PartialPosition::from_usi(
                     "sfen lnsgkgsn1/1r5s1/pppppppp1/9/8l/9/PPPPPPPP1/1B5S1/LNSGKGSN1 b Ppl 1",
                 )
-                .expect("failed to parse"),
+                    .expect("failed to parse"),
             );
             let drop_moves = pos
                 .legal_moves()
@@ -642,7 +673,7 @@ mod tests {
                     PartialPosition::from_usi(
                         "sfen 6B2/7np/8k/7P1/7G1/9/9/9/9 b P2rb3g4s3n4l15p 1",
                     )
-                    .expect("failed to parse"),
+                        .expect("failed to parse"),
                 ),
                 Square::SQ_1D,
                 true,
