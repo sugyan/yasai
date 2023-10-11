@@ -49,18 +49,14 @@ impl Position {
         for ch in self.checkers() {
             let pk = self.piece_at(ch).unwrap().piece_kind();
             // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
-            if pk == PieceKind::ProRook
-                && ch.file() != king.file()
-                && ch.rank() != king.rank()
-            {
+            if pk == PieceKind::ProRook && ch.file() != king.file() && ch.rank() != king.rank() {
                 checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &self.occupied_bitboard());
             } else {
                 checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
             }
             checkers_count += 1;
         }
-        for to in ATTACK_TABLE.ou.attack(king, c) & !self.player_bitboard(c) & !checkers_attacks
-        {
+        for to in ATTACK_TABLE.ou.attack(king, c) & !self.player_bitboard(c) & !checkers_attacks {
             av.push(Move::Normal {
                 from: king,
                 to,
@@ -332,8 +328,8 @@ impl Position {
             // 玉が相手の攻撃範囲内に動いてしまう指し手は除外
             if self.piece_at(from) == Some(king)
                 && !self
-                .attackers_to(c.flip(), m.to(), &self.occupied_bitboard())
-                .is_empty()
+                    .attackers_to(c.flip(), m.to(), &self.occupied_bitboard())
+                    .is_empty()
             {
                 return false;
             }
@@ -409,7 +405,6 @@ impl Position {
 
 #[cfg(test)]
 mod tests {
-    use shogi_core::consts::square::SQ_2I;
     use super::*;
     use shogi_core::PartialPosition;
     use shogi_usi_parser::FromUsi;
@@ -438,7 +433,7 @@ mod tests {
             PartialPosition::from_usi(
                 "sfen lnsgkg1nl/1r5s1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/7R1/LNSGKGSNL b Bb 1",
             )
-                .expect("failed to parse"),
+            .expect("failed to parse"),
         );
         assert_eq!(
             43,
@@ -493,7 +488,7 @@ mod tests {
         );
         let moves = pos.legal_moves();
         assert_eq!(1, moves.len());
-        assert_eq!(SQ_2I, moves[0].to());
+        assert_eq!(Square::SQ_2I, moves[0].to());
     }
 
     #[test]
@@ -515,7 +510,7 @@ mod tests {
                 PartialPosition::from_usi(
                     "sfen lnsgkgsnl/1r5s1/pppppppp1/9/8L/9/PPPPPPPP1/1B5S1/LNSGKGSN1 w Pp 1",
                 )
-                    .expect("failed to parse"),
+                .expect("failed to parse"),
             );
             let drop_moves = pos
                 .legal_moves()
@@ -548,7 +543,7 @@ mod tests {
                 PartialPosition::from_usi(
                     "sfen lnsgkgsn1/1r5s1/pppppppp1/9/8l/9/PPPPPPPP1/1B5S1/LNSGKGSN1 b Ppl 1",
                 )
-                    .expect("failed to parse"),
+                .expect("failed to parse"),
             );
             let drop_moves = pos
                 .legal_moves()
@@ -672,7 +667,7 @@ mod tests {
                     PartialPosition::from_usi(
                         "sfen 6B2/7np/8k/7P1/7G1/9/9/9/9 b P2rb3g4s3n4l15p 1",
                     )
-                        .expect("failed to parse"),
+                    .expect("failed to parse"),
                 ),
                 Square::SQ_1D,
                 true,

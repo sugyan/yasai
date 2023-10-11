@@ -176,7 +176,7 @@ mod tests {
         assert_eq!(
             bb | to_bb(vec![SQ_6G, SQ_7F]),
             bb.sliding_positives(&[
-                to_bb(vec![SQ_6G, SQ_6H,SQ_6I]),
+                to_bb(vec![SQ_6G, SQ_6H, SQ_6I]),
                 to_bb(vec![SQ_7F, SQ_8F, SQ_9F]),
             ])
         );
@@ -206,32 +206,25 @@ mod tests {
 
     #[test]
     fn vacant_files() {
-        assert_eq!(
-            !Bitboard::empty(),
-            Bitboard::empty().vacant_files(),
-        );
-        let all_files = to_bb(vec![SQ_1A, SQ_2B, SQ_3C, SQ_4D, SQ_5E, SQ_6F, SQ_7G, SQ_8H, SQ_9I]).vacant_files();
-        assert_eq!(
-            Bitboard::empty(),
-            all_files
-        );
+        assert_eq!(!Bitboard::empty(), Bitboard::empty().vacant_files());
+        let all_files = to_bb(vec![
+            SQ_1A, SQ_2B, SQ_3C, SQ_4D, SQ_5E, SQ_6F, SQ_7G, SQ_8H, SQ_9I,
+        ])
+        .vacant_files();
+        assert_eq!(Bitboard::empty(), all_files);
 
         let odd_files = to_bb(vec![SQ_1A, SQ_3A, SQ_5A, SQ_7A, SQ_9A]).vacant_files();
         let odd_files2 = to_bb(vec![SQ_1I, SQ_3I, SQ_5I, SQ_7I, SQ_9I]).vacant_files();
         assert_eq!(odd_files, odd_files2);
 
         let even_files = to_bb(vec![SQ_2A, SQ_4A, SQ_6A, SQ_8A]).vacant_files();
-        assert_eq!(
-            Bitboard::empty(),
-            odd_files & even_files,
-        );
-        assert_eq!(
-            !Bitboard::empty(),
-            odd_files | even_files,
-        );
+        assert_eq!(Bitboard::empty(), odd_files & even_files);
+        assert_eq!(!Bitboard::empty(), odd_files | even_files);
     }
 
     fn to_bb(squares: Vec<Square>) -> Bitboard {
-        squares.iter().fold(Bitboard::empty(), |acc, e| (acc | Bitboard::single(*e)))
+        squares
+            .iter()
+            .fold(Bitboard::empty(), |acc, e| (acc | Bitboard::single(*e)))
     }
 }
