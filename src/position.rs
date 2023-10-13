@@ -337,7 +337,6 @@ impl From<shogi_core::PartialPosition> for PartialPosition {
 #[derive(Debug, Clone)]
 struct State {
     /// Zobrist hashes for (board ^ side, hand)
-    /// TODO: It seems it's always used by XOR-ing two keys. Can we only store a single XOR-ed key?
     keys: (Key, Key),
     /// Piece captured on the last move
     captured: Option<Piece>,
