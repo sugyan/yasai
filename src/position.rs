@@ -3,7 +3,7 @@ use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
 use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 
-/// Represents a state of the game with history. This provides an ability to do and undo moves.
+/// Represents a state of the game with history. This provides the ability to do and undo moves.
 #[derive(Debug, Clone)]
 pub struct Position {
     inner: PartialPosition,
@@ -339,7 +339,7 @@ struct State {
     /// Zobrist hashes for (board ^ side, hand)
     /// TODO: It seems it's always used by XOR-ing two keys. Can we only store a single XOR-ed key?
     keys: (Key, Key),
-    /// Captured piece in the last move
+    /// Piece captured on the last move
     captured: Option<Piece>,
     /// Last moved piece
     last_moved: Option<Piece>,
