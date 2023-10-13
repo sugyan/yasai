@@ -25,6 +25,7 @@ impl Position {
         }
         av
     }
+    /// Generate moves.
     fn generate_all(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>) {
         let target = !self.player_bitboard(self.side_to_move());
         self.generate_for_fu(av, &target);
@@ -39,52 +40,48 @@ impl Position {
         self.generate_for_ry(av, &target);
         self.generate_drop(av, &(!self.occupied_bitboard() & !Bitboard::empty()));
     }
+    /// Generate moves to evade check, optimized using AttackInfo.
     fn generate_evasions(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>) {
         let c = self.side_to_move();
-        if let Some(king) = self.king_position(c) {
-            let mut checkers_attacks = Bitboard::empty();
-            let mut checkers_count = 0;
-            for ch in self.checkers() {
-                if let Some(p) = self.piece_at(ch) {
-                    let pk = p.piece_kind();
-                    // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
-                    if pk == PieceKind::ProRook
-                        && ch.file() != king.file()
-                        && ch.rank() != king.rank()
-                    {
-                        checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &self.occupied_bitboard());
-                    } else {
-                        checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
-                    }
-                }
-                checkers_count += 1;
+        let king = self.king_position(c).unwrap();
+        let mut checkers_attacks = Bitboard::empty();
+        let mut checkers_count = 0;
+        for ch in self.checkers() {
+            let pk = self.piece_at(ch).unwrap().piece_kind();
+            // 龍が斜め位置から王手している場合のみ、他の駒の裏に逃がれることができる可能性がある
+            if pk == PieceKind::ProRook && ch.file() != king.file() && ch.rank() != king.rank() {
+                checkers_attacks |= ATTACK_TABLE.hi.attack(ch, &self.occupied_bitboard());
+            } else {
+                checkers_attacks |= ATTACK_TABLE.pseudo_attack(pk, ch, c.flip());
             }
-            for to in ATTACK_TABLE.ou.attack(king, c) & !self.player_bitboard(c) & !checkers_attacks
-            {
-                av.push(Move::Normal {
-                    from: king,
-                    to,
-                    promote: false,
-                });
-            }
-            // 両王手の場合は玉が逃げるしかない
-            if checkers_count > 1 {
-                return;
-            }
-            if let Some(ch) = self.checkers().into_iter().next() {
-                let target_drop = BETWEEN_TABLE[ch.array_index()][king.array_index()];
-                let target_move = target_drop | self.checkers();
-                self.generate_for_fu(av, &target_move);
-                self.generate_for_ky(av, &target_move);
-                self.generate_for_ke(av, &target_move);
-                self.generate_for_gi(av, &target_move);
-                self.generate_for_ka(av, &target_move);
-                self.generate_for_hi(av, &target_move);
-                self.generate_for_ki(av, &target_move);
-                self.generate_for_um(av, &target_move);
-                self.generate_for_ry(av, &target_move);
-                self.generate_drop(av, &target_drop);
-            }
+            checkers_count += 1;
+        }
+        for to in ATTACK_TABLE.ou.attack(king, c) & !self.player_bitboard(c) & !checkers_attacks {
+            av.push(Move::Normal {
+                from: king,
+                to,
+                promote: false,
+            });
+        }
+        // 両王手の場合は玉が逃げるしかない
+        if checkers_count > 1 {
+            return;
+        }
+        let ch = self.checkers().into_iter().next().unwrap();
+        let target_drop = BETWEEN_TABLE[ch.array_index()][king.array_index()];
+        let target_move = target_drop | self.checkers();
+        self.generate_for_fu(av, &target_move);
+        self.generate_for_ky(av, &target_move);
+        self.generate_for_ke(av, &target_move);
+        self.generate_for_gi(av, &target_move);
+        self.generate_for_ka(av, &target_move);
+        self.generate_for_hi(av, &target_move);
+        self.generate_for_ki(av, &target_move);
+        self.generate_for_um(av, &target_move);
+        self.generate_for_ry(av, &target_move);
+        if !target_drop.is_empty() {
+            // No need to exclude occupied bitboard: Existence of cells between attacker and king is given.
+            self.generate_drop(av, &target_drop);
         }
     }
     fn generate_for_fu(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
@@ -231,6 +228,7 @@ impl Position {
             }
         }
     }
+    // Generate moves of pieces which moves like KI
     fn generate_for_ki(&self, av: &mut ArrayVec<Move, MAX_LEGAL_MOVES>, target: &Bitboard) {
         let c = self.side_to_move();
         for from in (self.piece_kind_bitboard(PieceKind::Gold)
@@ -322,6 +320,7 @@ impl Position {
             }
         }
     }
+    // Checks if the move isn't illegal: king's suicidal moves and moving pinned piece away.
     fn is_legal(&self, m: Move) -> bool {
         if let Some(from) = m.from() {
             let c = self.side_to_move();
@@ -390,6 +389,7 @@ impl Position {
             | (ATTACK_TABLE.ki.attack(to, opp)      & (self.piece_kind_bitboard(PieceKind::Gold) | self.piece_kind_bitboard(PieceKind::ProPawn) | self.piece_kind_bitboard(PieceKind::ProLance) | self.piece_kind_bitboard(PieceKind::ProKnight) | self.piece_kind_bitboard(PieceKind::ProSilver) | self.piece_kind_bitboard(PieceKind::ProBishop) | self.piece_kind_bitboard(PieceKind::King)))
         ) & self.player_bitboard(c)
     }
+    /// Attackers except for king, lance & pawn, which are not applicable to evade check by pawn
     #[rustfmt::skip]
     fn attackers_to_except_klp(&self, c: Color, to: Square) -> Bitboard {
         let opp = c.flip();
@@ -464,6 +464,31 @@ mod tests {
                 .expect("failed to parse"),
         );
         assert_eq!(593, pos.legal_moves().len());
+    }
+
+    #[test]
+    fn evasion_moves() {
+        // TODO: add more cases
+        // Behind RY
+        // P1 *  *  *  *  *  *  *  *  *
+        // P2 *  *  *  *  *  *  *  *  *
+        // P3 *  *  *  *  *  *  *  *  *
+        // P4 *  *  *  *  *  *  *  *  *
+        // P5 *  *  *  *  *  *  *  *  *
+        // P6 *  *  *  *  *  *  * -FU *
+        // P7 *  *  *  *  *  *  * -RY *
+        // P8 *  *  *  *  *  * +OU+KE *
+        // P9 *  *  *  * -OU * +GI *  *
+        // P+00FU
+        // P-00AL
+        // +
+        let pos = Position::new(
+            PartialPosition::from_usi("sfen 9/9/9/9/9/7p1/7+r1/6KN1/4k1S2 b Pr2b4g3s3n4l16p 1")
+                .expect("failed to parse"),
+        );
+        let moves = pos.legal_moves();
+        assert_eq!(1, moves.len());
+        assert_eq!(Square::SQ_2I, moves[0].to());
     }
 
     #[test]

@@ -3,10 +3,11 @@ use crate::tables::{ATTACK_TABLE, BETWEEN_TABLE};
 use crate::zobrist::{Key, ZOBRIST_TABLE};
 use shogi_core::{Color, Hand, Move, Piece, PieceKind, Square};
 
-/// Represents a state of the game.
+/// Represents a state of the game with history. This provides the ability to do and undo moves.
 #[derive(Debug, Clone)]
 pub struct Position {
     inner: PartialPosition,
+    /// History of the positions
     states: Vec<State>,
 }
 
@@ -72,25 +73,21 @@ impl Position {
         match m {
             Move::Normal { from, to, promote } => {
                 let piece = self.inner.piece_at(from).unwrap();
-                let p = if promote {
-                    if let Some(p) = piece.promote() {
-                        p
-                    } else {
-                        piece
-                    }
+                let pk = piece.piece_kind();
+                let pk = if promote {
+                    pk.promote().unwrap_or(pk)
                 } else {
-                    piece
+                    pk
                 };
-                if self.checkable(p.piece_kind(), to) {
+                if self.checkable(pk, to) {
                     return true;
                 }
                 // 開き王手
-                let c = self.inner.side;
-                if self.pinned(c.flip()).contains(from) {
-                    if let Some(sq) = self.king_position(c.flip()) {
-                        return !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(to)
-                            || BETWEEN_TABLE[sq.array_index()][to.array_index()].contains(from));
-                    }
+                let c = self.inner.side.flip();
+                if self.pinned(c).contains(from) {
+                    let sq = self.king_position(c).unwrap();
+                    return !(BETWEEN_TABLE[sq.array_index()][from.array_index()].contains(to)
+                        || BETWEEN_TABLE[sq.array_index()][to.array_index()].contains(from));
                 }
                 false
             }
@@ -109,11 +106,7 @@ impl Position {
                 last_moved = Some(piece);
                 if let Some(p) = captured {
                     let pk = p.piece_kind();
-                    let pk_unpromoted = if let Some(pk) = pk.unpromote() {
-                        pk
-                    } else {
-                        pk
-                    };
+                    let pk_unpromoted = pk.unpromote().unwrap_or(pk);
                     // Update keys
                     keys.0 ^= ZOBRIST_TABLE.board(to, p);
                     keys.1 ^= ZOBRIST_TABLE.hand(
@@ -181,7 +174,7 @@ impl Position {
         });
     }
     pub fn undo_move(&mut self, m: Move) {
-        let c = self.side_to_move();
+        let c = self.side_to_move().flip();
         match m {
             Move::Normal {
                 from,
@@ -192,13 +185,9 @@ impl Position {
                 let captured = self.captured();
                 if let Some(p_cap) = captured {
                     let pk = p_cap.piece_kind();
-                    let pk_unpromoted = if let Some(pk) = pk.unpromote() {
-                        pk
-                    } else {
-                        pk
-                    };
+                    let pk_unpromoted = pk.unpromote().unwrap_or(pk);
                     self.inner.xor_piece(to, p_cap);
-                    let hand = self.inner.hand_of_a_player_mut(c.flip());
+                    let hand = self.inner.hand_of_a_player_mut(c);
                     *hand = hand.removed(pk_unpromoted).unwrap();
                 }
                 self.inner.xor_piece(from, last_moved);
@@ -209,11 +198,11 @@ impl Position {
             Move::Drop { to, piece } => {
                 self.inner.xor_piece(to, piece);
                 *self.inner.piece_at_mut(to) = None;
-                let hand = self.inner.hand_of_a_player_mut(c.flip());
+                let hand = self.inner.hand_of_a_player_mut(c);
                 *hand = hand.added(piece.piece_kind()).unwrap();
             }
         }
-        self.inner.side = c.flip();
+        self.inner.side = c;
         self.inner.ply -= 1;
         self.states.pop();
     }
@@ -270,6 +259,7 @@ impl Default for Position {
     }
 }
 
+/// Represents a state of a single position of a game.
 #[derive(Clone, Debug)]
 pub(crate) struct PartialPosition {
     side: Color,
@@ -346,17 +336,23 @@ impl From<shogi_core::PartialPosition> for PartialPosition {
 
 #[derive(Debug, Clone)]
 struct State {
+    /// Zobrist hashes for (board ^ side, hand)
     keys: (Key, Key),
+    /// Piece captured on the last move
     captured: Option<Piece>,
+    /// Last moved piece
     last_moved: Option<Piece>,
     attack_info: AttackInfo,
 }
 
 #[derive(Debug, Clone)]
 struct AttackInfo {
-    checkers: Bitboard,                     // 王手をかけている駒の位置
-    checkables: [Bitboard; PieceKind::NUM], // 各駒種が王手になり得る位置
-    pinned: [Bitboard; Color::NUM],         // 飛び駒から玉を守っている駒の位置
+    /// 手番側の王に対して王手をかけている相手駒の位置
+    checkers: Bitboard,
+    /// 各駒種が王手になり得る位置
+    checkables: [Bitboard; PieceKind::NUM],
+    /// Color番目の玉を飛び駒から守っている駒（Color問わず）の位置
+    pinned: [Bitboard; Color::NUM],
 }
 
 impl AttackInfo {
@@ -384,14 +380,14 @@ impl AttackInfo {
             let ka = ATTACK_TABLE.ka.attack(sq, &occ);
             let hi = ATTACK_TABLE.hi.attack(sq, &occ);
             let ki = ATTACK_TABLE.ki.attack(sq, opp);
-            let ou = ATTACK_TABLE.ou.attack(sq, opp);
+            let gi = ATTACK_TABLE.gi.attack(sq, opp);
             Self {
                 checkers,
                 checkables: [
                     ATTACK_TABLE.fu.attack(sq, opp),
                     ATTACK_TABLE.ky.attack(sq, opp, &occ),
                     ATTACK_TABLE.ke.attack(sq, opp),
-                    ATTACK_TABLE.gi.attack(sq, opp),
+                    gi,
                     ki,
                     ka,
                     hi,
@@ -400,8 +396,8 @@ impl AttackInfo {
                     ki,
                     ki,
                     ki,
-                    ka | ou,
-                    hi | ou,
+                    ka | ki,
+                    hi | gi,
                 ],
                 pinned,
             }
@@ -421,7 +417,9 @@ impl AttackInfo {
             (     (ATTACK_TABLE.fu.attack(sq, c)       & pos.piece_bb[PieceKind::Pawn.array_index()])
                 | (ATTACK_TABLE.ky.attack(sq, c, &occ) & pos.piece_bb[PieceKind::Lance.array_index()])
                 | (ATTACK_TABLE.ke.attack(sq, c)       & pos.piece_bb[PieceKind::Knight.array_index()])
+                // Delta of ProRook (龍) is a superposition of GI and HI
                 | (ATTACK_TABLE.gi.attack(sq, c)       & (pos.piece_bb[PieceKind::Silver.array_index()] | pos.piece_bb[PieceKind::ProRook.array_index()]))
+                // Delta of ProBishop (馬) is a superposition of KA and KI
                 | (ATTACK_TABLE.ka.attack(sq, &occ)    & (pos.piece_bb[PieceKind::Bishop.array_index()] | pos.piece_bb[PieceKind::ProBishop.array_index()]))
                 | (ATTACK_TABLE.hi.attack(sq, &occ)    & (pos.piece_bb[PieceKind::Rook.array_index()] | pos.piece_bb[PieceKind::ProRook.array_index()]))
                 | (ATTACK_TABLE.ki.attack(sq, c)       & (pos.piece_bb[PieceKind::Gold.array_index()] | pos.piece_bb[PieceKind::ProPawn.array_index()] | pos.piece_bb[PieceKind::ProLance.array_index()] | pos.piece_bb[PieceKind::ProKnight.array_index()] | pos.piece_bb[PieceKind::ProSilver.array_index()] | pos.piece_bb[PieceKind::ProBishop.array_index()]))

@@ -2,12 +2,19 @@ pub(crate) trait Occupied
 where
     Self: Sized,
 {
+    /// Shift left (South)
     fn shl(&self) -> Self;
+    /// Shift right (North)
     fn shr(&self) -> Self;
+    /// Slide consecutively to the positive: that is South.
     fn sliding_positive_consecutive(&self, mask: &Self) -> Self;
+    /// Slide consecutively to the negative: that is North.
     fn sliding_negative_consecutive(&self, mask: &Self) -> Self;
+    /// Slide for 2 directions to the positive. Positive is further West, or further South if it's on the same file.
     fn sliding_positives(&self, masks: &[Self; 2]) -> Self;
+    /// Slide for 2 directions to the negative. Negative is further East, or further North if it's on the same file.
     fn sliding_negatives(&self, masks: &[Self; 2]) -> Self;
+    /// Vacant files
     fn vacant_files(&self) -> Self;
 }
 
@@ -154,25 +161,70 @@ mod tests {
 
     #[test]
     fn sliding_positives() {
-        let bb = Bitboard::single(SQ_8C) | Bitboard::single(SQ_8G);
+        // Imagine there's a bishop at 6E
+        let bb = to_bb(vec![SQ_8C, SQ_8G]);
         assert_eq!(
-            bb | Bitboard::single(SQ_7D) | Bitboard::single(SQ_7F),
+            bb | to_bb(vec![SQ_7D, SQ_7F]),
             bb.sliding_positives(&[
-                Bitboard::single(SQ_7D) | Bitboard::single(SQ_8C) | Bitboard::single(SQ_9B),
-                Bitboard::single(SQ_7F) | Bitboard::single(SQ_8G) | Bitboard::single(SQ_9H),
+                to_bb(vec![SQ_7D, SQ_8C, SQ_9B]),
+                to_bb(vec![SQ_7F, SQ_8G, SQ_9H]),
+            ])
+        );
+
+        // Imagine there's a rook at 6F
+        let bb = to_bb(vec![SQ_6H, SQ_8F]);
+        assert_eq!(
+            bb | to_bb(vec![SQ_6G, SQ_7F]),
+            bb.sliding_positives(&[
+                to_bb(vec![SQ_6G, SQ_6H, SQ_6I]),
+                to_bb(vec![SQ_7F, SQ_8F, SQ_9F]),
             ])
         );
     }
 
     #[test]
     fn sliding_negatives() {
-        let bb = Bitboard::single(SQ_2C) | Bitboard::single(SQ_2G);
+        // Imagine there's a bishop at 4E
+        let bb = to_bb(vec![SQ_2C, SQ_2G]);
         assert_eq!(
-            bb | Bitboard::single(SQ_3D) | Bitboard::single(SQ_3F),
+            bb | to_bb(vec![SQ_3D, SQ_3F]),
             bb.sliding_negatives(&[
-                Bitboard::single(SQ_3D) | Bitboard::single(SQ_2C) | Bitboard::single(SQ_1B),
-                Bitboard::single(SQ_3F) | Bitboard::single(SQ_2G) | Bitboard::single(SQ_1H),
+                to_bb(vec![SQ_3D, SQ_2C, SQ_1B]),
+                to_bb(vec![SQ_3F, SQ_2G, SQ_1H]),
             ])
         );
+        // Imagine there's a rook at 4D
+        let bb = to_bb(vec![SQ_2D, SQ_4B]);
+        assert_eq!(
+            bb | to_bb(vec![SQ_3D, SQ_4C]),
+            bb.sliding_negatives(&[
+                to_bb(vec![SQ_3D, SQ_2D, SQ_1D]),
+                to_bb(vec![SQ_4C, SQ_4B, SQ_4A]),
+            ])
+        );
+    }
+
+    #[test]
+    fn vacant_files() {
+        assert_eq!(!Bitboard::empty(), Bitboard::empty().vacant_files());
+        let all_files = to_bb(vec![
+            SQ_1A, SQ_2B, SQ_3C, SQ_4D, SQ_5E, SQ_6F, SQ_7G, SQ_8H, SQ_9I,
+        ])
+        .vacant_files();
+        assert_eq!(Bitboard::empty(), all_files);
+
+        let odd_files = to_bb(vec![SQ_1A, SQ_3A, SQ_5A, SQ_7A, SQ_9A]).vacant_files();
+        let odd_files2 = to_bb(vec![SQ_1I, SQ_3I, SQ_5I, SQ_7I, SQ_9I]).vacant_files();
+        assert_eq!(odd_files, odd_files2);
+
+        let even_files = to_bb(vec![SQ_2A, SQ_4A, SQ_6A, SQ_8A]).vacant_files();
+        assert_eq!(Bitboard::empty(), odd_files & even_files);
+        assert_eq!(!Bitboard::empty(), odd_files | even_files);
+    }
+
+    fn to_bb(squares: Vec<Square>) -> Bitboard {
+        squares
+            .iter()
+            .fold(Bitboard::empty(), |acc, e| (acc | Bitboard::single(*e)))
     }
 }
