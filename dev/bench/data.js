@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1664961647543,
+  "lastUpdate": 1697240131706,
   "repoUrl": "https://github.com/sugyan/yasai",
   "entries": {
     "Benchmark": [
@@ -703,6 +703,36 @@ window.BENCHMARK_DATA = {
             "name": "perft::bench_perft_5_from_default",
             "value": 410762468,
             "range": "± 1587266",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "sugi1982@gmail.com",
+            "name": "Yoshihiro Sugi",
+            "username": "sugyan"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "51c23780109a4ac7258c27d8965640d4f8b78e9e",
+          "message": "Merge pull request #28 from na2hiro/add-doc-comments-and-tests\n\nAdd doc comments & tests. Some refactoring",
+          "timestamp": "2023-10-14T08:32:53+09:00",
+          "tree_id": "33ada225a84e90ca0d29008f805b6e8749a8ad1c",
+          "url": "https://github.com/sugyan/yasai/commit/51c23780109a4ac7258c27d8965640d4f8b78e9e"
+        },
+        "date": 1697240131257,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "perft::bench_perft_5_from_default",
+            "value": 367354979,
+            "range": "± 584282",
             "unit": "ns/iter"
           }
         ]
